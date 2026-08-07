@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "contraption-phase1"
+version = "0.1.0"
+description = "Differentiable probabilistic digital-twin compiler for electrical and rigid-body contraptions"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{name = "Phase 1 reference implementation"}]
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+gpu = ["torch>=2.4"]
+agents = ["openai>=1.101"]
+dev = ["build>=1.2", "pytest>=8", "pytest-cov>=5"]
+
+[project.scripts]
+contraption = "contraption.cli:main"
+contraption-model-validate = "contraption.model_validation_tool:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.data-files]
+"share/contraption" = ["ARCHITECTURE.md"]
+"share/contraption/data" = ["data/*.json"]
+"share/contraption/docs" = ["docs/*.md"]
+"share/contraption/models/electrical" = ["models/electrical/*.pmdl"]
+"share/contraption/models/mechanical" = ["models/mechanical/*.pmdl"]
+"share/contraption/prompts" = ["prompts/*.md"]
+"share/contraption/web" = ["web/*.html", "web/*.css", "web/*.js"]
+"share/contraption/examples/scanner_robot" = ["examples/scanner_robot/*.json"]
+"share/contraption/examples/scanner_robot/controls" = ["examples/scanner_robot/controls/*.json"]
+"share/contraption/examples/scanner_robot/component_inputs" = ["examples/scanner_robot/component_inputs/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

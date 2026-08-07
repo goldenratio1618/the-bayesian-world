@@ -1,0 +1,34 @@
+{
+  "manufacturer": "Pololu",
+  "product": "Romi Chassis Kit, item 3500",
+  "purpose": "differential-drive base for apartment-floor scanning robot",
+  "included": [
+    "two 120:1 HP mini plastic brushed DC gearmotors",
+    "two 70 x 8 mm wheels",
+    "one ball caster",
+    "six-AA battery contacts",
+    "163 x 149 x 70 mm chassis"
+  ],
+  "source_urls": [
+    "https://www.pololu.com/product/3500",
+    "https://www.pololu.com/product/1520"
+  ],
+  "measured_or_published_parameters": {
+    "chassis_mass_without_batteries_kg": 0.160,
+    "wheel_radius_m": 0.035,
+    "motor_nominal_voltage_v": 4.5,
+    "motor_no_load_speed_rpm": 150,
+    "motor_no_load_current_a": 0.130,
+    "motor_stall_current_a": 1.25,
+    "motor_stall_torque_kg_cm": 1.8,
+    "gear_ratio": 120.0
+  },
+  "unknowns_to_fit": [
+    "armature inductance",
+    "reflected inertia",
+    "Coulomb and viscous friction",
+    "left/right mismatch",
+    "tire longitudinal and lateral slip on target floor"
+  ]
+}
+

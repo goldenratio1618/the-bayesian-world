@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>@@TITLE@@</title>
+  <style>@@STYLE@@</style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">CONTRAPTION / PHASE 1 VIEWER</p>
+        <h1 id="app-title">@@TITLE@@</h1>
+      </div>
+      <div class="status-cluster" aria-live="polite">
+        <span class="status-dot"></span>
+        <span id="status-text">Offline dataset ready</span>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="stage-card" aria-label="Interactive three-dimensional contraption view">
+        <div class="panel-heading overlay-heading">
+          <div>
+            <p class="panel-kicker">MECHANICAL</p>
+            <h2>Spatial model</h2>
+          </div>
+          <div class="view-actions">
+            <button id="reset-view" type="button" title="Reset rotation and zoom">Reset view</button>
+            <span class="interaction-hint">Drag to rotate &middot; Wheel to zoom</span>
+          </div>
+        </div>
+        <canvas id="scene" aria-label="Three-dimensional component geometry"></canvas>
+        <div id="component-tooltip" class="tooltip" hidden></div>
+        <div class="axis-key" aria-hidden="true"><span class="x">X</span><span class="y">Y</span><span class="z">Z</span></div>
+      </section>
+
+      <aside class="inspector">
+        <section class="panel controls-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="panel-kicker">INPUTS</p>
+              <h2>External controls</h2>
+            </div>
+          </div>
+          <div id="external-controls" class="control-stack"></div>
+        </section>
+
+        <section class="panel transparency-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="panel-kicker">RENDER</p>
+              <h2>Transparency</h2>
+            </div>
+          </div>
+          <label class="slider-row global-slider">
+            <span>All components</span>
+            <output id="global-alpha-value">100%</output>
+            <input id="global-alpha" type="range" min="0.05" max="1" step="0.01" value="1">
+          </label>
+          <div id="component-alpha" class="control-stack compact"></div>
+        </section>
+      </aside>
+
+      <section class="panel electrical-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">ELECTRICAL</p>
+            <h2>Connection diagram</h2>
+          </div>
+          <div id="electrical-summary" class="panel-meta"></div>
+        </div>
+        <svg id="electrical-diagram" role="img" aria-label="Electrical connection diagram"></svg>
+      </section>
+
+      <section class="panel timeline-panel">
+        <div class="transport">
+          <button id="play" class="primary-button" type="button" aria-label="Play simulation">&#9654;</button>
+          <button id="step-back" type="button" aria-label="Previous frame">-1</button>
+          <button id="step-forward" type="button" aria-label="Next frame">+1</button>
+          <label class="speed-label">Speed
+            <select id="speed">
+              <option value="0.25">0.25&times;</option>
+              <option value="0.5">0.5&times;</option>
+              <option value="1" selected>1&times;</option>
+              <option value="2">2&times;</option>
+              <option value="4">4&times;</option>
+            </select>
+          </label>
+        </div>
+        <div class="scrubber">
+          <div class="time-readout"><span id="time-value">0.000 s</span><span id="frame-value">frame 1 / 1</span></div>
+          <input id="timeline" type="range" min="0" max="0" step="1" value="0" aria-label="Simulation timeline">
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>Self-contained offline viewer</span>
+      <span id="model-summary"></span>
+    </footer>
+  </div>
+  <script id="contraption-data" type="application/json">@@DATA@@</script>
+  <script>@@SCRIPT@@</script>
+</body>
+</html>

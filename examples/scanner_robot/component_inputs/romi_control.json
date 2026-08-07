@@ -1,0 +1,20 @@
+{
+  "manufacturer": "Pololu",
+  "product": "Romi 32U4 Control Board, item 3544",
+  "purpose": "deterministic low-level motor, encoder, IMU, and arm-servo control",
+  "domains": ["electrical", "electromechanical"],
+  "features": {
+    "processor": "ATmega32U4 at 16 MHz",
+    "motor_driver": "two DRV8838 H bridges",
+    "motor_continuous_current_per_channel_a": 1.8,
+    "logic_voltage_v": 5.0,
+    "imu": "3-axis accelerometer and gyroscope",
+    "encoder_inputs": "two quadrature channels"
+  },
+  "source_urls": [
+    "https://www.pololu.com/product/3544",
+    "https://www.pololu.com/docs/0J69/all"
+  ],
+  "unknowns_to_fit": ["H-bridge resistance", "PWM dead zone", "sensor biases", "IMU noise"]
+}
+

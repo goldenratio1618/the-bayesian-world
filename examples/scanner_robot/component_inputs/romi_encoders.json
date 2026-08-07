@@ -1,0 +1,16 @@
+{
+  "manufacturer": "Pololu",
+  "product": "Romi Encoder Pair Kit, item 3542",
+  "purpose": "wheel rotation measurements",
+  "domains": ["electromechanical"],
+  "parameters": {
+    "motor_shaft_counts_per_revolution": 12,
+    "wheel_counts_per_revolution": 1440,
+    "supply_min_v": 3.5,
+    "supply_max_v": 18.0,
+    "pair_mass_kg": 0.003
+  },
+  "source_urls": ["https://www.pololu.com/product/3542"],
+  "unknowns_to_fit": ["edge timing jitter", "missed edge probability"]
+}
+

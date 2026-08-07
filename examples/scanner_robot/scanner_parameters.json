@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "name": "apartment_scanner_robot",
+  "object_bounding_cube": {
+    "center_m": [0.0, 0.0, 0.35],
+    "side_m": 0.40
+  },
+  "mission": {
+    "orbit_radius_m": 0.85,
+    "tangential_speed_m_s": 0.12,
+    "duration_s": 45.0,
+    "camera_height_min_m": 0.22,
+    "camera_height_max_m": 0.52,
+    "vertical_cycles_per_orbit": 2.0,
+    "maximum_voltage_v": 4.5
+  },
+  "mechanics": {
+    "total_mass_mean_kg": 0.55,
+    "total_mass_std_kg": 0.06,
+    "yaw_inertia_mean_kg_m2": 0.0045,
+    "yaw_inertia_std_kg_m2": 0.0008,
+    "wheel_radius_mean_m": 0.035,
+    "wheel_radius_std_m": 0.0007,
+    "track_width_mean_m": 0.142,
+    "track_width_std_m": 0.003,
+    "rough_surface_traction_mean": 0.82,
+    "rough_surface_traction_std": 0.08,
+    "lateral_slip_std_m_s": 0.006
+  },
+  "drive_motor": {
+    "resistance_mean_ohm": 3.6,
+    "resistance_std_ohm": 0.35,
+    "inductance_mean_h": 0.0012,
+    "inductance_std_h": 0.00035,
+    "torque_constant_mean_n_m_a": 0.011,
+    "torque_constant_std_n_m_a": 0.0015,
+    "back_emf_mean_v_s_rad": 0.011,
+    "back_emf_std_v_s_rad": 0.0015,
+    "gear_ratio": 120.0,
+    "gear_efficiency_mean": 0.68,
+    "gear_efficiency_std": 0.08
+  },
+  "arm": {
+    "lift_time_constant_s": 0.20,
+    "tilt_time_constant_s": 0.16,
+    "position_noise_std_rad": 0.008,
+    "camera_mount_offset_m": [0.10, 0.0, 0.18]
+  },
+  "condition": "unverified",
+  "trust": {
+    "structural": "reviewed",
+    "physical": "plausible",
+    "numerical": "tested",
+    "empirical": "unvalidated"
+  }
+}
+

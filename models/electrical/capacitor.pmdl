@@ -1,0 +1,38 @@
+{
+  "format": "pmdl-1",
+  "id": "electrical.capacitor.ideal",
+  "name": "Ideal uncertain capacitor",
+  "version": "1.0.0",
+  "domains": ["electrical"],
+  "category": "ceramic-capacitor",
+  "description": "Charge-state two-terminal capacitor in descriptor form.",
+  "power_ports": [
+    {"name": "p", "domain": "electrical", "effort": "v_p", "flow": "i_p", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "electrical", "reference": "v_p relative to circuit reference"},
+    {"name": "n", "domain": "electrical", "effort": "v_n", "flow": "i_n", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "electrical", "reference": "v_n relative to circuit reference"}
+  ],
+  "states": [
+    {"name": "charge", "unit": "C", "initial": 0.0, "derivative": "charge_dot", "description": "Charge stored on the positive terminal."}
+  ],
+  "parameters": [
+    {"name": "capacitance", "unit": "F", "default": 0.000001, "bounds": {"lower": 1e-15, "upper": 10.0}, "uncertainty": {"distribution": "lognormal", "parameters": {"std": 0.1}}, "learnable": true, "description": "Capacitance."}
+  ],
+  "relations": [
+    {"name": "constitutive_voltage", "expression": "v_p - v_n - charge / capacitance"},
+    {"name": "charge_rate", "expression": "charge_dot - i_p"},
+    {"name": "charge_conservation", "expression": "i_p + i_n"}
+  ],
+  "stored_energy": [
+    {"name": "electric_energy", "expression": "charge ** 2 / (2 * capacitance)", "unit": "J", "nonnegative": true, "description": "Energy of the electric field."}
+  ],
+  "initialization": {"strategy": "consistent", "constraints": [], "required": ["charge"]},
+  "validity": {"ranges": {"capacitance": {"lower": 1e-15, "upper": 10.0}}, "assumptions": ["Lumped element", "No dielectric leakage", "No equivalent-series resistance"], "max_timestep": 0.0001},
+  "fidelity_levels": [
+    {"name": "ideal", "description": "Lossless constant capacitance.", "active_relations": ["constitutive_voltage", "charge_rate", "charge_conservation"], "parameter_overrides": {}, "approximation_error": "Leakage and ESR omitted", "relative_cost": 1.0}
+  ],
+  "properties": [
+    {"name": "positive_capacitance", "kind": "parameter_bounds", "expression": "capacitance > 0 * capacitance", "expected": true, "samples": 32, "tolerance": 0.0},
+    {"name": "nonnegative_energy", "kind": "nonnegative_energy", "expression": "charge ** 2 / (2 * capacitance) >= 0 * (charge ** 2 / capacitance)", "expected": true, "samples": 64, "tolerance": 1e-12}
+  ],
+  "trust": {"structural": "tested", "physical": "reviewed", "numerical": "tested", "empirical": "unverified", "evidence": [{"kind": "textbook", "reference": "Ideal capacitor law", "summary": "Charge and voltage relation for a linear capacitor."}]},
+  "metadata": {"gold": true, "causality": "acausal", "descriptor_form": "F(t,z,zdot,theta,u)=0"}
+}

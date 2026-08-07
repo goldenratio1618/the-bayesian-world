@@ -1,0 +1,22 @@
+{
+  "products": [
+    "six rechargeable AA NiMH cells and matched charger",
+    "Pololu 6V 2.5A step-up/step-down regulator S13V25F6, item 4981"
+  ],
+  "purpose": "low-voltage apartment-suitable rechargeable power and regulated arm supply",
+  "domains": ["electrical", "electromechanical"],
+  "parameters": {
+    "cell_count": 6,
+    "nominal_pack_voltage_v": 7.2,
+    "servo_regulator_output_v": 6.0,
+    "servo_regulator_typical_max_output_a": 2.5,
+    "servo_regulator_input_range_v": [2.8, 22.0]
+  },
+  "operating_constraint": "rate-limit arm commands and do not make both large servos reverse abruptly; characterize brownout margin under load",
+  "source_urls": [
+    "https://www.pololu.com/docs/0J76/4",
+    "https://www.pololu.com/product/4981"
+  ],
+  "unknowns_to_fit": ["cell internal resistance", "capacity", "regulator efficiency map"]
+}
+

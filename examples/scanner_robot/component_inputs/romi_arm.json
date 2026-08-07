@@ -1,0 +1,26 @@
+{
+  "manufacturer": "Pololu",
+  "product": "Robot Arm Kit for Romi, item 3550",
+  "purpose": "raise/lower a camera and control its tilt",
+  "modification": "replace the gripper subassembly with a lightweight camera cradle",
+  "domains": ["electrical", "rigid_mechanical", "electromechanical"],
+  "features": {
+    "lift_and_tilt_servos": 2,
+    "feedback": "separate potentiometer feedback wire on each servo",
+    "servo_voltage_range_v": [4.8, 6.0],
+    "large_servo_peak_current_a_each": 1.8,
+    "recommended_payload_kg": 0.100
+  },
+  "source_urls": [
+    "https://www.pololu.com/product/3550",
+    "https://www.pololu.com/docs/0J76/4"
+  ],
+  "unknowns_to_fit": [
+    "link masses and inertias",
+    "joint friction",
+    "PWM-to-angle calibration",
+    "feedback-voltage-to-angle calibration",
+    "servo closed-loop bandwidth"
+  ]
+}
+

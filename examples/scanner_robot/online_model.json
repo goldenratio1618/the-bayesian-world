@@ -1,0 +1,173 @@
+{
+  "kind": "linearized",
+  "state_names": [
+    "radius_error",
+    "heading_error",
+    "left_wheel_speed_error",
+    "right_wheel_speed_error",
+    "arm_elevation_error",
+    "camera_pitch_error"
+  ],
+  "input_names": [
+    "left_voltage_delta",
+    "right_voltage_delta",
+    "arm_command_delta",
+    "camera_pitch_command_delta"
+  ],
+  "measurement_names": [
+    "radius_error_measurement",
+    "heading_error_measurement",
+    "left_encoder_speed_error",
+    "right_encoder_speed_error",
+    "arm_feedback_error",
+    "camera_pitch_feedback_error"
+  ],
+  "A": [
+    [0.0, 0.12, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.21898, -0.18522, 0.0, 0.0],
+    [0.0, 0.0, -6.29, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, -6.29, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0, -5.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, -6.25]
+  ],
+  "B": [
+    [0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0],
+    [20.0, 0.0, 0.0, 0.0],
+    [0.0, 20.0, 0.0, 0.0],
+    [0.0, 0.0, 5.0, 0.0],
+    [0.0, 0.0, 0.0, 6.25]
+  ],
+  "C": [
+    [1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+  ],
+  "D": [
+    [0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0]
+  ],
+  "process_covariance": [
+    [0.000025, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.00005, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.02, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.02, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.001, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.001]
+  ],
+  "measurement_covariance": [
+    [0.0004, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0004, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0025, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0025, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0001, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0001]
+  ],
+  "initial_state": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+  "initial_covariance": [
+    [0.0025, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.01, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.25, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.25, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.01, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.01]
+  ],
+  "dynamics_bias": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+  "measurement_bias": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+  "nominal_dt": 0.01,
+  "maximum_dt": 0.05,
+  "state_bounds": [
+    [-0.35, 0.35],
+    [-3.1415926536, 3.1415926536],
+    [-20.0, 20.0],
+    [-20.0, 20.0],
+    [-1.2, 1.2],
+    [-1.2, 1.2]
+  ],
+  "operating_point": {
+    "orbit_radius_m": 0.85,
+    "tangential_speed_m_s": 0.12,
+    "wheel_radius_m": 0.035,
+    "track_width_m": 0.142,
+    "nominal_traction": 0.82,
+    "nominal_wheel_speed_rad_s": 4.181184669
+  },
+  "metadata": {
+    "review_status": "reviewed-reference-linearization",
+    "source_model": "DifferentialDriveArmModel around the declared orbit",
+    "mechanics": "rigid_body",
+    "uncertainty_runtime": "continuous-discrete covariance propagation and EKF measurement update",
+    "assembly_coverage": {
+      "schema": "contraption.online-assembly-coverage/v1",
+      "component_ids": [
+        "battery-pack",
+        "chassis",
+        "control-board",
+        "left-motor",
+        "right-motor",
+        "left-wheel",
+        "right-wheel",
+        "encoder-pair",
+        "servo-regulator",
+        "lift-servo",
+        "tilt-servo",
+        "arm-linkage",
+        "camera",
+        "compute",
+        "scanner-controller"
+      ],
+      "connection_ids": [
+        "battery-positive-bus",
+        "battery-return-bus",
+        "left-motor-power",
+        "right-motor-power",
+        "servo-six-volt-bus",
+        "left-driveline",
+        "right-driveline",
+        "arm-base",
+        "camera-wrist",
+        "encoder-signals",
+        "servo-feedback",
+        "controller-io"
+      ],
+      "component_models": {
+        "battery-pack": "electrical.nimh-battery-pack",
+        "chassis": "mechanical.rigid-body-planar",
+        "control-board": "electromechanical.dual-hbridge-controller",
+        "left-motor": "electromechanical.brushed-dc-gearmotor",
+        "right-motor": "electromechanical.brushed-dc-gearmotor",
+        "left-wheel": "mechanical.compliant-wheel-contact",
+        "right-wheel": "mechanical.compliant-wheel-contact",
+        "encoder-pair": "electromechanical.quadrature-encoder-pair",
+        "servo-regulator": "electrical.switching-voltage-regulator",
+        "lift-servo": "electromechanical.position-servo",
+        "tilt-servo": "electromechanical.position-servo",
+        "arm-linkage": "mechanical.rigid-linkage",
+        "camera": "mechanical.camera-payload",
+        "compute": "electrical.single-board-computer",
+        "scanner-controller": "control.scanner-orbit-controller-v1"
+      },
+      "topology_sha256": "a22531850f666e560b8ecbb1ba3ad0bca500de524f1e2403247d8ade88a6e4cf",
+      "review": {
+        "review_id": "scanner-reference-linearization-2026-08-06",
+        "reviewed_by": "Phase 1 reference implementation maintainers",
+        "basis": "Reviewed vendor-part manifest and hand-derived DifferentialDriveArmModel aggregate linearization at the declared orbit.",
+        "component_contracts_reviewed": true,
+        "ports_and_connections_reviewed": true,
+        "assembled_ir_coverage_reviewed": true,
+        "limitations": [
+          "This IR is a reviewed aggregate abstraction, not a network assembled from the bundled PMDL component models.",
+          "The generated C99 implements estimation for the supplied affine matrices; the scanner ControlProgram remains a separate runtime.",
+          "Attachment compliance and electrical switching detail are represented only through the aggregate linearization and covariance."
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,166 @@
+{
+  "name": "scanner_orbit_controller",
+  "version": "1.0.0",
+  "inputs": [
+    {"name": "armed", "type": "boolean", "source": "external", "default": false, "unit": "1", "description": "mission enable after physical area check"},
+    {"name": "reset", "type": "boolean", "source": "external", "default": false, "unit": "1", "description": "acknowledge a latched stop"},
+    {"name": "emergency_stop", "type": "boolean", "source": "external", "default": false, "unit": "1", "description": "dominant stop input"},
+    {"name": "target_speed", "type": "number", "source": "external", "default": 0.12, "minimum": 0.0, "maximum": 0.25, "unit": "m/s", "description": "tangential orbit speed"},
+    {"name": "orbit_radius", "type": "number", "source": "external", "default": 0.85, "minimum": 0.65, "maximum": 1.5, "unit": "m", "description": "desired radius from known object center"},
+    {"name": "measured_speed", "type": "number", "source": "sensor", "default": 0.0, "minimum": -0.5, "maximum": 0.5, "unit": "m/s", "description": "encoder/IMU EKF tangential speed"},
+    {"name": "radius_error", "type": "number", "source": "sensor", "default": 0.0, "minimum": -1.0, "maximum": 1.0, "unit": "m", "description": "estimated radius minus commanded radius"},
+    {"name": "heading_error", "type": "number", "source": "sensor", "default": 0.0, "minimum": -3.1415926536, "maximum": 3.1415926536, "unit": "rad", "description": "wrapped tangent-heading error"},
+    {"name": "orbit_phase", "type": "number", "source": "sensor", "default": 0.0, "minimum": -1000000.0, "maximum": 1000000.0, "unit": "rad", "description": "unwrapped polar angle about object"},
+    {"name": "required_tilt", "type": "number", "source": "sensor", "default": 0.0, "minimum": -1.2, "maximum": 1.2, "unit": "rad", "description": "geometric look-at pitch from estimator"},
+    {"name": "lift_feedback", "type": "number", "source": "sensor", "default": 0.25, "minimum": -0.35, "maximum": 0.85, "unit": "rad", "description": "calibrated lift potentiometer"},
+    {"name": "tilt_feedback", "type": "number", "source": "sensor", "default": 0.0, "minimum": -0.70, "maximum": 0.70, "unit": "rad", "description": "calibrated tilt potentiometer"},
+    {"name": "drive_fault", "type": "boolean", "source": "sensor", "default": false, "unit": "1", "description": "driver current/encoder plausibility fault"},
+    {"name": "brownout", "type": "boolean", "source": "sensor", "default": false, "unit": "1", "description": "battery or regulated-rail undervoltage"}
+  ],
+  "outputs": [
+    {"name": "left_voltage", "type": "number", "source": "output", "default": 0.0, "minimum": -4.5, "maximum": 4.5, "unit": "V", "description": "left motor average voltage"},
+    {"name": "right_voltage", "type": "number", "source": "output", "default": 0.0, "minimum": -4.5, "maximum": 4.5, "unit": "V", "description": "right motor average voltage"},
+    {"name": "lift_target", "type": "number", "source": "output", "default": 0.25, "minimum": -0.35, "maximum": 0.85, "unit": "rad", "description": "arm lift angle target"},
+    {"name": "tilt_target", "type": "number", "source": "output", "default": 0.0, "minimum": -0.70, "maximum": 0.70, "unit": "rad", "description": "camera pitch target"},
+    {"name": "record_video", "type": "boolean", "source": "output", "default": false, "unit": "1", "description": "video capture gate"}
+  ],
+  "parameters": {
+    "speed_feedforward_v_per_m_s": 12.0,
+    "speed_kp": 4.0,
+    "heading_kp": 2.5,
+    "radius_kp": 1.6,
+    "voltage_limit": 4.5,
+    "lift_midpoint": 0.25,
+    "lift_amplitude": 0.45,
+    "vertical_harmonic": 2.0,
+    "lift_min": -0.35,
+    "lift_max": 0.85,
+    "tilt_min": -0.70,
+    "tilt_max": 0.70
+  },
+  "registers": {
+    "fault_latched": {"type": "boolean", "initial": false}
+  },
+  "states": [
+    {
+      "name": "idle",
+      "outputs": {
+        "left_voltage": 0.0,
+        "right_voltage": 0.0,
+        "lift_target": {"ref": "sensor.lift_feedback"},
+        "tilt_target": {"ref": "sensor.tilt_feedback"},
+        "record_video": false
+      },
+      "updates": {"fault_latched": false},
+      "transitions": [
+        {
+          "name": "fault_while_idle",
+          "target": "emergency",
+          "priority": 100,
+          "condition": {"op": "or", "args": [{"ref": "external.emergency_stop"}, {"ref": "sensor.drive_fault"}, {"ref": "sensor.brownout"}]}
+        },
+        {
+          "name": "arm_mission",
+          "target": "scanning",
+          "priority": 10,
+          "condition": {"op": "and", "args": [{"ref": "external.armed"}, {"op": "not", "args": [{"ref": "external.emergency_stop"}]}]}
+        }
+      ]
+    },
+    {
+      "name": "scanning",
+      "outputs": {
+        "left_voltage": {
+          "op": "clamp",
+          "args": [
+            {"op": "sub", "args": [
+              {"op": "add", "args": [
+                {"op": "mul", "args": [{"ref": "parameter.speed_feedforward_v_per_m_s"}, {"ref": "external.target_speed"}]},
+                {"op": "mul", "args": [{"ref": "parameter.speed_kp"}, {"op": "sub", "args": [{"ref": "external.target_speed"}, {"ref": "sensor.measured_speed"}]}]}
+              ]},
+              {"op": "add", "args": [
+                {"op": "mul", "args": [{"ref": "parameter.heading_kp"}, {"ref": "sensor.heading_error"}]},
+                {"op": "mul", "args": [{"ref": "parameter.radius_kp"}, {"ref": "sensor.radius_error"}]}
+              ]}
+            ]},
+            {"op": "neg", "args": [{"ref": "parameter.voltage_limit"}]},
+            {"ref": "parameter.voltage_limit"}
+          ]
+        },
+        "right_voltage": {
+          "op": "clamp",
+          "args": [
+            {"op": "add", "args": [
+              {"op": "add", "args": [
+                {"op": "mul", "args": [{"ref": "parameter.speed_feedforward_v_per_m_s"}, {"ref": "external.target_speed"}]},
+                {"op": "mul", "args": [{"ref": "parameter.speed_kp"}, {"op": "sub", "args": [{"ref": "external.target_speed"}, {"ref": "sensor.measured_speed"}]}]}
+              ]},
+              {"op": "add", "args": [
+                {"op": "mul", "args": [{"ref": "parameter.heading_kp"}, {"ref": "sensor.heading_error"}]},
+                {"op": "mul", "args": [{"ref": "parameter.radius_kp"}, {"ref": "sensor.radius_error"}]}
+              ]}
+            ]},
+            {"op": "neg", "args": [{"ref": "parameter.voltage_limit"}]},
+            {"ref": "parameter.voltage_limit"}
+          ]
+        },
+        "lift_target": {
+          "op": "clamp",
+          "args": [
+            {"op": "add", "args": [
+              {"ref": "parameter.lift_midpoint"},
+              {"op": "mul", "args": [
+                {"ref": "parameter.lift_amplitude"},
+                {"op": "sin", "args": [{"op": "mul", "args": [{"ref": "parameter.vertical_harmonic"}, {"ref": "sensor.orbit_phase"}]}]}
+              ]}
+            ]},
+            {"ref": "parameter.lift_min"},
+            {"ref": "parameter.lift_max"}
+          ]
+        },
+        "tilt_target": {"op": "clamp", "args": [{"ref": "sensor.required_tilt"}, {"ref": "parameter.tilt_min"}, {"ref": "parameter.tilt_max"}]},
+        "record_video": true
+      },
+      "updates": {"fault_latched": false},
+      "transitions": [
+        {
+          "name": "stop_or_fault",
+          "target": "emergency",
+          "priority": 100,
+          "condition": {"op": "or", "args": [{"ref": "external.emergency_stop"}, {"ref": "sensor.drive_fault"}, {"ref": "sensor.brownout"}]}
+        },
+        {
+          "name": "disarm",
+          "target": "idle",
+          "priority": 10,
+          "condition": {"op": "not", "args": [{"ref": "external.armed"}]}
+        }
+      ]
+    },
+    {
+      "name": "emergency",
+      "outputs": {
+        "left_voltage": 0.0,
+        "right_voltage": 0.0,
+        "lift_target": {"ref": "sensor.lift_feedback"},
+        "tilt_target": {"ref": "sensor.tilt_feedback"},
+        "record_video": false
+      },
+      "updates": {"fault_latched": true},
+      "transitions": [
+        {
+          "name": "acknowledge",
+          "target": "idle",
+          "priority": 10,
+          "condition": {"op": "and", "args": [
+            {"ref": "external.reset"},
+            {"op": "not", "args": [{"ref": "external.emergency_stop"}]},
+            {"op": "not", "args": [{"ref": "sensor.drive_fault"}]},
+            {"op": "not", "args": [{"ref": "sensor.brownout"}]}
+          ]}
+        }
+      ]
+    }
+  ],
+  "initial_state": "idle"
+}

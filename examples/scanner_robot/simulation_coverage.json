@@ -1,0 +1,367 @@
+{
+  "schema": "contraption.simulation-coverage/v1",
+  "contraption_id": "apartment-scanner-robot",
+  "aggregate_model": "contraption.scanner.DifferentialDriveArmModel/v1",
+  "composition": "hand_authored_aggregate_not_pmdl_network",
+  "topology_sha256": "sha256:d112680e2dddcec58dd9637d5f4ee2a1e0ce27e23e4c4d035532c5a760a9dc98",
+  "components": [
+    {
+      "id": "battery-pack",
+      "model": "electrical.nimh-battery-pack",
+      "representations": [
+        {
+          "kind": "excluded",
+          "targets": [],
+          "limitation": "The aggregate has no battery or electrical-network state; state of charge, voltage sag, internal resistance, heating, and depletion are not simulated."
+        }
+      ]
+    },
+    {
+      "id": "chassis",
+      "model": "mechanical.rigid-body-planar",
+      "representations": [
+        {
+          "kind": "state",
+          "targets": ["state.x", "state.y", "state.yaw"],
+          "limitation": "Planar pose is represented, but declared chassis mass and yaw inertia are not used by the kinematic aggregate."
+        }
+      ]
+    },
+    {
+      "id": "control-board",
+      "model": "electromechanical.dual-hbridge-controller",
+      "representations": [
+        {
+          "kind": "controller",
+          "targets": ["control.left_voltage", "control.right_voltage"],
+          "limitation": "H-bridge switching, current limiting, brownout, thermal protection, and PWM ripple are reduced to bounded voltage commands."
+        }
+      ]
+    },
+    {
+      "id": "left-motor",
+      "model": "electromechanical.brushed-dc-gearmotor",
+      "representations": [
+        {
+          "kind": "state",
+          "targets": ["state.left_wheel_speed"],
+          "limitation": "The motor electrical state and gearbox compliance are not explicit."
+        },
+        {
+          "kind": "dynamics_parameter",
+          "targets": ["parameter.motor_gain", "parameter.motor_time_constant", "parameter.rolling_drag"],
+          "limitation": "These identified first-order parameters are shared by both motors rather than preserving all per-instance PMDL parameters."
+        }
+      ]
+    },
+    {
+      "id": "right-motor",
+      "model": "electromechanical.brushed-dc-gearmotor",
+      "representations": [
+        {
+          "kind": "state",
+          "targets": ["state.right_wheel_speed"],
+          "limitation": "The motor electrical state and gearbox compliance are not explicit."
+        },
+        {
+          "kind": "dynamics_parameter",
+          "targets": ["parameter.motor_gain", "parameter.motor_time_constant", "parameter.rolling_drag"],
+          "limitation": "These identified first-order parameters are shared by both motors rather than preserving all per-instance PMDL parameters."
+        }
+      ]
+    },
+    {
+      "id": "left-wheel",
+      "model": "mechanical.compliant-wheel-contact",
+      "representations": [
+        {
+          "kind": "dynamics_parameter",
+          "targets": ["parameter.wheel_radius", "parameter.traction_left", "parameter.roughness_std", "parameter.contact_jitter_std"],
+          "limitation": "Contact is a planar traction/noise approximation without normal-force, tire deformation, or obstacle contact states."
+        }
+      ]
+    },
+    {
+      "id": "right-wheel",
+      "model": "mechanical.compliant-wheel-contact",
+      "representations": [
+        {
+          "kind": "dynamics_parameter",
+          "targets": ["parameter.wheel_radius", "parameter.traction_right", "parameter.roughness_std", "parameter.contact_jitter_std"],
+          "limitation": "Contact is a planar traction/noise approximation without normal-force, tire deformation, or obstacle contact states."
+        }
+      ]
+    },
+    {
+      "id": "encoder-pair",
+      "model": "electromechanical.quadrature-encoder-pair",
+      "representations": [
+        {
+          "kind": "sensor",
+          "targets": ["controller.context.measured_speed"],
+          "limitation": "Wheel speed states are observed ideally; quantization, missed edges, latency, and the declared miss probability are not simulated."
+        }
+      ]
+    },
+    {
+      "id": "servo-regulator",
+      "model": "electrical.switching-voltage-regulator",
+      "representations": [
+        {
+          "kind": "excluded",
+          "targets": [],
+          "limitation": "The aggregate has no regulator electrical state; efficiency, output-current limit, ripple, dropout, and thermal behavior are not simulated."
+        }
+      ]
+    },
+    {
+      "id": "lift-servo",
+      "model": "electromechanical.position-servo",
+      "representations": [
+        {
+          "kind": "state",
+          "targets": ["state.arm_elevation"],
+          "limitation": "Servo motion is reduced to a bounded first-order angle state."
+        },
+        {
+          "kind": "dynamics_parameter",
+          "targets": ["parameter.arm_time_constant", "parameter.arm_min", "parameter.arm_max"],
+          "limitation": "Current, torque, backlash, load dependence, saturation recovery, and thermal behavior are omitted."
+        }
+      ]
+    },
+    {
+      "id": "tilt-servo",
+      "model": "electromechanical.position-servo",
+      "representations": [
+        {
+          "kind": "state",
+          "targets": ["state.camera_pitch"],
+          "limitation": "Servo motion is reduced to a bounded first-order angle state."
+        },
+        {
+          "kind": "dynamics_parameter",
+          "targets": ["parameter.camera_time_constant", "parameter.camera_pitch_min", "parameter.camera_pitch_max"],
+          "limitation": "Current, torque, backlash, load dependence, saturation recovery, and thermal behavior are omitted."
+        }
+      ]
+    },
+    {
+      "id": "arm-linkage",
+      "model": "mechanical.rigid-linkage",
+      "representations": [
+        {
+          "kind": "dynamics_parameter",
+          "targets": ["parameter.mount_offset", "parameter.arm_length", "parameter.base_height", "parameter.arm_azimuth_offset"],
+          "limitation": "The linkage is kinematic; its declared mass, center of mass, joint loads, and parallel-link geometry are not dynamic states."
+        },
+        {
+          "kind": "geometry_only",
+          "targets": ["output.camera_x", "output.camera_y", "output.camera_z"],
+          "limitation": "Only the reduced camera-mount transform is emitted."
+        }
+      ]
+    },
+    {
+      "id": "camera",
+      "model": "mechanical.camera-payload",
+      "representations": [
+        {
+          "kind": "geometry_only",
+          "targets": ["output.camera_x", "output.camera_y", "output.camera_z", "state.camera_pitch"],
+          "limitation": "Camera position and pointing geometry are represented; mass, field of view, optics, exposure, image formation, and capture timing are not simulated."
+        }
+      ]
+    },
+    {
+      "id": "compute",
+      "model": "electrical.single-board-computer",
+      "representations": [
+        {
+          "kind": "excluded",
+          "targets": [],
+          "limitation": "Compute load, power draw, scheduling, thermal behavior, communication latency, and software faults are outside the aggregate dynamics."
+        }
+      ]
+    },
+    {
+      "id": "scanner-controller",
+      "model": "control.scanner-orbit-controller-v1",
+      "representations": [
+        {
+          "kind": "controller",
+          "targets": ["ScannerOrbitController.evaluate", "scanner.control.json:state.scanning"],
+          "limitation": "The normal mission executes the scanning-state expressions; deployment timing and physical I/O faults remain outside this aggregate."
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "battery-positive-bus",
+      "kind": "power",
+      "domain": "electrical",
+      "endpoints": ["battery-pack.positive", "control-board.vin", "servo-regulator.vin_positive"],
+      "representations": [
+        {
+          "kind": "excluded",
+          "targets": [],
+          "limitation": "No electrical network is assembled, so bus voltage, current sharing, fuse behavior, and wire losses are not simulated."
+        }
+      ]
+    },
+    {
+      "id": "battery-return-bus",
+      "kind": "power",
+      "domain": "electrical",
+      "endpoints": ["battery-pack.negative", "control-board.ground", "servo-regulator.ground"],
+      "representations": [
+        {
+          "kind": "excluded",
+          "targets": [],
+          "limitation": "No electrical network is assembled, so return-path resistance, ground offsets, and disconnection faults are not simulated."
+        }
+      ]
+    },
+    {
+      "id": "left-motor-power",
+      "kind": "power",
+      "domain": "electrical",
+      "endpoints": ["control-board.left_motor", "left-motor.electrical"],
+      "representations": [
+        {
+          "kind": "controller",
+          "targets": ["control.left_voltage"],
+          "limitation": "The connection is reduced to an ideal commanded voltage; current, polarity wiring faults, switching, and conductor losses are omitted."
+        }
+      ]
+    },
+    {
+      "id": "right-motor-power",
+      "kind": "power",
+      "domain": "electrical",
+      "endpoints": ["control-board.right_motor", "right-motor.electrical"],
+      "representations": [
+        {
+          "kind": "controller",
+          "targets": ["control.right_voltage"],
+          "limitation": "The connection is reduced to an ideal commanded voltage; current, polarity wiring faults, switching, and conductor losses are omitted."
+        }
+      ]
+    },
+    {
+      "id": "servo-six-volt-bus",
+      "kind": "power",
+      "domain": "electrical",
+      "endpoints": ["servo-regulator.output", "lift-servo.power", "tilt-servo.power"],
+      "representations": [
+        {
+          "kind": "excluded",
+          "targets": [],
+          "limitation": "The aggregate does not solve servo supply current, simultaneous load peaks, voltage droop, wiring losses, or regulator current limiting."
+        }
+      ]
+    },
+    {
+      "id": "left-driveline",
+      "kind": "attachment",
+      "domain": "rigid_mechanical",
+      "endpoints": ["left-motor.shaft", "left-wheel.hub", "chassis.left_axle"],
+      "representations": [
+        {
+          "kind": "dynamics_parameter",
+          "targets": ["kinematics.left_wheel_speed", "parameter.wheel_radius", "parameter.traction_left"],
+          "limitation": "The rigid shaft/hub/axle connection is a direct kinematic coupling without compliance, bearing load, backlash, or failure."
+        }
+      ]
+    },
+    {
+      "id": "right-driveline",
+      "kind": "attachment",
+      "domain": "rigid_mechanical",
+      "endpoints": ["right-motor.shaft", "right-wheel.hub", "chassis.right_axle"],
+      "representations": [
+        {
+          "kind": "dynamics_parameter",
+          "targets": ["kinematics.right_wheel_speed", "parameter.wheel_radius", "parameter.traction_right"],
+          "limitation": "The rigid shaft/hub/axle connection is a direct kinematic coupling without compliance, bearing load, backlash, or failure."
+        }
+      ]
+    },
+    {
+      "id": "arm-base",
+      "kind": "attachment",
+      "domain": "rigid_mechanical",
+      "endpoints": ["chassis.arm_mount", "arm-linkage.base", "lift-servo.shaft"],
+      "representations": [
+        {
+          "kind": "state",
+          "targets": ["state.arm_elevation"],
+          "limitation": "The revolute-linkage attachment is one ideal angle without reaction loads, compliance, fastener behavior, or travel-stop impact."
+        }
+      ]
+    },
+    {
+      "id": "camera-wrist",
+      "kind": "attachment",
+      "domain": "rigid_mechanical",
+      "endpoints": ["arm-linkage.tip", "tilt-servo.case", "camera.mount"],
+      "representations": [
+        {
+          "kind": "state",
+          "targets": ["state.camera_pitch"],
+          "limitation": "The wrist is one ideal pitch coordinate; cable service-loop forces, compliance, fastener behavior, and collision are omitted."
+        },
+        {
+          "kind": "geometry_only",
+          "targets": ["output.camera_x", "output.camera_y", "output.camera_z"],
+          "limitation": "The camera transform uses fixed aggregate offsets."
+        }
+      ]
+    },
+    {
+      "id": "encoder-signals",
+      "kind": "signal",
+      "domain": null,
+      "endpoints": ["encoder-pair.left_measurement", "encoder-pair.right_measurement", "control-board.encoder_inputs"],
+      "representations": [
+        {
+          "kind": "sensor",
+          "targets": ["controller.context.measured_speed"],
+          "limitation": "The aggregate provides ideal state-derived speed rather than edge-level quadrature signaling, pullups, quantization, or transport faults."
+        }
+      ]
+    },
+    {
+      "id": "servo-feedback",
+      "kind": "signal",
+      "domain": null,
+      "endpoints": ["lift-servo.position_measurement", "tilt-servo.position_measurement", "control-board.analog_inputs"],
+      "representations": [
+        {
+          "kind": "sensor",
+          "targets": ["controller.context.lift_feedback", "controller.context.tilt_feedback"],
+          "limitation": "Feedback is read directly from ideal aggregate angle states; analog scaling, calibration error, latency, noise, and disconnection are omitted."
+        }
+      ]
+    },
+    {
+      "id": "controller-io",
+      "kind": "signal",
+      "domain": null,
+      "endpoints": ["scanner-controller.actuator_commands", "control-board.command_interface", "control-board.sensor_interface", "scanner-controller.sensor_measurements"],
+      "representations": [
+        {
+          "kind": "controller",
+          "targets": ["ScannerOrbitController.evaluate", "control.left_voltage", "control.right_voltage", "control.arm_command", "control.camera_pitch"],
+          "limitation": "The interface is an instantaneous in-process call without the declared sample clock, serialization, latency, dropped frames, or electrical signaling."
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "This file admits one hand-authored reduced aggregate model; it is not evidence that the listed PMDL models were assembled into a coupled network.",
+    "Excluded entries remain part of the physical contraption and must not be interpreted as simulated, safe, or irrelevant.",
+    "Any component/model or connection kind/domain/endpoint change invalidates this contract and must be reviewed before simulation."
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "format": "pmdl-1",
+  "id": "electromechanical.dc_motor.ideal",
+  "name": "Ideal brushed DC motor",
+  "version": "1.0.0",
+  "domains": ["electromechanical", "electrical", "mechanical"],
+  "category": "brushed-dc-motor",
+  "description": "Armature electrical dynamics coupled acausally to a rigid rotating shaft.",
+  "power_ports": [
+    {"name": "p", "domain": "electrical", "effort": "v_p", "flow": "i_p", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "electrical", "reference": "positive armature terminal"},
+    {"name": "n", "domain": "electrical", "effort": "v_n", "flow": "i_n", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "electrical", "reference": "negative armature terminal"},
+    {"name": "shaft", "domain": "mechanical", "effort": "torque_shaft", "flow": "omega_shaft", "effort_unit": "N*m", "flow_unit": "rad/s", "orientation": "into_component", "frame": "shaft", "reference": "right-hand positive rotation"}
+  ],
+  "states": [
+    {"name": "armature_current", "unit": "A", "initial": 0.0, "derivative": "armature_current_dot", "description": "Armature winding current."}
+  ],
+  "parameters": [
+    {"name": "resistance", "unit": "ohm", "default": 2.0, "bounds": {"lower": 1e-06, "upper": 10000.0}, "uncertainty": {"distribution": "lognormal", "parameters": {"std": 0.1}}, "learnable": true},
+    {"name": "inductance", "unit": "H", "default": 0.001, "bounds": {"lower": 1e-09, "upper": 100.0}, "uncertainty": {"distribution": "lognormal", "parameters": {"std": 0.15}}, "learnable": true},
+    {"name": "back_emf_constant", "unit": "V*s/rad", "default": 0.05, "bounds": {"lower": 1e-09, "upper": 1000.0}, "uncertainty": {"distribution": "normal", "parameters": {"std": 0.005}}, "learnable": true},
+    {"name": "torque_constant", "unit": "N*m/A", "default": 0.05, "bounds": {"lower": 1e-09, "upper": 1000.0}, "uncertainty": {"distribution": "normal", "parameters": {"std": 0.005}}, "learnable": true}
+  ],
+  "relations": [
+    {"name": "armature_dynamics", "expression": "inductance * armature_current_dot - (v_p - v_n - resistance * armature_current - back_emf_constant * omega_shaft)"},
+    {"name": "positive_terminal_current", "expression": "i_p - armature_current"},
+    {"name": "negative_terminal_current", "expression": "i_n + armature_current"},
+    {"name": "electromagnetic_torque", "expression": "torque_shaft + torque_constant * armature_current"}
+  ],
+  "stored_energy": [
+    {"name": "magnetic_energy", "expression": "0.5 * inductance * armature_current ** 2", "unit": "J", "nonnegative": true}
+  ],
+  "dissipation": [
+    {"name": "copper_loss", "expression": "resistance * armature_current ** 2", "unit": "W", "nonnegative": true}
+  ],
+  "initialization": {"strategy": "consistent", "constraints": [], "required": ["armature_current"]},
+  "validity": {"ranges": {"armature_current": {"lower": -1000.0, "upper": 1000.0}, "omega_shaft": {"lower": -100000.0, "upper": 100000.0}}, "assumptions": ["Rigid shaft", "Linear magnetic circuit", "No brush switching ripple", "Torque and back-EMF constants use coherent SI values"], "max_timestep": 0.0001},
+  "fidelity_levels": [
+    {"name": "ideal", "description": "Linear armature and rigid shaft coupling.", "active_relations": ["armature_dynamics", "positive_terminal_current", "negative_terminal_current", "electromagnetic_torque"], "parameter_overrides": {}, "approximation_error": "Saturation, cogging, friction, and shaft compliance omitted", "relative_cost": 1.0}
+  ],
+  "properties": [
+    {"name": "positive_resistance", "kind": "parameter_bounds", "expression": "resistance > 0 * resistance", "expected": true, "samples": 32, "tolerance": 0.0},
+    {"name": "positive_inductance", "kind": "parameter_bounds", "expression": "inductance > 0 * inductance", "expected": true, "samples": 32, "tolerance": 0.0},
+    {"name": "nonnegative_copper_loss", "kind": "nonnegative_dissipation", "expression": "resistance * armature_current ** 2 >= 0 * (resistance * armature_current ** 2)", "expected": true, "samples": 64, "tolerance": 1e-12}
+  ],
+  "trust": {"structural": "tested", "physical": "reviewed", "numerical": "tested", "empirical": "unverified", "evidence": [{"kind": "textbook", "reference": "Linear brushed DC motor equations", "summary": "Standard armature-controlled motor approximation."}]},
+  "metadata": {"gold": true, "causality": "acausal", "descriptor_form": "F(t,z,zdot,theta,u)=0", "mechanics": "rigid"}
+}

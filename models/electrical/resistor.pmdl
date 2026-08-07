@@ -1,0 +1,34 @@
+{
+  "format": "pmdl-1",
+  "id": "electrical.resistor.ideal",
+  "name": "Ideal uncertain resistor",
+  "version": "1.0.0",
+  "domains": ["electrical"],
+  "category": "fixed-resistor",
+  "description": "Acausal two-terminal resistor using the passive sign convention.",
+  "power_ports": [
+    {"name": "p", "domain": "electrical", "effort": "v_p", "flow": "i_p", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "electrical", "reference": "v_p relative to circuit reference"},
+    {"name": "n", "domain": "electrical", "effort": "v_n", "flow": "i_n", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "electrical", "reference": "v_n relative to circuit reference"}
+  ],
+  "parameters": [
+    {"name": "resistance", "unit": "ohm", "default": 100.0, "bounds": {"lower": 1e-09, "upper": 1000000000000.0}, "uncertainty": {"distribution": "lognormal", "parameters": {"std": 0.05}}, "learnable": true, "description": "Terminal resistance."}
+  ],
+  "relations": [
+    {"name": "ohms_law", "expression": "v_p - v_n - resistance * i_p", "description": "Voltage drop equals resistance times current."},
+    {"name": "charge_conservation", "expression": "i_p + i_n", "description": "Terminal currents sum to zero."}
+  ],
+  "dissipation": [
+    {"name": "joule_heating", "expression": "resistance * i_p ** 2", "unit": "W", "nonnegative": true, "description": "Irreversible electrical loss."}
+  ],
+  "initialization": {"strategy": "consistent", "constraints": [], "required": []},
+  "validity": {"ranges": {"resistance": {"lower": 1e-09, "upper": 1000000000000.0}}, "assumptions": ["Lumped element", "Constant resistance over a simulation sample", "Parasitic capacitance and inductance neglected"], "max_timestep": 0.001},
+  "fidelity_levels": [
+    {"name": "ideal", "description": "Memoryless Ohmic law.", "active_relations": ["ohms_law", "charge_conservation"], "parameter_overrides": {}, "approximation_error": "Parasitic dynamics omitted", "relative_cost": 1.0}
+  ],
+  "properties": [
+    {"name": "positive_resistance", "kind": "parameter_bounds", "expression": "resistance > 0 * resistance", "expected": true, "samples": 32, "tolerance": 0.0},
+    {"name": "nonnegative_joule_loss", "kind": "nonnegative_dissipation", "expression": "resistance * i_p ** 2 >= 0 * (resistance * i_p ** 2)", "expected": true, "samples": 64, "tolerance": 1e-12}
+  ],
+  "trust": {"structural": "tested", "physical": "reviewed", "numerical": "tested", "empirical": "unverified", "evidence": [{"kind": "textbook", "reference": "Ohm's law", "summary": "Canonical ideal constitutive relation."}]},
+  "metadata": {"gold": true, "causality": "acausal", "descriptor_form": "F(t,z,zdot,theta,u)=0"}
+}

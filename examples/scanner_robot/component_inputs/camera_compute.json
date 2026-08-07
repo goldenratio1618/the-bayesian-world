@@ -1,0 +1,22 @@
+{
+  "manufacturer": "Raspberry Pi",
+  "products": ["Raspberry Pi Zero 2 W", "Camera Module 3 Wide"],
+  "purpose": "record video and run high-level path planning",
+  "domains": ["electrical", "rigid_mechanical"],
+  "parameters": {
+    "computer_dimensions_m": [0.065, 0.030, 0.005],
+    "computer_estimated_mass_kg": 0.011,
+    "camera_dimensions_m": [0.025, 0.024, 0.0124],
+    "camera_estimated_mass_kg": 0.005,
+    "camera_diagonal_field_of_view_deg": 120.0,
+    "camera_resolution_pixels": [4608, 2592],
+    "camera_common_video_mode": "1080p50"
+  },
+  "mounting": "computer remains on chassis; camera alone is on arm with a Zero camera cable",
+  "source_urls": [
+    "https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/",
+    "https://www.raspberrypi.com/products/camera-module-3/"
+  ],
+  "unknowns_to_verify": ["actual masses", "cable bending moment", "mount transform"]
+}
+
