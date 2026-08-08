@@ -154,10 +154,10 @@ class TaxonomyInstantiation(StrictRecord):
     taxonomy_node: str
     model: str
     version: str
+    geometry: GeometrySpec
     condition: str = "unverified"
     parameters: FrozenDict[Any] = FrozenDict()
     parameter_uncertainty: FrozenDict[Any] = FrozenDict()
-    geometry: GeometrySpec = GeometrySpec()
     purchasing: PurchasingSpec = PurchasingSpec()
     connection_info: FrozenDict[Any] = FrozenDict()
     metadata: FrozenDict[Any] = FrozenDict()
@@ -174,15 +174,21 @@ class TaxonomyInstantiation(StrictRecord):
     def from_dict(cls, data: Mapping[str, Any]) -> "TaxonomyInstantiation":
         data = _object(data, "instantiation")
         names = ("id", "name", "taxonomy_node", "model", "version", "condition", "parameters", "parameter_uncertainty", "geometry", "purchasing", "connection_info", "metadata")
-        _keys(data, names, "instantiation", names[:5])
-        return cls(_identifier(data["id"], "instantiation.id"), _string(data["name"], "instantiation.name"),
-                   _identifier(data["taxonomy_node"], "instantiation.taxonomy_node"), _identifier(data["model"], "instantiation.model"),
-                   _string(data["version"], "instantiation.version"), _string(data.get("condition", "unverified"), "instantiation.condition"),
-                   _freeze(_object(data.get("parameters", {}), "instantiation.parameters")),
-                   _freeze(_object(data.get("parameter_uncertainty", {}), "instantiation.parameter_uncertainty")),
-                   GeometrySpec.from_dict(data.get("geometry")), PurchasingSpec.from_dict(data.get("purchasing", {})),
-                   _freeze(_object(data.get("connection_info", {}), "instantiation.connection_info")),
-                   _freeze(_object(data.get("metadata", {}), "instantiation.metadata")))
+        _keys(data, names, "instantiation", (*names[:5], "geometry"))
+        return cls(
+            id=_identifier(data["id"], "instantiation.id"),
+            name=_string(data["name"], "instantiation.name"),
+            taxonomy_node=_identifier(data["taxonomy_node"], "instantiation.taxonomy_node"),
+            model=_identifier(data["model"], "instantiation.model"),
+            version=_string(data["version"], "instantiation.version"),
+            geometry=GeometrySpec.from_dict(data["geometry"]),
+            condition=_string(data.get("condition", "unverified"), "instantiation.condition"),
+            parameters=_freeze(_object(data.get("parameters", {}), "instantiation.parameters")),
+            parameter_uncertainty=_freeze(_object(data.get("parameter_uncertainty", {}), "instantiation.parameter_uncertainty")),
+            purchasing=PurchasingSpec.from_dict(data.get("purchasing", {})),
+            connection_info=_freeze(_object(data.get("connection_info", {}), "instantiation.connection_info")),
+            metadata=_freeze(_object(data.get("metadata", {}), "instantiation.metadata")),
+        )
 
 
 InstantiationSpec = TaxonomyInstantiation
@@ -342,9 +348,10 @@ class Taxonomy(StrictRecord):
         return tuple(issues)
 
     def instantiate(
-        self, *, id: str, name: str, taxonomy_node: str, model: str, version: str = "1.0.0",
+        self, *, id: str, name: str, taxonomy_node: str, model: str, geometry: GeometrySpec,
+        version: str = "1.0.0",
         parameters: Mapping[str, Any] | None = None, parameter_uncertainty: Mapping[str, Any] | None = None,
-        geometry: GeometrySpec | None = None, purchasing: PurchasingSpec | None = None,
+        purchasing: PurchasingSpec | None = None,
         connection_info: Mapping[str, Any] | None = None, metadata: Mapping[str, Any] | None = None,
     ) -> TaxonomyInstantiation:
         if taxonomy_node not in self.category_map and taxonomy_node not in self.subcategory_map:
@@ -352,7 +359,7 @@ class Taxonomy(StrictRecord):
         return TaxonomyInstantiation(
             id=id, name=name, taxonomy_node=taxonomy_node, model=model, version=version,
             condition="unverified", parameters=_freeze(parameters or {}), parameter_uncertainty=_freeze(parameter_uncertainty or {}),
-            geometry=geometry or GeometrySpec.placeholder_cube(), purchasing=purchasing or PurchasingSpec(),
+            geometry=geometry, purchasing=purchasing or PurchasingSpec(),
             connection_info=_freeze(connection_info or {}), metadata=_freeze(metadata or {}),
         )
 

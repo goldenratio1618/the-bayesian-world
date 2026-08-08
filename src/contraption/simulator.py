@@ -783,6 +783,28 @@ def _resolve_system(candidate: Any) -> tuple[Any, Any | None]:
     return system, controller
 
 
+def _validate_accepted_step(
+    contraption: Any,
+    *,
+    step_index: int,
+    time_s: float,
+    state: Array,
+    state_names: tuple[str, ...],
+    backend: Backend,
+) -> None:
+    """Run an optional fail-closed validator on each accepted state frame."""
+
+    validator = getattr(contraption, "validate_simulation_step", None)
+    if callable(validator):
+        validator(
+            step_index=step_index,
+            time_s=time_s,
+            state=state,
+            state_names=state_names,
+            backend=backend,
+        )
+
+
 def _time_grid(
     t_span: tuple[float, float] | None,
     duration: float | None,
@@ -1307,6 +1329,11 @@ def simulate(
     ``(mean, std)``, :class:`~contraption.uq.Normal`, or a mapping with
     ``mean/std/lower/upper``—as well as a joint distribution object whose
     ``sample`` method returns a name-to-batch mapping.
+
+    A contraption wrapper may expose ``validate_simulation_step`` to reject an
+    invalid consistently initialized or accepted state before the engine
+    advances or publishes it.  ``validate_simulation_result`` remains the
+    final whole-trajectory admission hook.
     """
 
     if num_samples < 1:
@@ -1368,12 +1395,24 @@ def simulate(
     if integrator not in {"euler", "rk4", "implicit_euler"}:
         raise ValueError(f"Unsupported integrator {integrator!r}")
 
-    states = [state]
     external_controls = _evaluate_controls(controls, None, float(grid[0]), state, numerical, grid)
     held_internal_controls = _evaluate_controls(
         None, controller, float(grid[0]), state, numerical, grid
     )
     first_controls = _merged_controls(external_controls, held_internal_controls)
+    initializer = getattr(system, "consistent_initial_state", None)
+    if callable(initializer):
+        state = _invoke(
+            initializer,
+            numerical.asarray(float(grid[0])),
+            state,
+            sampled_parameters,
+            first_controls,
+            backend=numerical,
+        )
+        # Initial commands are sample-and-hold inputs to the consistency solve.
+        # Re-evaluating feedback against solved algebraics here would change the
+        # equations after solving them and publish an inconsistent first frame.
     _require_runtime_validity(
         system,
         t=float(grid[0]),
@@ -1381,6 +1420,28 @@ def simulate(
         parameters=sampled_parameters,
         controls=first_controls,
         phase="initialization",
+    )
+    # The first published frame must be the accepted, consistently initialized
+    # assembly state.  Retaining the caller's zero-filled algebraic guess here
+    # would make visualization and downstream metrics observe a configuration
+    # that the descriptor equations explicitly rejected.
+    states = [state]
+    invariant_check = getattr(system, "require_network_invariants", None)
+    if callable(invariant_check):
+        invariant_check(
+            state,
+            first_controls,
+            numerical,
+            tolerance=max(float(newton_tolerance) * 10.0, 1e-8),
+            time=float(grid[0]),
+        )
+    _validate_accepted_step(
+        contraption,
+        step_index=0,
+        time_s=float(grid[0]),
+        state=state,
+        state_names=names,
+        backend=numerical,
     )
     output_names, first_output = _observe(
         system, float(grid[0]), state, sampled_parameters, first_controls, numerical, names
@@ -1435,13 +1496,27 @@ def simulate(
             next_state = next_state + _as_vector(increment, numerical, num_samples)
         state = next_state
         states.append(state)
-        next_external_controls = _evaluate_controls(
-            controls, None, float(grid[index + 1]), state, numerical, grid
-        )
-        held_internal_controls = _evaluate_controls(
-            None, controller, float(grid[index + 1]), state, numerical, grid
-        )
-        output_controls = _merged_controls(next_external_controls, held_internal_controls)
+        if explicit:
+            next_external_controls = _evaluate_controls(
+                controls, None, float(grid[index + 1]), state, numerical, grid
+            )
+            output_controls = _merged_controls(
+                next_external_controls, held_internal_controls
+            )
+        else:
+            # The accepted descriptor state satisfies its algebraic/control
+            # equations for the command held during this interval.  Comparing
+            # it against newly evaluated feedback would check a command that
+            # was never applied and can report a false constraint violation.
+            output_controls = dict(step_controls)
+        if callable(invariant_check):
+            invariant_check(
+                state,
+                output_controls,
+                numerical,
+                tolerance=max(float(newton_tolerance) * 10.0, 1e-8),
+                time=float(grid[index + 1]),
+            )
         _require_runtime_validity(
             system,
             t=float(grid[index + 1]),
@@ -1449,6 +1524,14 @@ def simulate(
             parameters=sampled_parameters,
             controls=output_controls,
             phase=f"accepted timestep {index + 1}",
+        )
+        _validate_accepted_step(
+            contraption,
+            step_index=index + 1,
+            time_s=float(grid[index + 1]),
+            state=state,
+            state_names=names,
+            backend=numerical,
         )
         current_names, output = _observe(
             system,
@@ -1462,6 +1545,9 @@ def simulate(
         if current_names != output_names:
             raise ValueError("observe() returned inconsistent output names across time")
         outputs.append(output)
+        held_internal_controls = _evaluate_controls(
+            None, controller, float(grid[index + 1]), state, numerical, grid
+        )
 
     trajectory = numerical.stack(states, axis=1)
     output_trajectory = numerical.stack(outputs, axis=1)
@@ -1477,7 +1563,7 @@ def simulate(
         quantiles=quantiles,
         confidence_level=confidence_level,
     )
-    return SimulationResult(
+    result = SimulationResult(
         time=numerical.asarray(grid),
         state_names=names,
         samples=trajectory,
@@ -1493,8 +1579,25 @@ def simulate(
             "sample_count": int(num_samples),
             "interval_kind": summary.interval_kind,
             "process_noise": bool(process_noise),
+            **(
+                {"assembly_sha256": str(system.assembly_sha256)}
+                if getattr(system, "assembly_sha256", None) is not None
+                else {}
+            ),
+            **(
+                {"pmdl_sha256": str(system.pmdl_sha256)}
+                if getattr(system, "pmdl_sha256", None) is not None
+                else {}
+            ),
         },
     )
+    result_validator = getattr(contraption, "validate_simulation_result", None)
+    if callable(result_validator):
+        # Geometry is not a viewer concern: a resolved assembly reconstructs
+        # every sample/time configuration from these exact PMDL states and
+        # rejects any mechanical boundary drift before the result can escape.
+        result_validator(result)
+    return result
 
 
 class OfflineSimulator:
@@ -1523,13 +1626,6 @@ class OfflineSimulator:
         }
         values.update(overrides)
         return simulate(contraption, **values)
-
-    def simulate_scanner_robot(self, **options: Any) -> SimulationResult:
-        """Convenience entry point for the Phase 1 acceptance robot."""
-
-        parameters = options.pop("model_parameters", None)
-        return self.simulate(DifferentialDriveArmModel(parameters), **options)
-
 
 def linearize_dynamics(
     system: Any,
@@ -1821,184 +1917,17 @@ class PlanarRigidBodySystem:
         return simulate(self, **options)
 
 
-class DifferentialDriveArmModel:
-    """Scanning-robot chassis, arm, and camera rigid-body motion model.
-
-    The motor/electrical dynamics are reduced to identified first-order voltage
-    responses for high-throughput robot trajectory work; :class:`DCMotorSystem`
-    provides the higher-fidelity standalone electromechanical model.  Per-run
-    traction uncertainty and per-step rough/contact noise represent an apartment
-    floor or similarly rough planar surface.
-    """
-
-    state_names = (
-        "x",
-        "y",
-        "yaw",
-        "left_wheel_speed",
-        "right_wheel_speed",
-        "arm_elevation",
-        "camera_pitch",
-    )
-    control_names = ("left_voltage", "right_voltage", "arm_command", "camera_pitch")
-    output_names = (
-        "x",
-        "y",
-        "yaw",
-        "forward_speed",
-        "yaw_rate",
-        "left_wheel_speed",
-        "right_wheel_speed",
-        "arm_elevation",
-        "camera_pitch",
-        "camera_x",
-        "camera_y",
-        "camera_z",
-    )
-
-    def __init__(self, parameters: Mapping[str, Any] | None = None) -> None:
-        defaults = {
-            "wheel_radius": 0.05,
-            "wheel_base": 0.28,
-            "motor_gain": 1.2,
-            "motor_time_constant": 0.18,
-            "rolling_drag": 0.04,
-            "traction_left": 1.0,
-            "traction_right": 1.0,
-            "lateral_slip": 0.0,
-            "arm_time_constant": 0.25,
-            "camera_time_constant": 0.12,
-            "arm_min": -0.35,
-            "arm_max": 0.85,
-            "camera_pitch_min": -1.45,
-            "camera_pitch_max": 0.35,
-            "mount_offset": 0.09,
-            "arm_length": 0.45,
-            "base_height": 0.25,
-            "arm_azimuth_offset": 0.0,
-            "roughness_std": 0.002,
-            "contact_jitter_std": 0.006,
-        }
-        if parameters:
-            unknown = set(parameters) - set(defaults)
-            if unknown:
-                raise KeyError(f"Unknown scanner model parameters: {sorted(unknown)}")
-            defaults.update(parameters)
-        self.default_parameters = defaults
-        positive = {
-            "wheel_radius",
-            "wheel_base",
-            "motor_gain",
-            "motor_time_constant",
-            "arm_time_constant",
-            "camera_time_constant",
-        }
-        self.parameter_bounds = {
-            name: ((1e-9 if name in positive else None), None) for name in defaults
-        }
-        self.parameter_bounds.update(
-            {
-                "rolling_drag": (0.0, None),
-                "traction_left": (0.05, 1.5),
-                "traction_right": (0.05, 1.5),
-                "roughness_std": (0.0, None),
-                "contact_jitter_std": (0.0, None),
-                "arm_length": (1e-6, None),
-                "arm_azimuth_offset": (-math.pi, math.pi),
-            }
-        )
-        self.parameter_uncertainty = {
-            "motor_gain": {"std": 0.03 * defaults["motor_gain"]},
-            "traction_left": {"std": 0.035},
-            "traction_right": {"std": 0.035},
-            "rolling_drag": {"std": 0.01, "lower": 0.0},
-        }
-        self.initial_state = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-
-    def _kinematics(self, state: Array, parameters: Mapping[str, Array], backend: Backend) -> tuple[Array, Array]:
-        left = state[:, 3] * _parameter(parameters, "traction_left")
-        right = state[:, 4] * _parameter(parameters, "traction_right")
-        radius = _parameter(parameters, "wheel_radius")
-        forward = 0.5 * radius * (left + right)
-        yaw_rate = radius * (right - left) / _parameter(parameters, "wheel_base")
-        return forward, yaw_rate
-
-    def derivative(self, t: Any, state: Array, parameters: Mapping[str, Array], controls: Mapping[str, Array], backend: Backend) -> Array:
-        yaw = state[:, 2]
-        left, right = state[:, 3], state[:, 4]
-        forward, yaw_rate = self._kinematics(state, parameters, backend)
-        lateral = _parameter(parameters, "lateral_slip") * forward
-        x_rate = forward * backend.cos(yaw) - lateral * backend.sin(yaw)
-        y_rate = forward * backend.sin(yaw) + lateral * backend.cos(yaw)
-        motor_gain = _parameter(parameters, "motor_gain")
-        tau = _parameter(parameters, "motor_time_constant")
-        drag = _parameter(parameters, "rolling_drag")
-        left_rate = (motor_gain * _control(controls, "left_voltage") - left) / tau - drag * left
-        right_rate = (motor_gain * _control(controls, "right_voltage") - right) / tau - drag * right
-        arm_target = backend.clip(
-            _control(controls, "arm_command", default=_parameter(parameters, "arm_min")),
-            _parameter(parameters, "arm_min"),
-            _parameter(parameters, "arm_max"),
-        )
-        pitch_target = backend.clip(
-            _control(controls, "camera_pitch", "camera_pitch_command", default=0.0),
-            _parameter(parameters, "camera_pitch_min"),
-            _parameter(parameters, "camera_pitch_max"),
-        )
-        arm_rate = (arm_target - state[:, 5]) / _parameter(parameters, "arm_time_constant")
-        pitch_rate = (pitch_target - state[:, 6]) / _parameter(parameters, "camera_time_constant")
-        return backend.stack(
-            (x_rate, y_rate, yaw_rate, left_rate, right_rate, arm_rate, pitch_rate), axis=-1
-        )
-
-    def process_noise(self, t: Any, state: Array, parameters: Mapping[str, Array], controls: Mapping[str, Array], dt: Any, rng: Any, backend: Backend) -> Array:
-        count = int(state.shape[0])
-        translation_scale = _parameter(parameters, "roughness_std") * backend.sqrt(dt)
-        yaw_scale = _parameter(parameters, "contact_jitter_std") * backend.sqrt(dt)
-        translation = backend.normal((count, 2), rng) * translation_scale[:, None]
-        yaw = backend.normal((count,), rng) * yaw_scale
-        zeros = backend.zeros((count, 4))
-        return backend.concatenate((translation, yaw[:, None], zeros), axis=-1)
-
-    def observe(self, t: Any, state: Array, parameters: Mapping[str, Array], controls: Mapping[str, Array], backend: Backend) -> Mapping[str, Array]:
-        forward, yaw_rate = self._kinematics(state, parameters, backend)
-        radial = _parameter(parameters, "mount_offset") + _parameter(
-            parameters, "arm_length"
-        ) * backend.cos(state[:, 5])
-        arm_azimuth = state[:, 2] + _parameter(parameters, "arm_azimuth_offset")
-        return {
-            "x": state[:, 0],
-            "y": state[:, 1],
-            "yaw": state[:, 2],
-            "forward_speed": forward,
-            "yaw_rate": yaw_rate,
-            "left_wheel_speed": state[:, 3],
-            "right_wheel_speed": state[:, 4],
-            "arm_elevation": state[:, 5],
-            "camera_pitch": state[:, 6],
-            "camera_x": state[:, 0] + radial * backend.cos(arm_azimuth),
-            "camera_y": state[:, 1] + radial * backend.sin(arm_azimuth),
-            "camera_z": _parameter(parameters, "base_height")
-            + _parameter(parameters, "arm_length") * backend.sin(state[:, 5]),
-        }
-
-    def simulate(self, **options: Any) -> SimulationResult:
-        return simulate(self, **options)
-
-
 # Friendly compatibility aliases used in examples and downstream notebooks.
 RCSystem = RCCircuit
 RLSystem = RLCircuit
 DCMotor = DCMotorSystem
 PlanarRigidBody = PlanarRigidBodySystem
-ScannerRobotModel = DifferentialDriveArmModel
 
 
 __all__ = [
     "DCMotor",
     "DCMotorSystem",
     "DescriptorDynamics",
-    "DifferentialDriveArmModel",
     "ExplicitDynamics",
     "Linearization",
     "OfflineSimulator",
@@ -2009,7 +1938,6 @@ __all__ = [
     "RLCircuit",
     "RLSystem",
     "ResidualSystem",
-    "ScannerRobotModel",
     "SimulationConfig",
     "SimulationResult",
     "linearize_dynamics",

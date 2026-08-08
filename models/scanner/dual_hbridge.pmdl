@@ -1,0 +1,44 @@
+{
+  "format": "pmdl-1",
+  "id": "electrical.dual_hbridge.ideal",
+  "name": "Ideal dual H-bridge with logic supply",
+  "version": "1.0.0",
+  "domains": ["electrical"],
+  "category": "power-converter",
+  "description": "An ideal commanded-voltage dual motor driver plus a regulated logic rail with an explicitly approximate current balance.",
+  "power_ports": [
+    {"name": "supply_p", "domain": "electrical", "effort": "v_supply_p", "flow": "i_supply_p", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "supply_p", "reference": "battery positive"},
+    {"name": "supply_n", "domain": "electrical", "effort": "v_supply_n", "flow": "i_supply_n", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "supply_n", "reference": "battery return"},
+    {"name": "left_p", "domain": "electrical", "effort": "v_left_p", "flow": "i_left_p", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "left_p", "reference": "left motor positive"},
+    {"name": "left_n", "domain": "electrical", "effort": "v_left_n", "flow": "i_left_n", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "left_n", "reference": "left motor negative"},
+    {"name": "right_p", "domain": "electrical", "effort": "v_right_p", "flow": "i_right_p", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "right_p", "reference": "right motor positive"},
+    {"name": "right_n", "domain": "electrical", "effort": "v_right_n", "flow": "i_right_n", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "right_n", "reference": "right motor negative"},
+    {"name": "logic_p", "domain": "electrical", "effort": "v_logic_p", "flow": "i_logic_p", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "logic_p", "reference": "regulated logic positive"},
+    {"name": "logic_n", "domain": "electrical", "effort": "v_logic_n", "flow": "i_logic_n", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "logic_n", "reference": "logic return"}
+  ],
+  "signal_ports": [
+    {"name": "left_command", "direction": "input", "unit": "V", "dtype": "float64", "shape": [], "description": "Requested left motor terminal voltage."},
+    {"name": "right_command", "direction": "input", "unit": "V", "dtype": "float64", "shape": [], "description": "Requested right motor terminal voltage."},
+    {"name": "left_encoder", "direction": "input", "unit": "rad/s", "dtype": "float64", "shape": [], "description": "Left shaft measurement."},
+    {"name": "right_encoder", "direction": "input", "unit": "rad/s", "dtype": "float64", "shape": [], "description": "Right shaft measurement."},
+    {"name": "lift_position", "direction": "input", "unit": "rad", "dtype": "float64", "shape": [], "description": "Lift feedback."},
+    {"name": "tilt_position", "direction": "input", "unit": "rad", "dtype": "float64", "shape": [], "description": "Tilt feedback."}
+  ],
+  "parameters": [
+    {"name": "logic_voltage", "unit": "V", "default": 5.0, "bounds": {"lower": 1.0, "upper": 12.0}, "uncertainty": {}, "learnable": false}
+  ],
+  "relations": [
+    {"name": "left_voltage", "expression": "v_left_p - v_left_n - left_command"},
+    {"name": "left_return", "expression": "i_left_p + i_left_n"},
+    {"name": "right_voltage", "expression": "v_right_p - v_right_n - right_command"},
+    {"name": "right_return", "expression": "i_right_p + i_right_n"},
+    {"name": "logic_voltage", "expression": "v_logic_p - v_logic_n - logic_voltage"},
+    {"name": "logic_return", "expression": "i_logic_p + i_logic_n"},
+    {"name": "supply_return", "expression": "i_supply_p + i_supply_n"},
+    {"name": "low_fidelity_current_balance", "expression": "i_supply_p + i_left_p + i_right_p + i_logic_p"}
+  ],
+  "initialization": {"strategy": "consistent", "constraints": [], "required": []},
+  "validity": {"ranges": {"left_command": {"lower": -7.2, "upper": 7.2}, "right_command": {"lower": -7.2, "upper": 7.2}}, "assumptions": ["Commands are average terminal voltages", "The online current balance neglects voltage-ratio conversion loss", "Current and thermal limits are outside this fidelity"], "max_timestep": 0.05},
+  "trust": {"structural": "tested", "physical": "reviewed", "numerical": "tested", "empirical": "unverified", "evidence": []},
+  "metadata": {"gold": false, "scanner_component": true, "causality": "acausal", "descriptor_form": "F(t,z,zdot,theta,u)=0", "online_admission": {"admitted": true, "kind": "linearizable"}}
+}

@@ -1,203 +1,153 @@
 {
-  "format": "contraption-1",
+  "format": "contraption-2",
   "id": "apartment-scanner-robot",
   "name": "Romi orbital 3D-scanning motion prototype",
-  "version": "0.1.0",
-  "components": [
-    {
-      "id": "battery-pack",
-      "model": "electrical.nimh-battery-pack",
-      "taxonomy": "electrical.energy-storage.battery.nimh-pack",
-      "parameters": {
-        "cells": 6,
-        "nominal_voltage": {"value": 7.2, "unit": "V", "uncertainty": {"distribution": "normal", "std": 0.35}},
-        "internal_resistance": {"value": 0.12, "unit": "ohm", "uncertainty": {"distribution": "lognormal", "relative_std": 0.35}}
-      },
-      "geometry": {"kind": "box", "dimensions": [0.086, 0.058, 0.052], "unit": "m", "frame": "chassis", "metadata": {"translation_m": [-0.02, 0.0, 0.035]}},
-      "condition": "unverified",
-      "version": "1.0.0",
-      "metadata": {"quantity": 1, "connection": "six series AA contacts", "verify": ["cell chemistry", "polarity", "loaded voltage", "internal resistance"]}
+  "version": "0.2.0",
+  "physical_root": {
+    "component": "chassis",
+    "pose": {
+      "translation_m": [0.85, 0.0, 0.0],
+      "rotation_quaternion_wxyz": [0.7071067811865476, 0.0, 0.0, 0.7071067811865475]
     },
-    {
-      "id": "chassis",
-      "model": "mechanical.rigid-body-planar",
-      "taxonomy": "rigid_mechanical.structure.mobile-chassis.circular",
-      "parameters": {
-        "mass": {"value": 0.55, "unit": "kg", "uncertainty": {"distribution": "normal", "std": 0.06}},
-        "yaw_inertia": {"value": 0.0045, "unit": "kg*m^2", "uncertainty": {"distribution": "normal", "std": 0.0008}}
-      },
-      "geometry": {"kind": "cylinder", "dimensions": [0.163, 0.163, 0.070], "unit": "m", "frame": "chassis", "metadata": {"translation_m": [0.0, 0.0, 0.035], "color": "#334155"}},
-      "condition": "unverified",
-      "version": "1.0.0",
-      "metadata": {"manufacturer": "Pololu", "part_number": "3500", "purchase_url": "https://www.pololu.com/product/3500"}
-    },
-    {
-      "id": "control-board",
-      "model": "electromechanical.dual-hbridge-controller",
-      "taxonomy": "electromechanical.controller.motor-controller.dual-hbridge",
-      "parameters": {"logic_voltage": {"value": 5.0, "unit": "V"}, "motor_current_limit": {"value": 1.8, "unit": "A"}, "pwm_frequency": {"value": 19500, "unit": "Hz"}},
-      "geometry": {"kind": "box", "dimensions": [0.112, 0.084, 0.010], "unit": "m", "frame": "chassis", "metadata": {"translation_m": [0.0, 0.0, 0.085], "color": "#16a34a"}},
-      "condition": "unverified",
-      "version": "1.0.0",
-      "metadata": {"manufacturer": "Pololu", "part_number": "3544", "purchase_url": "https://www.pololu.com/product/3544", "firmware_target": "ATmega32U4"}
-    },
-    {
-      "id": "left-motor",
-      "model": "electromechanical.brushed-dc-gearmotor",
-      "taxonomy": "electromechanical.motor.dc-brushed.plastic-gearmotor",
-      "parameters": {"gear_ratio": 120.0, "nominal_voltage": {"value": 4.5, "unit": "V"}, "resistance": {"value": 3.6, "unit": "ohm", "uncertainty": {"distribution": "normal", "std": 0.35}}, "inductance": {"value": 0.0012, "unit": "H", "uncertainty": {"distribution": "lognormal", "relative_std": 0.3}}, "torque_constant": {"value": 0.011, "unit": "N*m/A", "uncertainty": {"distribution": "normal", "std": 0.0015}}},
-      "geometry": {"kind": "box", "dimensions": [0.037, 0.020, 0.027], "unit": "m", "frame": "chassis", "metadata": {"translation_m": [0.0, 0.071, 0.035]}},
-      "condition": "unverified",
-      "version": "1.0.0",
-      "metadata": {"manufacturer": "Pololu", "part_number": "1520", "side": "left"}
-    },
-    {
-      "id": "right-motor",
-      "model": "electromechanical.brushed-dc-gearmotor",
-      "taxonomy": "electromechanical.motor.dc-brushed.plastic-gearmotor",
-      "parameters": {"gear_ratio": 120.0, "nominal_voltage": {"value": 4.5, "unit": "V"}, "resistance": {"value": 3.6, "unit": "ohm", "uncertainty": {"distribution": "normal", "std": 0.35}}, "inductance": {"value": 0.0012, "unit": "H", "uncertainty": {"distribution": "lognormal", "relative_std": 0.3}}, "torque_constant": {"value": 0.011, "unit": "N*m/A", "uncertainty": {"distribution": "normal", "std": 0.0015}}},
-      "geometry": {"kind": "box", "dimensions": [0.037, 0.020, 0.027], "unit": "m", "frame": "chassis", "metadata": {"translation_m": [0.0, -0.071, 0.035]}},
-      "condition": "unverified",
-      "version": "1.0.0",
-      "metadata": {"manufacturer": "Pololu", "part_number": "1520", "side": "right"}
-    },
-    {
-      "id": "left-wheel",
-      "model": "mechanical.compliant-wheel-contact",
-      "taxonomy": "rigid_mechanical.running-gear.wheel.compliant-tire",
-      "parameters": {"radius": {"value": 0.035, "unit": "m", "uncertainty": {"distribution": "normal", "std": 0.0007}}, "traction": {"value": 0.82, "unit": "1", "uncertainty": {"distribution": "normal", "std": 0.08}}},
-      "geometry": {"kind": "cylinder", "dimensions": [0.070, 0.070, 0.008], "unit": "m", "frame": "chassis", "metadata": {"translation_m": [0.0, 0.075, 0.035], "rotation_rpy_rad": [1.5707963268, 0.0, 0.0], "color": "#111827"}},
-      "condition": "unverified",
-      "version": "1.0.0",
-      "metadata": {"side": "left"}
-    },
-    {
-      "id": "right-wheel",
-      "model": "mechanical.compliant-wheel-contact",
-      "taxonomy": "rigid_mechanical.running-gear.wheel.compliant-tire",
-      "parameters": {"radius": {"value": 0.035, "unit": "m", "uncertainty": {"distribution": "normal", "std": 0.0007}}, "traction": {"value": 0.82, "unit": "1", "uncertainty": {"distribution": "normal", "std": 0.08}}},
-      "geometry": {"kind": "cylinder", "dimensions": [0.070, 0.070, 0.008], "unit": "m", "frame": "chassis", "metadata": {"translation_m": [0.0, -0.075, 0.035], "rotation_rpy_rad": [1.5707963268, 0.0, 0.0], "color": "#111827"}},
-      "condition": "unverified",
-      "version": "1.0.0",
-      "metadata": {"side": "right"}
-    },
-    {
-      "id": "encoder-pair",
-      "model": "electromechanical.quadrature-encoder-pair",
-      "taxonomy": "electromechanical.sensor.position.quadrature-encoder",
-      "parameters": {"counts_per_wheel_revolution": 1440, "miss_probability": {"value": 0.0001, "unit": "1", "uncertainty": {"distribution": "lognormal", "relative_std": 1.0}}},
-      "geometry": {"kind": "box", "dimensions": [0.020, 0.019, 0.004], "unit": "m", "frame": "chassis", "metadata": {"translation_m": [-0.025, 0.0, 0.035]}},
-      "condition": "unverified",
-      "version": "1.0.0",
-      "metadata": {"manufacturer": "Pololu", "part_number": "3542", "purchase_url": "https://www.pololu.com/product/3542"}
-    },
-    {
-      "id": "servo-regulator",
-      "model": "electrical.switching-voltage-regulator",
-      "taxonomy": "electrical.power-conversion.regulator.buck-boost",
-      "parameters": {"output_voltage": {"value": 6.0, "unit": "V"}, "current_limit": {"value": 2.5, "unit": "A"}, "efficiency": {"value": 0.88, "unit": "1", "uncertainty": {"distribution": "normal", "std": 0.04}}},
-      "geometry": {"kind": "box", "dimensions": [0.023, 0.023, 0.010], "unit": "m", "frame": "chassis", "metadata": {"translation_m": [-0.045, 0.03, 0.10], "color": "#2563eb"}},
-      "condition": "unverified",
-      "version": "1.0.0",
-      "metadata": {"manufacturer": "Pololu", "part_number": "4981", "purchase_url": "https://www.pololu.com/product/4981"}
-    },
-    {
-      "id": "lift-servo",
-      "model": "electromechanical.position-servo",
-      "taxonomy": "electromechanical.actuator.servo.position-feedback",
-      "parameters": {"supply_voltage": {"value": 6.0, "unit": "V"}, "time_constant": {"value": 0.20, "unit": "s", "uncertainty": {"distribution": "normal", "std": 0.04}}, "angle_min": {"value": -0.35, "unit": "rad"}, "angle_max": {"value": 0.85, "unit": "rad"}},
-      "geometry": {"kind": "box", "dimensions": [0.041, 0.020, 0.038], "unit": "m", "frame": "chassis", "metadata": {"translation_m": [-0.035, 0.035, 0.14], "color": "#f59e0b"}},
-      "condition": "unverified",
-      "version": "1.0.0",
-      "metadata": {"kit": "Pololu 3550", "feedback": "potentiometer wire"}
-    },
-    {
-      "id": "tilt-servo",
-      "model": "electromechanical.position-servo",
-      "taxonomy": "electromechanical.actuator.servo.position-feedback",
-      "parameters": {"supply_voltage": {"value": 6.0, "unit": "V"}, "time_constant": {"value": 0.16, "unit": "s", "uncertainty": {"distribution": "normal", "std": 0.03}}, "angle_min": {"value": -0.70, "unit": "rad"}, "angle_max": {"value": 0.70, "unit": "rad"}},
-      "geometry": {"kind": "box", "dimensions": [0.041, 0.020, 0.038], "unit": "m", "frame": "chassis", "metadata": {"translation_m": [-0.035, -0.035, 0.14], "color": "#f59e0b"}},
-      "condition": "unverified",
-      "version": "1.0.0",
-      "metadata": {"kit": "Pololu 3550", "feedback": "potentiometer wire"}
-    },
-    {
-      "id": "arm-linkage",
-      "model": "mechanical.rigid-linkage",
-      "taxonomy": "rigid_mechanical.structure.linkage.parallel-arm",
-      "parameters": {"estimated_mass": {"value": 0.16, "unit": "kg", "uncertainty": {"distribution": "normal", "std": 0.04}}},
-      "geometry": {"kind": "box", "dimensions": [0.180, 0.030, 0.020], "unit": "m", "frame": "arm", "metadata": {"translation_m": [0.08, 0.0, 0.20], "color": "#94a3b8"}},
-      "condition": "unverified",
-      "version": "1.0.0",
-      "metadata": {"manufacturer": "Pololu", "kit_part_number": "3550", "verify": ["mass", "center of mass", "joint transforms"]}
-    },
-    {
-      "id": "camera",
-      "model": "mechanical.camera-payload",
-      "taxonomy": "electromechanical.sensor.camera.csi-autofocus",
-      "parameters": {"estimated_mass": {"value": 0.005, "unit": "kg", "uncertainty": {"distribution": "normal", "std": 0.002}}, "diagonal_fov": {"value": 2.0943951024, "unit": "rad"}},
-      "geometry": {"kind": "box", "dimensions": [0.025, 0.024, 0.0124], "unit": "m", "frame": "camera", "metadata": {"translation_m": [0.18, 0.0, 0.26], "rotation_rpy_rad": [0.0, 0.0, 1.5707963268], "color": "#dc2626"}},
-      "condition": "unverified",
-      "version": "1.0.0",
-      "metadata": {"manufacturer": "Raspberry Pi", "product": "Camera Module 3 Wide", "purchase_url": "https://www.raspberrypi.com/products/camera-module-3/", "optics_simulated": false}
-    },
-    {
-      "id": "compute",
-      "model": "electrical.single-board-computer",
-      "taxonomy": "electrical.compute.single-board-computer",
-      "parameters": {"supply_voltage": {"value": 5.0, "unit": "V"}, "estimated_current": {"value": 0.8, "unit": "A", "uncertainty": {"distribution": "lognormal", "relative_std": 0.4}}},
-      "geometry": {"kind": "box", "dimensions": [0.065, 0.030, 0.005], "unit": "m", "frame": "chassis", "metadata": {"translation_m": [0.025, 0.0, 0.115], "color": "#15803d"}},
-      "condition": "unverified",
-      "version": "1.0.0",
-      "metadata": {"manufacturer": "Raspberry Pi", "product": "Zero 2 W", "purchase_url": "https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/"}
-    },
-    {
-      "id": "scanner-controller",
-      "model": "control.scanner-orbit-controller-v1",
-      "taxonomy": "control.internal.motion.scanner-orbit",
-      "geometry": null,
-      "condition": "unverified",
-      "version": "1.0.0",
-      "metadata": {"implementation": "controls/scanner.control.json", "safety": ["e-stop dominates", "voltage clamp", "servo slew limits", "validity-envelope checks"]}
+    "state_binding": {
+      "kind": "planar",
+      "x": "chassis.position_x",
+      "y": "chassis.position_y",
+      "yaw": "chassis.yaw"
     }
+  },
+  "components": [
+    {"id": "battery-pack", "package": "scanner.nimh_battery", "parameters": {"open_circuit_voltage": 7.2, "internal_resistance": 0.12}, "condition": "unverified"},
+    {"id": "chassis", "package": "scanner.romi_chassis", "parameters": {"mass": 0.16, "yaw_inertia": 0.0006502666666666667, "wheel_base": 0.15, "linear_drag": 1.2, "angular_drag": 0.06}, "condition": "unverified"},
+    {"id": "control-board", "package": "scanner.control_board", "parameters": {"logic_voltage": 5.0}, "condition": "unverified"},
+    {"id": "left-motor", "package": "scanner.gearmotor", "parameters": {"resistance": 3.6, "effective_inductance": 0.08, "electromechanical_constant": 0.30}, "condition": "unverified"},
+    {"id": "right-motor", "package": "scanner.gearmotor", "parameters": {"resistance": 3.6, "effective_inductance": 0.08, "electromechanical_constant": 0.30}, "condition": "unverified"},
+    {"id": "left-wheel", "package": "scanner.wheel", "parameters": {"radius": 0.035, "rolling_ratio": 0.9}, "condition": "unverified"},
+    {"id": "right-wheel", "package": "scanner.wheel", "parameters": {"radius": 0.035, "rolling_ratio": 0.9}, "condition": "unverified"},
+    {"id": "encoder-pair", "package": "scanner.encoder_pair", "parameters": {"equivalent_resistance": 250.0}, "condition": "unverified"},
+    {"id": "servo-regulator", "package": "scanner.servo_regulator", "parameters": {"output_voltage": 6.0, "efficiency": 0.88}, "condition": "unverified"},
+    {"id": "lift-servo", "package": "scanner.position_servo", "parameters": {"stiffness": 1.1, "damping": 0.08, "efficiency": 0.65}, "condition": "unverified"},
+    {"id": "tilt-servo", "package": "scanner.position_servo", "parameters": {"stiffness": 0.8, "damping": 0.06, "efficiency": 0.65}, "condition": "unverified"},
+    {"id": "arm-linkage", "package": "scanner.arm_linkage", "parameters": {"inertia": 0.002, "damping": 0.04, "gravity_torque": 0.12}, "condition": "unverified"},
+    {"id": "camera", "package": "scanner.camera", "parameters": {"inertia": 0.00008, "bearing_damping": 0.01, "current_draw": 0.15}, "condition": "unverified"},
+    {"id": "compute", "package": "scanner.compute", "parameters": {"resistance": 6.25}, "condition": "unverified"},
+    {"id": "electrical-reference", "package": "scanner.electrical_reference", "parameters": {}, "condition": "unverified"}
   ],
   "connections": [
-    {"id": "battery-positive-bus", "kind": "power", "domain": "electrical", "endpoints": ["battery-pack.positive", "control-board.vin", "servo-regulator.vin_positive"], "metadata": {"wire": "size after measured peak-current and fuse selection", "fused": true}},
-    {"id": "battery-return-bus", "kind": "power", "domain": "electrical", "endpoints": ["battery-pack.negative", "control-board.ground", "servo-regulator.ground"], "metadata": {"reference": "battery negative"}},
-    {"id": "left-motor-power", "kind": "power", "domain": "electrical", "endpoints": ["control-board.left_motor", "left-motor.electrical"], "metadata": {"polarity_test_required": true}},
-    {"id": "right-motor-power", "kind": "power", "domain": "electrical", "endpoints": ["control-board.right_motor", "right-motor.electrical"], "metadata": {"polarity_test_required": true}},
-    {"id": "servo-six-volt-bus", "kind": "power", "domain": "electrical", "endpoints": ["servo-regulator.output", "lift-servo.power", "tilt-servo.power"], "metadata": {"maximum_simultaneous_peak_a": 2.5, "command_slew_required": true}},
-    {"id": "left-driveline", "kind": "attachment", "domain": "rigid_mechanical", "endpoints": ["left-motor.shaft", "left-wheel.hub", "chassis.left_axle"], "metadata": {"joint": "revolute", "axis_chassis": [0, 1, 0]}},
-    {"id": "right-driveline", "kind": "attachment", "domain": "rigid_mechanical", "endpoints": ["right-motor.shaft", "right-wheel.hub", "chassis.right_axle"], "metadata": {"joint": "revolute", "axis_chassis": [0, 1, 0]}},
-    {"id": "arm-base", "kind": "attachment", "domain": "rigid_mechanical", "endpoints": ["chassis.arm_mount", "arm-linkage.base", "lift-servo.shaft"], "metadata": {"fasteners": "four #2-56 chassis screws", "joint": "revolute-linkage"}},
-    {"id": "camera-wrist", "kind": "attachment", "domain": "rigid_mechanical", "endpoints": ["arm-linkage.tip", "tilt-servo.case", "camera.mount"], "metadata": {"camera_yaw_offset_rad": 1.5707963268, "service_loop_required": true}},
-    {"id": "encoder-signals", "kind": "signal", "endpoints": ["encoder-pair.left_measurement", "encoder-pair.right_measurement", "control-board.encoder_inputs"], "metadata": {"logic": "open-drain with board pullups"}},
-    {"id": "servo-feedback", "kind": "signal", "endpoints": ["lift-servo.position_measurement", "tilt-servo.position_measurement", "control-board.analog_inputs"], "metadata": {"approximately": "1 mV per microsecond command, calibrate individually"}},
-    {"id": "controller-io", "kind": "signal", "endpoints": ["scanner-controller.actuator_commands", "control-board.command_interface", "control-board.sensor_interface", "scanner-controller.sensor_measurements"], "metadata": {"rate_hz": 100}}
+    {"id": "mount-battery", "kind": "attachment", "domain": "mechanical", "endpoints": ["chassis.battery_mount", "battery-pack.mount"], "joint": {"kind": "fixed", "behavior_binding": "kinematic_only", "coordinate_bindings": []}},
+    {"id": "mount-control-board", "kind": "attachment", "domain": "mechanical", "endpoints": ["chassis.controller_mount", "control-board.mount"], "joint": {"kind": "fixed", "behavior_binding": "kinematic_only", "coordinate_bindings": []}},
+    {"id": "mount-left-motor", "kind": "attachment", "domain": "mechanical", "endpoints": ["chassis.left_motor_mount", "left-motor.case_mount"], "joint": {"kind": "fixed", "behavior_binding": "kinematic_only", "coordinate_bindings": []}},
+    {"id": "mount-right-motor", "kind": "attachment", "domain": "mechanical", "endpoints": ["chassis.right_motor_mount", "right-motor.case_mount"], "joint": {"kind": "fixed", "behavior_binding": "kinematic_only", "coordinate_bindings": []}},
+    {"id": "mount-encoders", "kind": "attachment", "domain": "mechanical", "endpoints": ["chassis.encoder_mount", "encoder-pair.mount"], "joint": {"kind": "fixed", "behavior_binding": "kinematic_only", "coordinate_bindings": []}},
+    {"id": "mount-regulator", "kind": "attachment", "domain": "mechanical", "endpoints": ["chassis.regulator_mount", "servo-regulator.mount"], "joint": {"kind": "fixed", "behavior_binding": "kinematic_only", "coordinate_bindings": []}},
+    {"id": "mount-lift-servo", "kind": "attachment", "domain": "mechanical", "endpoints": ["chassis.lift_servo_mount", "lift-servo.case_mount"], "joint": {"kind": "fixed", "behavior_binding": "kinematic_only", "coordinate_bindings": []}},
+    {"id": "mount-compute", "kind": "attachment", "domain": "mechanical", "endpoints": ["chassis.compute_mount", "compute.mount"], "joint": {"kind": "fixed", "behavior_binding": "kinematic_only", "coordinate_bindings": []}},
+    {"id": "left-wheel-joint", "kind": "attachment", "domain": "mechanical", "endpoints": ["left-motor.shaft", "left-wheel.hub"], "joint": {"kind": "revolute", "behavior_binding": "pmdl", "coordinate": "left-wheel.angle", "zero_angle_rad": 0.0, "coordinate_bindings": [{"state": "left-wheel.angle", "joint_angle_at_state_zero_rad": 0.0}]}},
+    {"id": "right-wheel-joint", "kind": "attachment", "domain": "mechanical", "endpoints": ["right-motor.shaft", "right-wheel.hub"], "joint": {"kind": "revolute", "behavior_binding": "pmdl", "coordinate": "right-wheel.angle", "zero_angle_rad": 0.0, "coordinate_bindings": [{"state": "right-wheel.angle", "joint_angle_at_state_zero_rad": 0.0}]}},
+    {"id": "arm-lift-joint", "kind": "attachment", "domain": "mechanical", "endpoints": ["lift-servo.shaft", "arm-linkage.base"], "joint": {"kind": "revolute", "behavior_binding": "pmdl", "coordinate": "arm-linkage.angle", "zero_angle_rad": 0.0, "coordinate_bindings": [{"state": "arm-linkage.angle", "joint_angle_at_state_zero_rad": 0.0}, {"state": "lift-servo.angle", "joint_angle_at_state_zero_rad": 0.0}]}},
+    {"id": "mount-tilt-servo", "kind": "attachment", "domain": "mechanical", "endpoints": ["arm-linkage.tilt_servo_mount", "tilt-servo.case_mount"], "joint": {"kind": "fixed", "behavior_binding": "kinematic_only", "coordinate_bindings": []}},
+    {"id": "camera-tilt-joint", "kind": "attachment", "domain": "mechanical", "endpoints": ["tilt-servo.shaft", "camera.mount"], "joint": {"kind": "revolute", "behavior_binding": "pmdl", "coordinate": "camera.angle", "zero_angle_rad": 0.0, "coordinate_bindings": [{"state": "camera.angle", "joint_angle_at_state_zero_rad": 0.0}, {"state": "tilt-servo.angle", "joint_angle_at_state_zero_rad": 0.0}]}},
+
+    {"id": "battery-positive-bus", "kind": "power", "domain": "electrical", "endpoints": ["battery-pack.positive", "control-board.supply_p", "servo-regulator.vin_p"]},
+    {"id": "electrical-return-bus", "kind": "power", "domain": "electrical", "endpoints": ["battery-pack.negative", "control-board.supply_n", "control-board.logic_n", "control-board.left_n", "control-board.right_n", "left-motor.n", "right-motor.n", "servo-regulator.vin_n", "servo-regulator.out_n", "lift-servo.supply_n", "tilt-servo.supply_n", "encoder-pair.supply_n", "camera.supply_n", "compute.n", "electrical-reference.ground"]},
+    {"id": "logic-positive-bus", "kind": "power", "domain": "electrical", "endpoints": ["control-board.logic_p", "encoder-pair.supply_p", "camera.supply_p", "compute.p"]},
+    {"id": "servo-positive-bus", "kind": "power", "domain": "electrical", "endpoints": ["servo-regulator.out_p", "lift-servo.supply_p", "tilt-servo.supply_p"]},
+    {"id": "left-motor-positive", "kind": "power", "domain": "electrical", "endpoints": ["control-board.left_p", "left-motor.p"]},
+    {"id": "right-motor-positive", "kind": "power", "domain": "electrical", "endpoints": ["control-board.right_p", "right-motor.p"]},
+    {"id": "left-floor-contact", "kind": "power", "domain": "mechanical", "endpoints": ["left-wheel.translation", "chassis.left_drive"]},
+    {"id": "right-floor-contact", "kind": "power", "domain": "mechanical", "endpoints": ["right-wheel.translation", "chassis.right_drive"]},
+
+    {"id": "left-wheel-sensing", "kind": "signal", "domain": "signal", "endpoints": ["left-wheel.angular_velocity_measurement", "encoder-pair.left_rate"]},
+    {"id": "right-wheel-sensing", "kind": "signal", "domain": "signal", "endpoints": ["right-wheel.angular_velocity_measurement", "encoder-pair.right_rate"]},
+    {"id": "left-encoder-feedback", "kind": "signal", "domain": "signal", "endpoints": ["encoder-pair.left_measurement", "control-board.left_encoder"]},
+    {"id": "right-encoder-feedback", "kind": "signal", "domain": "signal", "endpoints": ["encoder-pair.right_measurement", "control-board.right_encoder"]},
+    {"id": "lift-position-feedback", "kind": "signal", "domain": "signal", "endpoints": ["lift-servo.position_measurement", "control-board.lift_position"]},
+    {"id": "tilt-position-feedback", "kind": "signal", "domain": "signal", "endpoints": ["tilt-servo.position_measurement", "control-board.tilt_position"]}
   ],
   "controls": [
-    {"id": "left-voltage-command", "source": "internal:scanner-controller.left_voltage", "target": "control-board.left_command", "settings": {"unit": "V", "minimum": -4.5, "maximum": 4.5, "slew_per_second": 12.0}, "external": false},
-    {"id": "right-voltage-command", "source": "internal:scanner-controller.right_voltage", "target": "control-board.right_command", "settings": {"unit": "V", "minimum": -4.5, "maximum": 4.5, "slew_per_second": 12.0}, "external": false},
-    {"id": "lift-command", "source": "internal:scanner-controller.lift_target", "target": "lift-servo.position_command", "settings": {"unit": "rad", "minimum": -0.35, "maximum": 0.85, "slew_per_second": 1.2}, "external": false},
-    {"id": "tilt-command", "source": "internal:scanner-controller.tilt_target", "target": "tilt-servo.position_command", "settings": {"unit": "rad", "minimum": -0.70, "maximum": 0.70, "slew_per_second": 1.2}, "external": false},
-    {"id": "external-orbit-radius", "source": "external:user.orbit_radius", "target": "scanner-controller.orbit_radius", "settings": {"unit": "m", "minimum": 0.65, "maximum": 1.5, "default": 0.85}, "external": true},
-    {"id": "external-speed", "source": "external:user.tangential_speed", "target": "scanner-controller.tangential_speed", "settings": {"unit": "m/s", "minimum": 0.0, "maximum": 0.25, "default": 0.12}, "external": true},
-    {"id": "external-object-center", "source": "external:known_bounding_cube.center", "target": "scanner-controller.object_center", "settings": {"unit": "m", "shape": [3], "default": [0.0, 0.0, 0.35]}, "external": true},
-    {"id": "external-emergency-stop", "source": "external:user.emergency_stop", "target": "scanner-controller.emergency_stop", "settings": {"type": "boolean", "default": false, "dominates": true}, "external": true}
+    {"id": "left-voltage-command", "source": "scanner.left_voltage", "target": "control-board.left_command", "settings": {"unit": "V", "minimum": -4.5, "maximum": 4.5, "default": 0.0, "slew_per_second": 12.0}, "external": false},
+    {"id": "right-voltage-command", "source": "scanner.right_voltage", "target": "control-board.right_command", "settings": {"unit": "V", "minimum": -4.5, "maximum": 4.5, "default": 0.0, "slew_per_second": 12.0}, "external": false},
+    {"id": "lift-command", "source": "scanner.lift_angle", "target": "lift-servo.position_command", "settings": {"unit": "rad", "minimum": -0.35, "maximum": 0.85, "default": 0.25, "slew_per_second": 1.2}, "external": false},
+    {"id": "tilt-command", "source": "scanner.tilt_angle", "target": "tilt-servo.position_command", "settings": {"unit": "rad", "minimum": -0.70, "maximum": 0.70, "default": 0.0, "slew_per_second": 1.2}, "external": false}
   ],
+  "controller": {
+    "id": "scanner_orbit_controller",
+    "version": "1.0.0",
+    "sha256": "sha256:dd285ae85c68d06cf0495a2851df29b172a98a269e70cca1dd6aba2e9af568e9",
+    "output_bindings": {
+      "left_voltage": "scanner.left_voltage",
+      "right_voltage": "scanner.right_voltage",
+      "lift_target": "scanner.lift_angle",
+      "tilt_target": "scanner.tilt_angle"
+    },
+    "telemetry_outputs": ["record_video"]
+  },
   "environment": {
     "gravity_m_s2": [0.0, 0.0, -9.80665],
-    "floor": {"kind": "rough-planar", "traction_distribution": {"distribution": "truncated_normal", "mean": 0.82, "std": 0.08, "minimum": 0.45, "maximum": 1.0}, "lateral_slip_std_m_s": 0.006},
+    "floor": {"kind": "rough-planar", "longitudinal_interaction": {"kind": "component-effective-rolling-ratio", "parameter": "rolling_ratio", "uncertainty": "sampled-per-simulation-run"}, "lateral_slip_simulated": false},
     "object_bounding_cube": {"center_m": [0.0, 0.0, 0.35], "side_m": 0.40},
-    "keep_out_radius_m": 0.50
+    "mission": {"orbit_radius_m": 0.85, "tangential_speed_m_s": 0.12, "duration_s": 8.0, "keep_out_radius_m": 0.50}
   },
   "metadata": {
     "coordinate_convention": "right-handed world: x/y floor, +z up; chassis +x forward, +y left",
-    "camera_convention": "optical axis +x_camera; mounted +90 degrees yaw so left side faces orbit center",
-    "physics_scope": ["electrical", "rigid_mechanical", "electromechanical"],
+    "geometry_provenance": "estimated connector locations are explicit in component packages and must be replaced by measured/CAD/scan evidence before construction",
     "optical_physics": false,
-    "acceptance": {"orbit_radius_rmse_max_m": 0.12, "camera_pointing_p95_max_deg": 6.0, "collision_probability_max": 0.001},
+    "dynamics_completeness": {
+      "schema": "contraption.dynamics-completeness/v1",
+      "status": "incomplete",
+      "modeled_scope": "bare_chassis_planar_plus_component_local_dynamics",
+      "parameter_basis": {
+        "component": "chassis",
+        "mass_parameter": "mass",
+        "mass_scope": "published_bare_chassis_without_batteries",
+        "yaw_inertia_parameter": "yaw_inertia",
+        "yaw_inertia_estimate": {
+          "kind": "uniform_box_about_center_z",
+          "package_body": "body",
+          "package_solid": "deck",
+          "formula": "mass * (length^2 + width^2) / 12",
+          "source": "Pololu Romi chassis catalog envelope and published 0.160 kg mass without batteries"
+        }
+      },
+      "gates": [
+        {
+          "id": "fixed_payload_mass_inertia",
+          "status": "open",
+          "reason": "Fixed battery, electronics, motor cases, servo cases, and compute payload mass, center of mass, and inertia are not included in planar chassis dynamics."
+        },
+        {
+          "id": "moving_arm_camera_inertial_derivation",
+          "status": "open",
+          "reason": "Arm and camera inertia and gravity terms are component-local estimates, not derived from downstream body mass properties, parent motion, or configuration."
+        },
+        {
+          "id": "servo_case_reaction_coupling",
+          "status": "open",
+          "reason": "One-port servo shaft models do not transmit actuator case-reaction torque through their fixed case attachments to the arm or chassis."
+        },
+        {
+          "id": "caster_floor_contact",
+          "status": "open",
+          "reason": "The physical ball caster and its floor contact, drag, load transfer, and lift constraints are not represented as a component interaction."
+        },
+        {
+          "id": "full_body_keepout",
+          "status": "open",
+          "reason": "The current keep-out evidence checks only the planar root position; it does not test canonical chassis, arm, camera, or payload solids against the object volume."
+        },
+        {
+          "id": "controller_sensor_observation_binding",
+          "status": "open",
+          "reason": "Planar localization and speed are ideal simulated-state estimator proxies rather than a hash-bound physical localization and encoder estimator chain."
+        },
+        {
+          "id": "electrical_supply_and_fault_coupling",
+          "status": "open",
+          "reason": "Actuator and sensor behavior is not supply-voltage-limited, and drive-fault and brownout generation are outside the current component PMDL fidelity."
+        }
+      ]
+    },
+    "acceptance": {"orbit_radius_rmse_max_m": 0.12, "camera_pointing_p95_max_deg": 6.0, "root_keepout_violation_probability_max": 0.001},
     "condition": "unverified"
   }
 }
-

@@ -1,67 +1,121 @@
-# Online compiler contract
+# Online C99 compiler contract
 
-The Phase 1 online compiler emits a fixed-allocation C99 estimator from an
-already assembled affine or reviewed linearized model. It does **not** assemble
-component PMDL residuals, reduce a DAE, prove a residual Jacobian nonsingular,
-or compile the declarative `ControlProgram`. Those remain explicit upstream or
-future compiler stages.
+## Purpose
 
-## Required assembly coverage
+The offline simulator solves the full namespaced PMDL descriptor system and can
+use workstation/GPU resources. The online compiler derives a smaller local
+fixed-allocation C99 estimator/runtime for constrained onboard hardware. It is
+an explicitly bounded approximation of the same resolved assembly, not a
+second physical or behavioral specification.
 
-Every assembled IR used with `compile_contraption` must contain
-`metadata.assembly_coverage` with schema
-`contraption.online-assembly-coverage/v1`. The object lists the exact
-`component_ids` and `connection_ids` represented, maps every component instance
-to its exact model reference in `component_models`, and carries a
-`topology_sha256`. The digest binds component/model pairs and every connection
-identifier, kind, declared domain, and endpoint. Missing entries, extra entries,
-model substitutions, endpoint changes, malformed endpoints, unknown component
-references, duplicate identifiers, and stale topology digests are hard errors.
+The generated C99 is useful for deterministic embedded execution, estimator
+integration, toolchain checks, and later hardware-in-the-loop comparison. It is
+not used to define the browser visualization or to replace the high-fidelity
+offline simulation.
 
-An `admitted_models` string list, a component-local admission flag, or an
-unstructured `review_status` string is not an admission contract.
+## Only canonical resolved assemblies are admitted
 
-## Two explicit admission paths
+`compile_resolved_assembly` accepts only a fully resolved `ResolvedAssembly`
+closure. Here "fully resolved" does not mean that its physical fidelity status
+must be `complete`; known omissions may remain, but they must be explicit. The
+required inputs include:
 
-1. **Validated model registry.** Supply a complete mapping from every referenced
-   model ID to a full PMDL `ModelSpec`. The compiler validates each PMDL model,
-   requires its affirmative structured `online_admission`, and runs contraption
-   compatibility validation against that registry. Unknown power/signal ports,
-   unit/domain mismatches, unknown parameter overrides, and invalid signal
-   direction fail compilation. Only this path reports that all referenced models
-   were registry-validated.
+- a valid `sha256:...` assembly closure hash;
+- a valid PMDL closure hash;
+- a valid, mandatory `dynamics_completeness` record;
+- a square, structurally full-rank assembled residual system;
+- at least one differential state;
+- finite parameters, controls, timestep, and operating point; and
+- a nonsingular, acceptably conditioned local descriptor solve.
 
-2. **Reviewed abstraction boundary.** When full component PMDL contracts are not
-   available, `assembly_coverage.review` must identify the review, reviewer, and
-   evidence basis; affirm review of component contracts, ports/connections, and
-   IR coverage; and list non-empty limitations. This is an explicit trust
-   boundary, not equivalent to PMDL validation. The generated manifest labels it
-   `reviewed_abstraction` and states that referenced PMDL models were not
-   registry-validated.
+The compiler refuses caller-authored `OnlineModelIR` at this entry point. The
+scanner no longer loads an `online_model.json`, reviewed aggregate matrix, or
+separate topology-coverage document. Every state, input, residual, parameter,
+and topology dependency comes from the same component packages/PMDL closure
+used by offline simulation.
 
-The scanner fixture uses the second path. Its matrices are a hand-derived,
-reviewed aggregate `DifferentialDriveArmModel` linearization tied to the vendor
-manifest and exact scanner topology. It is not a network assembled from the
-bundled PMDL library, and its generated C99 does not include the scanner
-`ControlProgram`; both limitations are recorded in the fixture and output
-manifest.
+Both expected hashes can be supplied at the API/CLI boundary. A mismatch is a
+hard error. A bare `AssembledPMDLSystem` is refused because it has discarded the
+physical/package/controller closure. Generated headers, sources, and manifests
+embed the assembly and PMDL hashes plus the canonical controller id, version,
+and content hash (or explicit `null`). They also embed the dynamics-completeness
+status and open-gate identifiers; the manifest and model metadata retain the
+full typed record.
 
-## Numeric subset and generated runtime
+## DAE-derived local model
 
-The accepted numeric IR has fixed state, input, and measurement dimensions;
-finite affine matrices and biases; positive-semidefinite process covariance;
-positive-definite measurement covariance; bounded positive timesteps; and, for
-a `linearized` IR, a declared operating point. Flexible/non-rigid mechanics are
-rejected when declared by a validated model admission.
+Let the assembled residual be:
 
-Generated C99 uses preallocated arrays, explicit dimensions, forward-Euler
-prediction, a fixed-matrix Kalman measurement update, Joseph-form covariance
-updates, innovation gating, and state clamps. The manifest records state/input
-ordering, matrices, numeric assumptions, validity bounds, the topology digest,
-and the admission level. Optional host compiler checking verifies C99 syntax;
-target execution, timing, numerical equivalence, and hardware-in-the-loop tests
-remain release gates.
+```text
+F(t, x, xdot, a, u, θ) = 0
+```
 
-Floating-point C is the Phase 1 portable target. A future FPGA flow must add
-range analysis, fixed-point quantization, overflow policy, pipeline scheduling,
-synthesis, timing closure, and hardware-in-the-loop verification.
+where `x` is the differential state, `a` is the algebraic state, `u` is the
+declared control-source vector, and `θ` is the package-resolved parameter
+vector. At the requested operating point, the compiler solves for
+`q = [xdot, a]`, then differentiates the assembled residual to obtain:
+
+```text
+G = ∂F/∂q
+H = ∂F/∂x
+J = ∂F/∂u
+```
+
+The implicit-function theorem gives the local differential dynamics from the
+first rows of `-G⁻¹[H J]`. Failure to find a consistent operating point,
+singular `G`, excessive condition number, nonfinite derivative, or residual
+above tolerance stops compilation with diagnostics. No component or connection
+may be silently dropped to make the system compilable.
+
+## Generated dynamics/estimator module
+
+Generated C99 uses fixed-size/preallocated arrays and records:
+
+- differential-state and input ordering;
+- the derived local matrices/bias and operating point;
+- covariance and clamp assumptions;
+- nominal/maximum timesteps;
+- DAE residual and condition diagnostics; and
+- the canonical assembly and PMDL hashes; and
+- the declared dynamics-completeness status and open gates.
+
+It does **not** currently compile the declarative `ControlProgram` state machine
+into C. The generated functions accept the resolved control-source vector. A
+separately qualified controller runtime must execute the exact controller
+recorded in the manifest and supply those values. The manifest carries
+`controller_execution.emitted: false`, and every generated source/header says
+`Controller execution: NOT EMITTED`; therefore this output is not complete
+robot firmware.
+
+The portable target uses floating point and an uncertainty-aware estimator.
+`contraption compile` requires a local GCC/Clang-compatible C99 syntax check by
+default; `--skip-syntax-check` is an explicit artifact-only escape hatch, not a
+claim of target validity.
+
+## What remains outside this compiler
+
+The compiler does not certify numerical equivalence outside the declared local
+validity region, worst-case execution time, target ABI/toolchain behavior,
+overflow policy, memory integrity, actuator safety, or physical behavior.
+Release still requires target execution tests, offline/online trajectory
+comparison, timing/range analysis, fault injection, and hardware-in-the-loop
+qualification. Compilation is allowed while dynamics gates are open, but it
+does not close or waive them.
+
+FPGA deployment additionally requires fixed-point selection, quantization and
+overflow analysis, scheduling/pipelining, synthesis, timing closure, and HIL
+verification. A generated floating-point C model is not an FPGA bitstream.
+
+## CLI
+
+From the repository root after canonical validation:
+
+```bash
+contraption validate
+contraption compile --output outputs/scanner_demo/online
+```
+
+The command resolves the contraption, component-package registry, PMDL registry,
+and canonical data-only controller dependency before deriving C99. Inspect the
+manifest hashes and compiler diagnostics before using the output in any target
+toolchain.

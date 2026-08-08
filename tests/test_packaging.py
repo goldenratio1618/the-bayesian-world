@@ -14,6 +14,19 @@ class RuntimeAssetTests(unittest.TestCase):
     def test_complete_asset_root_is_discoverable(self) -> None:
         root = asset_root()
         self.assertTrue((root / "models" / "electrical" / "resistor.pmdl").is_file())
+        self.assertTrue((root / "models" / "scanner" / "differential_chassis.pmdl").is_file())
+        self.assertTrue(
+            (root / "examples" / "scanner_robot" / "component_packages.json").is_file()
+        )
+        self.assertTrue(
+            (
+                root
+                / "examples"
+                / "scanner_robot"
+                / "controls"
+                / "scanner.control.json"
+            ).is_file()
+        )
         self.assertTrue((root / "web" / "viewer.js").is_file())
         self.assertEqual(default_taxonomy_path(), root / "data" / "taxonomy.json")
         self.assertGreater(len(load_default_taxonomy().categories), 1)
@@ -27,7 +40,10 @@ class RuntimeAssetTests(unittest.TestCase):
             for relative in (
                 "data/taxonomy.json",
                 "models/electrical/resistor.pmdl",
+                "models/scanner/differential_chassis.pmdl",
                 "examples/scanner_robot/contraption.json",
+                "examples/scanner_robot/component_packages.json",
+                "examples/scanner_robot/controls/scanner.control.json",
             ):
                 path = assets / relative
                 path.parent.mkdir(parents=True, exist_ok=True)

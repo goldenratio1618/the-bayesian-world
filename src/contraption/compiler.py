@@ -129,179 +129,6 @@ def _nested(data: Mapping[str, Any], key: str) -> Mapping[str, Any]:
     return value
 
 
-_ASSEMBLY_COVERAGE_SCHEMA = "contraption.online-assembly-coverage/v1"
-
-
-def _coverage_names(
-    values: Any, label: str, *, allow_empty: bool = False
-) -> tuple[str, ...]:
-    if isinstance(values, (str, bytes)) or not isinstance(values, Sequence):
-        raise IRValidationError(f"{label} must be an array")
-    result = tuple(str(value) for value in values)
-    if not allow_empty and not result:
-        raise IRValidationError(f"{label} may not be empty")
-    if any(not value for value in result):
-        raise IRValidationError(f"{label} entries may not be empty")
-    if len(set(result)) != len(result):
-        raise IRValidationError(f"{label} entries must be unique")
-    return result
-
-
-@dataclass(frozen=True)
-class AssemblyCoverage:
-    """Reviewed declaration of the exact contraption scope represented by an IR.
-
-    Coverage is deliberately stronger than a list of admitted model names: it
-    binds component instances to model references and binds the reviewed IR to
-    a canonical hash of every connection kind, domain, and endpoint.  A review
-    record is mandatory when no full validated model registry is supplied.
-    """
-
-    component_ids: tuple[str, ...]
-    connection_ids: tuple[str, ...]
-    component_models: Mapping[str, str]
-    topology_sha256: str
-    review: Mapping[str, Any] | None = None
-    schema: str = _ASSEMBLY_COVERAGE_SCHEMA
-
-    @classmethod
-    def from_dict(cls, value: Any) -> "AssemblyCoverage":
-        if not isinstance(value, Mapping):
-            raise IRValidationError("metadata.assembly_coverage must be an object")
-        if any(not isinstance(key, str) for key in value):
-            raise IRValidationError(
-                "metadata.assembly_coverage field names must be strings"
-            )
-        allowed = {
-            "schema",
-            "component_ids",
-            "connection_ids",
-            "component_models",
-            "topology_sha256",
-            "review",
-        }
-        unknown = sorted(set(value) - allowed)
-        if unknown:
-            raise IRValidationError(
-                "metadata.assembly_coverage has unknown fields: " + ", ".join(unknown)
-            )
-        required = allowed - {"review"}
-        missing = sorted(required - set(value))
-        if missing:
-            raise IRValidationError(
-                "metadata.assembly_coverage is missing fields: " + ", ".join(missing)
-            )
-        schema = value.get("schema")
-        if schema != _ASSEMBLY_COVERAGE_SCHEMA:
-            raise IRValidationError(
-                f"metadata.assembly_coverage.schema must be {_ASSEMBLY_COVERAGE_SCHEMA!r}"
-            )
-        component_ids = _coverage_names(
-            value.get("component_ids"), "metadata.assembly_coverage.component_ids"
-        )
-        connection_ids = _coverage_names(
-            value.get("connection_ids"),
-            "metadata.assembly_coverage.connection_ids",
-            allow_empty=True,
-        )
-        component_models = value.get("component_models")
-        if not isinstance(component_models, Mapping):
-            raise IRValidationError(
-                "metadata.assembly_coverage.component_models must be an object"
-            )
-        cleaned_models: dict[str, str] = {}
-        for key, model_reference in component_models.items():
-            if not isinstance(key, str) or not key:
-                raise IRValidationError(
-                    "metadata.assembly_coverage.component_models keys must be non-empty strings"
-                )
-            if not isinstance(model_reference, str) or not model_reference:
-                raise IRValidationError(
-                    f"metadata.assembly_coverage.component_models.{key} must be a non-empty string"
-                )
-            cleaned_models[key] = model_reference
-        if set(cleaned_models) != set(component_ids):
-            raise IRValidationError(
-                "metadata.assembly_coverage.component_models keys must exactly match component_ids"
-            )
-        topology_sha256 = value.get("topology_sha256")
-        if not isinstance(topology_sha256, str) or not re.fullmatch(
-            r"[0-9a-f]{64}", topology_sha256
-        ):
-            raise IRValidationError(
-                "metadata.assembly_coverage.topology_sha256 must be a lowercase SHA-256 digest"
-            )
-        review = value.get("review")
-        if review is not None and not isinstance(review, Mapping):
-            raise IRValidationError("metadata.assembly_coverage.review must be an object")
-        return cls(
-            component_ids,
-            connection_ids,
-            cleaned_models,
-            topology_sha256,
-            None if review is None else dict(review),
-            schema,
-        )
-
-    def require_reviewed_abstraction(self) -> Mapping[str, Any]:
-        """Validate the explicit human/vendor abstraction boundary."""
-
-        if self.review is None:
-            raise IRValidationError(
-                "a full validated model registry or metadata.assembly_coverage.review is required"
-            )
-        if any(not isinstance(key, str) for key in self.review):
-            raise IRValidationError(
-                "metadata.assembly_coverage.review field names must be strings"
-            )
-        allowed = {
-            "review_id",
-            "reviewed_by",
-            "basis",
-            "component_contracts_reviewed",
-            "ports_and_connections_reviewed",
-            "assembled_ir_coverage_reviewed",
-            "limitations",
-        }
-        unknown = sorted(set(self.review) - allowed)
-        missing = sorted(allowed - set(self.review))
-        if unknown:
-            raise IRValidationError(
-                "metadata.assembly_coverage.review has unknown fields: "
-                + ", ".join(unknown)
-            )
-        if missing:
-            raise IRValidationError(
-                "metadata.assembly_coverage.review is missing fields: "
-                + ", ".join(missing)
-            )
-        for key in ("review_id", "reviewed_by", "basis"):
-            if not isinstance(self.review.get(key), str) or not self.review[key].strip():
-                raise IRValidationError(
-                    f"metadata.assembly_coverage.review.{key} must be a non-empty string"
-                )
-        for key in (
-            "component_contracts_reviewed",
-            "ports_and_connections_reviewed",
-            "assembled_ir_coverage_reviewed",
-        ):
-            if self.review.get(key) is not True:
-                raise IRValidationError(
-                    f"metadata.assembly_coverage.review.{key} must be true"
-                )
-        limitations = self.review.get("limitations")
-        if (
-            isinstance(limitations, (str, bytes))
-            or not isinstance(limitations, Sequence)
-            or not limitations
-            or any(not isinstance(item, str) or not item.strip() for item in limitations)
-        ):
-            raise IRValidationError(
-                "metadata.assembly_coverage.review.limitations must be a non-empty string array"
-            )
-        return self.review
-
-
 @dataclass(frozen=True)
 class OnlineModelIR:
     """Validated online affine/linearized model.
@@ -948,28 +775,31 @@ class OnlineCompiler:
 
     def compile_contraption(
         self,
-        specification: Mapping[str, Any] | Any,
-        model_registry: Mapping[str, Any] | None = None,
-        assembled_system: OnlineModelIR | Mapping[str, Any] | Any | None = None,
+        resolved: Any,
         output_directory: str | Path | None = None,
         *,
-        operating_point: Mapping[str, float] | None = None,
+        operating_state: Mapping[str, float] | Sequence[float] | None = None,
+        operating_controls: Mapping[str, float] | Sequence[float] | None = None,
+        operating_parameters: Mapping[str, float] | None = None,
+        operating_time: float = 0.0,
         model_name: str = "contraption_model",
         check_syntax: bool = False,
         compiler: str | None = None,
+        **options: Any,
     ) -> CompilationArtifact:
-        """Validate a contraption compilation scope, then compile its assembly."""
+        """Compile only a canonical package-resolved PMDL assembly."""
 
-        return compile_contraption(
-            specification,
-            model_registry,
-            assembled_system,
+        return compile_resolved_assembly(
+            resolved,
             output_directory,
-            operating_point=operating_point,
+            operating_state=operating_state,
+            operating_controls=operating_controls,
+            operating_parameters=operating_parameters,
+            operating_time=operating_time,
             model_name=model_name,
             check_syntax=check_syntax,
             compiler=compiler,
-            _compiler=self,
+            **options,
         )
 
 
@@ -992,469 +822,718 @@ def compile_online_model(
     )
 
 
-def _records(value: Any, label: str) -> list[Mapping[str, Any]]:
-    if value is None:
-        return []
-    if isinstance(value, Mapping):
-        records: list[Mapping[str, Any]] = []
-        for key in sorted(value, key=str):
-            item = dict(_plain_mapping(value[key]))
-            item.setdefault("id", str(key))
-            records.append(item)
-        return records
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        return [_plain_mapping(item) for item in value]
-    raise IRValidationError(f"{label} must be an array or object")
+_CANONICAL_HASH = re.compile(r"sha256:[0-9a-f]{64}\Z")
 
 
-def _component_model_reference(component: Mapping[str, Any]) -> str:
-    model = component.get("model", component.get("model_id"))
-    if isinstance(model, Mapping):
-        for key in ("id", "name", "model_id", "qualified_name"):
-            if key in model:
-                reference = model[key]
-                if isinstance(reference, str) and reference:
-                    return reference
-                break
-    if isinstance(model, str) and model:
-        return model
-    raise IRValidationError(
-        f"component {component.get('id', '?')!r} lacks an unambiguous model reference"
-    )
+def _required_closure_hash(value: Any, label: str) -> str:
+    if not isinstance(value, str) or _CANONICAL_HASH.fullmatch(value) is None:
+        raise IRValidationError(
+            f"{label} must be 'sha256:' followed by 64 lowercase hex digits"
+        )
+    return value
 
 
-def _admission_mapping(value: Any) -> Mapping[str, Any] | None:
-    try:
-        data = _plain_mapping(value)
-    except IRValidationError:
+def _controller_provenance(value: Any) -> dict[str, str] | None:
+    """Verify and expose the controller identity retained by resolution."""
+
+    from .controls import ControlProgram
+
+    reference = value.specification.controller
+    program = value.controller
+    if reference is None:
+        if program is not None:
+            raise IRValidationError(
+                "resolved controller has no canonical contraption reference"
+            )
         return None
-    admission = data.get("online_admission", data.get("online_compilation"))
-    metadata = data.get("metadata", {})
-    if admission is None and isinstance(metadata, Mapping):
-        admission = metadata.get("online_admission", metadata.get("online_compilation"))
-    if isinstance(admission, bool):
-        return {"admitted": admission, "kind": "linear"}
-    return admission if isinstance(admission, Mapping) else None
-
-
-def _connection_endpoints(
-    connection: Mapping[str, Any], *, label: str = "connection"
-) -> tuple[tuple[str, str], ...]:
-    endpoints = connection.get("endpoints")
-    if not isinstance(endpoints, Sequence) or isinstance(endpoints, (str, bytes)):
-        for first, second in (("from", "to"), ("source", "target"), ("a", "b")):
-            if first in connection or second in connection:
-                endpoints = [connection.get(first), connection.get(second)]
-                break
-    if not isinstance(endpoints, Sequence) or isinstance(endpoints, (str, bytes)):
-        raise IRValidationError(f"{label}.endpoints must be an array")
-    if len(endpoints) < 2:
-        raise IRValidationError(f"{label} must have at least two endpoints")
-    result: list[tuple[str, str]] = []
-    for index, endpoint in enumerate(endpoints):
-        if isinstance(endpoint, str):
-            try:
-                component, port = endpoint.rsplit(".", 1)
-            except ValueError as exc:
-                raise IRValidationError(
-                    f"{label}.endpoints[{index}] must be 'component.port'"
-                ) from exc
-        elif isinstance(endpoint, Mapping):
-            component = endpoint.get("component", endpoint.get("component_id"))
-            port = endpoint.get("port", endpoint.get("port_id"))
-        else:
-            raise IRValidationError(
-                f"{label}.endpoints[{index}] must be a string or object"
-            )
-        if not isinstance(component, str) or not component:
-            raise IRValidationError(
-                f"{label}.endpoints[{index}] has no component identifier"
-            )
-        if not isinstance(port, str) or not port:
-            raise IRValidationError(f"{label}.endpoints[{index}] has no port identifier")
-        result.append((component, port))
-    return tuple(result)
-
-
-def _connection_component_ids(connection: Mapping[str, Any]) -> tuple[str, ...]:
-    return tuple(component for component, _ in _connection_endpoints(connection))
-
-
-def _topology_payload(
-    components: Sequence[Mapping[str, Any]],
-    connections: Sequence[Mapping[str, Any]],
-) -> dict[str, Any]:
-    component_rows = []
-    for component in components:
-        component_id = str(component.get("id", component.get("name", "")))
-        component_rows.append(
-            {"id": component_id, "model": _component_model_reference(component)}
+    if not isinstance(reference, Mapping):
+        raise IRValidationError("resolved controller reference must be a mapping")
+    try:
+        result = {
+            name: str(reference[name]) for name in ("id", "version", "sha256")
+        }
+    except KeyError as exc:
+        raise IRValidationError(
+            f"resolved controller reference is missing {exc.args[0]!r}"
+        ) from exc
+    if not isinstance(program, ControlProgram):
+        raise IRValidationError(
+            "resolved controller reference did not retain a parsed ControlProgram"
         )
-    connection_rows = []
-    for index, connection in enumerate(connections):
-        connection_id = connection.get("id")
-        if not isinstance(connection_id, str) or not connection_id:
-            raise IRValidationError(
-                f"contraption.connections[{index}] needs a non-empty identifier"
-            )
-        kind = connection.get("kind")
-        if kind not in {"power", "signal", "attachment", "constraint"}:
-            raise IRValidationError(
-                f"connection {connection_id!r} has unsupported kind {kind!r}"
-            )
-        endpoints = _connection_endpoints(
-            connection, label=f"contraption.connections[{index}]"
+    if result["id"] != program.name or result["version"] != program.version:
+        raise IRValidationError(
+            "resolved controller identity/version differs from its canonical reference"
         )
-        domain = connection.get("domain")
-        if domain is not None and (not isinstance(domain, str) or not domain):
-            raise IRValidationError(
-                f"connection {connection_id!r} domain must be a non-empty string or null"
-            )
-        connection_rows.append(
-            {
-                "id": connection_id,
-                "kind": kind,
-                "domain": domain,
-                "endpoints": sorted(
-                    (
-                        {"component": component, "port": port}
-                        for component, port in endpoints
-                    ),
-                    key=lambda item: (item["component"], item["port"]),
-                ),
-            }
-        )
-    return {
-        "components": sorted(component_rows, key=lambda item: item["id"]),
-        "connections": sorted(connection_rows, key=lambda item: item["id"]),
-    }
-
-
-def _topology_sha256(
-    components: Sequence[Mapping[str, Any]],
-    connections: Sequence[Mapping[str, Any]],
-) -> str:
-    canonical = json.dumps(
-        _topology_payload(components, connections),
+    expected = _required_closure_hash(result["sha256"], "controller sha256")
+    payload = json.dumps(
+        program.to_dict(),
         sort_keys=True,
         separators=(",", ":"),
-        ensure_ascii=True,
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    actual = "sha256:" + hashlib.sha256(payload).hexdigest()
+    if actual != expected:
+        raise IRValidationError(
+            "resolved controller content hash no longer matches its canonical "
+            f"reference: expected={expected}, actual={actual}"
+        )
+    return result
+
+
+def _resolved_pmdl_system(value: Any) -> tuple[Any, str, str, dict[str, str] | None]:
+    """Accept only the complete canonical resolution product."""
+
+    from .assembly import AssembledPMDLSystem
+    from .resolved import ResolvedAssembly
+
+    if isinstance(value, OnlineModelIR):
+        raise IRValidationError(
+            "compile_resolved_assembly refuses authored OnlineModelIR; pass the "
+            "canonical ResolvedAssembly"
+        )
+    if not isinstance(value, ResolvedAssembly):
+        if isinstance(value, AssembledPMDLSystem):
+            raise IRValidationError(
+                "compile_resolved_assembly refuses a bare AssembledPMDLSystem because "
+                "it loses the physical/package/controller closure; pass ResolvedAssembly"
+            )
+        raise IRValidationError(
+            "compile_resolved_assembly accepts only ResolvedAssembly; authored "
+            "mappings, OnlineModelIR, and partial projections are forbidden"
+        )
+    system = value.system
+    assembly_sha256 = _required_closure_hash(
+        value.assembly_sha256, "resolved assembly_sha256"
     )
-    return hashlib.sha256(canonical.encode("ascii")).hexdigest()
-
-
-def _scope_mismatch(label: str, expected: Sequence[str], actual: Sequence[str]) -> str | None:
-    expected_set = set(expected)
-    actual_set = set(actual)
-    if expected_set == actual_set and len(expected) == len(actual):
-        return None
-    missing = sorted(expected_set - actual_set)
-    extra = sorted(actual_set - expected_set)
-    return f"{label} mismatch; missing={missing}, extra={extra}"
-
-
-def _validate_assembly_coverage(
-    metadata: Mapping[str, Any],
-    components: Sequence[Mapping[str, Any]],
-    connections: Sequence[Mapping[str, Any]],
-    component_ids: Sequence[str],
-    connection_ids: Sequence[str],
-    model_references: Sequence[str],
-) -> AssemblyCoverage:
-    raw_coverage = metadata.get("assembly_coverage")
-    if raw_coverage is None:
-        legacy = metadata.get("admitted_models")
-        suffix = (
-            "; metadata.admitted_models is only a string list and is not an admission contract"
-            if legacy is not None
-            else ""
-        )
+    if not isinstance(system, AssembledPMDLSystem):
         raise IRValidationError(
-            "assembled IR metadata must include explicit assembly_coverage" + suffix
+            "ResolvedAssembly.system must be an AssembledPMDLSystem"
         )
-    coverage = AssemblyCoverage.from_dict(raw_coverage)
-    for message in (
-        _scope_mismatch("assembly component_ids", component_ids, coverage.component_ids),
-        _scope_mismatch("assembly connection_ids", connection_ids, coverage.connection_ids),
-    ):
-        if message is not None:
-            raise IRValidationError(message)
-    expected_models = dict(zip(component_ids, model_references, strict=True))
-    if dict(coverage.component_models) != expected_models:
-        mismatches = sorted(
-            component_id
-            for component_id in set(expected_models) | set(coverage.component_models)
-            if expected_models.get(component_id) != coverage.component_models.get(component_id)
-        )
+    if system.assembly_sha256 != assembly_sha256:
         raise IRValidationError(
-            "assembly component_models do not match the contraption for: "
-            + ", ".join(mismatches)
+            "resolved physical/PMDL assembly hash mismatch: physical="
+            f"{assembly_sha256}, PMDL={system.assembly_sha256}"
         )
-    expected_hash = _topology_sha256(components, connections)
-    if coverage.topology_sha256 != expected_hash:
+    controller = _controller_provenance(value)
+
+    pmdl_sha256 = _required_closure_hash(
+        getattr(system, "pmdl_sha256", None), "pmdl_sha256"
+    )
+    diagnostics = getattr(system, "diagnostics", {})
+    if not isinstance(diagnostics, Mapping):
+        raise IRValidationError("assembled system diagnostics must be a mapping")
+    if diagnostics.get("assembly_sha256") != assembly_sha256:
         raise IRValidationError(
-            "assembly topology_sha256 does not match the contraption topology"
+            "assembled diagnostics assembly_sha256 does not match canonical identity"
         )
-    return coverage
+    if diagnostics.get("pmdl_sha256") != pmdl_sha256:
+        raise IRValidationError(
+            "assembled diagnostics pmdl_sha256 does not match PMDL closure identity"
+        )
+    return system, assembly_sha256, pmdl_sha256, controller
 
 
-def _validate_registry_scope(
-    specification: Mapping[str, Any] | Any,
-    components: Sequence[Mapping[str, Any]],
-    model_registry: Mapping[str, Any],
-) -> None:
-    """Validate full PMDL models, their admission records, and composition."""
-
-    from .specs import ContraptionSpec, ModelSpec, SpecError
-    from .validation import validate_contraption, validate_model
-
-    normalized: dict[str, ModelSpec] = {}
-    for component in components:
-        reference = _component_model_reference(component)
-        if reference in normalized:
-            continue
-        try:
-            candidate = model_registry[reference]
-        except KeyError as exc:
+def _point_vector(value: Any, names: Sequence[str], label: str) -> np.ndarray:
+    if isinstance(value, Mapping):
+        unknown = sorted(set(value) - set(names))
+        missing = sorted(set(names) - set(value))
+        if unknown or missing:
             raise IRValidationError(
-                f"model {reference!r} is absent from the supplied model registry"
-            ) from exc
-        try:
-            model = (
-                candidate
-                if isinstance(candidate, ModelSpec)
-                else ModelSpec.from_dict(_plain_mapping(candidate))
+                f"{label} keys must exactly match declared names; "
+                f"missing={missing}, unknown={unknown}"
             )
-        except (IRValidationError, SpecError) as exc:
-            raise IRValidationError(
-                f"registry entry {reference!r} is not a valid full PMDL model: {exc}"
-            ) from exc
-        if model.id != reference:
-            raise IRValidationError(
-                f"registry key {reference!r} contains model {model.id!r}"
-            )
-        report = validate_model(model)
-        if not report.valid:
-            details = "; ".join(
-                f"[{issue.code}] {issue.path}: {issue.message}"
-                for issue in report.errors
-            )
-            raise IRValidationError(
-                f"model {reference!r} failed PMDL validation: {details}"
-            )
-        admission = _admission_mapping(model)
-        if admission is None or admission.get("admitted") is not True:
-            raise IRValidationError(
-                f"model {reference!r} has no affirmative online_admission contract"
-            )
-        kind = str(admission.get("kind", admission.get("model_kind", ""))).lower()
-        if kind not in {"linear", "affine", "linearized", "linearizable"}:
-            raise IRValidationError(
-                f"model {reference!r} has unsupported online kind {kind!r}"
-            )
-        mechanics = str(
-            admission.get("mechanics", admission.get("mechanical_fidelity", "rigid_body"))
-        ).lower()
-        if mechanics in {"nonrigid", "non-rigid", "flexible", "deformable"}:
-            raise IRValidationError(
-                f"model {reference!r} mixes non-rigid mechanics into the Phase 1 online scope"
-            )
-        normalized[reference] = model
-
+        raw = [value[name] for name in names]
+    else:
+        if isinstance(value, (str, bytes)):
+            raise IRValidationError(f"{label} must be a numeric vector or mapping")
+        raw = value
     try:
-        strict_spec = (
-            specification
-            if isinstance(specification, ContraptionSpec)
-            else ContraptionSpec.from_dict(_plain_mapping(specification))
-        )
-    except (IRValidationError, SpecError) as exc:
+        result = np.asarray(raw, dtype=np.float64)
+    except (TypeError, ValueError) as exc:
+        raise IRValidationError(f"{label} must be numeric") from exc
+    if result.shape != (len(names),):
         raise IRValidationError(
-            f"contraption schema validation failed before compilation: {exc}"
+            f"{label} has shape {result.shape}, expected {(len(names),)}"
+        )
+    if not np.all(np.isfinite(result)):
+        raise IRValidationError(f"{label} contains a non-finite value")
+    return np.array(result, dtype=np.float64, copy=True)
+
+
+def _finite_difference_matrix(
+    function: Any,
+    point: np.ndarray,
+    output_size: int,
+    *,
+    relative_step: float,
+    label: str,
+) -> np.ndarray:
+    columns: list[np.ndarray] = []
+    for index in range(point.size):
+        step = relative_step * max(1.0, abs(float(point[index])))
+        positive = np.array(point, copy=True)
+        negative = np.array(point, copy=True)
+        positive[index] += step
+        negative[index] -= step
+        above = np.asarray(function(positive), dtype=np.float64)
+        below = np.asarray(function(negative), dtype=np.float64)
+        if above.shape != (output_size,) or below.shape != (output_size,):
+            raise IRValidationError(
+                f"{label} evaluation returned an unexpected residual shape"
+            )
+        if not np.all(np.isfinite(above)) or not np.all(np.isfinite(below)):
+            raise IRValidationError(
+                f"{label} finite difference produced a non-finite residual "
+                f"for column {index}"
+            )
+        columns.append((above - below) / (2.0 * step))
+    if not columns:
+        return np.empty((output_size, 0), dtype=np.float64)
+    return np.stack(columns, axis=1)
+
+
+def compile_resolved_assembly(
+    resolved: Any,
+    output_directory: str | Path | None = None,
+    *,
+    operating_state: Mapping[str, float] | Sequence[float] | None = None,
+    operating_controls: Mapping[str, float] | Sequence[float] | None = None,
+    operating_parameters: Mapping[str, float] | None = None,
+    operating_time: float = 0.0,
+    model_name: str = "contraption_model",
+    nominal_dt: float | None = None,
+    maximum_dt: float | None = None,
+    process_covariance: Any | None = None,
+    measurement_covariance: Any | None = None,
+    initial_covariance: Any | None = None,
+    relative_step: float = 1e-6,
+    newton_tolerance: float = 1e-10,
+    newton_max_iterations: int = 20,
+    maximum_condition_number: float = 1e12,
+    expected_assembly_sha256: str | None = None,
+    expected_pmdl_sha256: str | None = None,
+    check_syntax: bool = False,
+    compiler: str | None = None,
+) -> CompilationArtifact:
+    """Derive target C99 directly from a canonical assembled PMDL DAE.
+
+    The differential-state dynamics are obtained from the implicit-function
+    theorem.  With differential state ``x``, algebraics ``a``, and
+    ``q=[xdot,a]``, the operating point solves ``F(x,q,u)=0``.  Central finite
+    differences form ``G=dF/dq``, ``H=dF/dx``, and ``J=dF/du``; the first
+    ``len(x)`` rows of ``-G^-1 [H,J]`` are the approved local ``A`` and ``B``.
+    No caller-authored online matrices are accepted by this entry point.
+    """
+
+    from .backend import NumpyBackend
+    from .resolved import ResolutionError
+
+    system, assembly_sha256, pmdl_sha256, controller = _resolved_pmdl_system(resolved)
+    try:
+        dynamics_record = resolved.dynamics_completeness
+    except ResolutionError as exc:
+        raise IRValidationError(
+            "resolved assembly lacks a valid mandatory dynamics_completeness record"
         ) from exc
-    composition = validate_contraption(strict_spec, normalized)
-    if not composition.valid:
-        details = "; ".join(
-            f"[{issue.code}] {issue.path}: {issue.message}"
-            for issue in composition.errors
+    dynamics_completeness = dynamics_record.to_dict()
+    if expected_assembly_sha256 is not None:
+        expected = _required_closure_hash(
+            expected_assembly_sha256, "expected_assembly_sha256"
         )
+        if expected != assembly_sha256:
+            raise IRValidationError(
+                f"assembly hash mismatch: resolved={assembly_sha256}, expected={expected}"
+            )
+    if expected_pmdl_sha256 is not None:
+        expected = _required_closure_hash(
+            expected_pmdl_sha256, "expected_pmdl_sha256"
+        )
+        if expected != pmdl_sha256:
+            raise IRValidationError(
+                f"PMDL hash mismatch: resolved={pmdl_sha256}, expected={expected}"
+            )
+
+    step = _finite(relative_step, "relative_step")
+    tolerance = _finite(newton_tolerance, "newton_tolerance")
+    condition_limit = _finite(
+        maximum_condition_number, "maximum_condition_number"
+    )
+    if step <= 0.0 or tolerance <= 0.0 or condition_limit <= 1.0:
         raise IRValidationError(
-            f"contraption compatibility validation failed: {details}"
+            "relative_step/newton_tolerance must be positive and "
+            "maximum_condition_number must exceed one"
         )
+    if isinstance(newton_max_iterations, bool) or not isinstance(
+        newton_max_iterations, int
+    ) or newton_max_iterations <= 0:
+        raise IRValidationError("newton_max_iterations must be a positive integer")
+    time_value = _finite(operating_time, "operating_time")
+
+    state_names = tuple(str(name) for name in system.state_names)
+    differential_names = tuple(
+        str(name) for name in system.differential_state_names
+    )
+    if not differential_names:
+        raise IRValidationError(
+            "resolved assembly has no differential PMDL states to compile"
+        )
+    if len(differential_names) > _MAX_STATES:
+        raise IRValidationError(
+            f"resolved assembly has {len(differential_names)} differential states; "
+            f"C99 limit is {_MAX_STATES}"
+        )
+    differential_indices = tuple(state_names.index(name) for name in differential_names)
+    differential_set = set(differential_indices)
+    algebraic_indices = tuple(
+        index for index in range(len(state_names)) if index not in differential_set
+    )
+    algebraic_names = tuple(state_names[index] for index in algebraic_indices)
+    residual_names = tuple(str(name) for name in system.residual_names)
+    if len(residual_names) != len(state_names):
+        raise IRValidationError(
+            "assembled DAE must remain square at compilation: "
+            f"residuals={len(residual_names)}, unknowns={len(state_names)}"
+        )
+
+    initial_full = _point_vector(
+        system.initial_state, state_names, "assembled initial_state"
+    )
+    if operating_state is None:
+        full_guess = initial_full
+        x_operating = initial_full[list(differential_indices)]
+    elif isinstance(operating_state, Mapping) and set(operating_state) == set(state_names):
+        full_guess = _point_vector(
+            operating_state, state_names, "operating_state"
+        )
+        x_operating = full_guess[list(differential_indices)]
+    else:
+        x_operating = _point_vector(
+            operating_state, differential_names, "operating_state"
+        )
+        full_guess = np.array(initial_full, copy=True)
+        full_guess[list(differential_indices)] = x_operating
+
+    control_names = tuple(str(name) for name in system.control_names)
+    if not control_names:
+        raise IRValidationError(
+            "existing fixed-allocation C99 generator requires at least one control input"
+        )
+    if len(control_names) > _MAX_INPUTS:
+        raise IRValidationError(
+            f"resolved assembly has {len(control_names)} controls; C99 limit is {_MAX_INPUTS}"
+        )
+    defaults = dict(system.control_defaults)
+    if operating_controls is None:
+        missing = sorted(set(control_names) - set(defaults))
+        if missing:
+            raise IRValidationError(
+                "operating_controls is required because controls lack defaults: "
+                f"{missing}"
+            )
+        u_operating = _point_vector(defaults, control_names, "control defaults")
+    elif isinstance(operating_controls, Mapping):
+        unknown = sorted(set(operating_controls) - set(control_names))
+        if unknown:
+            raise IRValidationError(
+                f"operating_controls contains unknown controls: {unknown}"
+            )
+        merged_controls = dict(defaults)
+        merged_controls.update(operating_controls)
+        missing = sorted(set(control_names) - set(merged_controls))
+        if missing:
+            raise IRValidationError(
+                f"operating_controls is missing controls without defaults: {missing}"
+            )
+        u_operating = _point_vector(
+            merged_controls, control_names, "operating_controls"
+        )
+    else:
+        u_operating = _point_vector(
+            operating_controls, control_names, "operating_controls"
+        )
+
+    parameter_names = tuple(str(name) for name in system.default_parameters)
+    parameter_values = dict(system.default_parameters)
+    if operating_parameters is not None:
+        if not isinstance(operating_parameters, Mapping):
+            raise IRValidationError("operating_parameters must be a mapping")
+        unknown = sorted(set(operating_parameters) - set(parameter_names))
+        if unknown:
+            raise IRValidationError(
+                f"operating_parameters contains unknown parameters: {unknown}"
+            )
+        parameter_values.update(operating_parameters)
+    parameter_vector = _point_vector(
+        parameter_values, parameter_names, "operating_parameters"
+    ) if parameter_names else np.empty((0,), dtype=np.float64)
+    parameter_values = {
+        name: float(parameter_vector[index])
+        for index, name in enumerate(parameter_names)
+    }
+    for name, value in parameter_values.items():
+        low, high = system.parameter_bounds.get(name, (None, None))
+        if (low is not None and value < low) or (high is not None and value > high):
+            raise IRValidationError(
+                f"operating parameter {name!r}={value} is outside bounds [{low}, {high}]"
+            )
+
+    validity_ranges = dict(getattr(system.validity, "ranges", {}))
+    state_bounds: list[tuple[float | None, float | None]] = []
+    for index, name in enumerate(differential_names):
+        bounds = validity_ranges.get(name)
+        pair = (
+            (None, None)
+            if bounds is None
+            else (getattr(bounds, "lower", None), getattr(bounds, "upper", None))
+        )
+        state_bounds.append(pair)
+        if (pair[0] is not None and x_operating[index] < pair[0]) or (
+            pair[1] is not None and x_operating[index] > pair[1]
+        ):
+            raise IRValidationError(
+                f"operating state {name!r}={x_operating[index]} is outside "
+                f"validity range [{pair[0]}, {pair[1]}]"
+            )
+
+    backend = NumpyBackend()
+    parameter_batch = {
+        name: np.asarray([value], dtype=np.float64)
+        for name, value in parameter_values.items()
+    }
+
+    nx = len(differential_names)
+    na = len(algebraic_names)
+    equation_count = len(residual_names)
+
+    def evaluate(x_value: np.ndarray, q_value: np.ndarray, u_value: np.ndarray) -> np.ndarray:
+        state = np.zeros((1, len(state_names)), dtype=np.float64)
+        state_derivative = np.zeros_like(state)
+        state[0, list(differential_indices)] = x_value
+        if na:
+            state[0, list(algebraic_indices)] = q_value[nx:]
+        state_derivative[0, list(differential_indices)] = q_value[:nx]
+        controls = {
+            name: np.asarray([u_value[index]], dtype=np.float64)
+            for index, name in enumerate(control_names)
+        }
+        try:
+            result = system.residual(
+                time_value,
+                state,
+                state_derivative,
+                parameter_batch,
+                controls,
+                backend,
+            )
+        except Exception as exc:
+            raise IRValidationError(
+                f"assembled PMDL residual evaluation failed during C99 derivation: {exc}"
+            ) from exc
+        array = np.asarray(result, dtype=np.float64)
+        if array.shape != (1, equation_count):
+            raise IRValidationError(
+                "assembled PMDL residual returned shape "
+                f"{array.shape}, expected {(1, equation_count)}"
+            )
+        vector = array[0]
+        if not np.all(np.isfinite(vector)):
+            bad = int(np.flatnonzero(~np.isfinite(vector))[0])
+            raise IRValidationError(
+                f"assembled residual {residual_names[bad]!r} is non-finite at the operating point"
+            )
+        return vector
+
+    q_operating = np.concatenate(
+        [np.zeros(nx, dtype=np.float64), full_guess[list(algebraic_indices)]]
+    )
+    iterations = 0
+    for iteration in range(newton_max_iterations):
+        iterations = iteration + 1
+        value = evaluate(x_operating, q_operating, u_operating)
+        if float(np.max(np.abs(value))) <= tolerance:
+            break
+        g_iteration = _finite_difference_matrix(
+            lambda point: evaluate(x_operating, point, u_operating),
+            q_operating,
+            equation_count,
+            relative_step=step,
+            label="dF/dq",
+        )
+        rank = int(np.linalg.matrix_rank(g_iteration))
+        if rank != equation_count:
+            worst = int(np.argmax(np.abs(value)))
+            raise IRValidationError(
+                "DAE operating-point solve has singular dF/d[xdot,a]: "
+                f"rank={rank}/{equation_count}, worst_residual="
+                f"{residual_names[worst]!r} ({value[worst]:.17g})"
+            )
+        condition = float(np.linalg.cond(g_iteration))
+        if not math.isfinite(condition) or condition > condition_limit:
+            raise IRValidationError(
+                "DAE operating-point Jacobian is ill-conditioned: "
+                f"condition={condition:.17g}, limit={condition_limit:.17g}"
+            )
+        try:
+            update = np.linalg.solve(g_iteration, -value)
+        except np.linalg.LinAlgError as exc:
+            raise IRValidationError(
+                f"DAE operating-point linear solve failed: {exc}"
+            ) from exc
+        if not np.all(np.isfinite(update)):
+            raise IRValidationError("DAE operating-point Newton update is non-finite")
+        q_operating += update
+    final_residual = evaluate(x_operating, q_operating, u_operating)
+    worst_residual = float(np.max(np.abs(final_residual)))
+    if worst_residual > max(tolerance * 10.0, 1e-9):
+        worst = int(np.argmax(np.abs(final_residual)))
+        raise IRValidationError(
+            "DAE operating-point solve did not converge after "
+            f"{iterations} iteration(s); worst_residual={residual_names[worst]!r} "
+            f"({final_residual[worst]:.17g})"
+        )
+
+    g_matrix = _finite_difference_matrix(
+        lambda point: evaluate(x_operating, point, u_operating),
+        q_operating,
+        equation_count,
+        relative_step=step,
+        label="dF/dq",
+    )
+    rank = int(np.linalg.matrix_rank(g_matrix))
+    if g_matrix.shape != (equation_count, equation_count) or rank != equation_count:
+        raise IRValidationError(
+            "DAE implicit-function Jacobian must be square and full rank: "
+            f"shape={g_matrix.shape}, rank={rank}/{equation_count}"
+        )
+    condition = float(np.linalg.cond(g_matrix))
+    if not math.isfinite(condition) or condition > condition_limit:
+        raise IRValidationError(
+            "DAE implicit-function Jacobian is ill-conditioned: "
+            f"condition={condition:.17g}, limit={condition_limit:.17g}"
+        )
+    h_matrix = _finite_difference_matrix(
+        lambda point: evaluate(point, q_operating, u_operating),
+        x_operating,
+        equation_count,
+        relative_step=step,
+        label="dF/dx",
+    )
+    j_matrix = _finite_difference_matrix(
+        lambda point: evaluate(x_operating, q_operating, point),
+        u_operating,
+        equation_count,
+        relative_step=step,
+        label="dF/du",
+    )
+    try:
+        sensitivity = -np.linalg.solve(
+            g_matrix, np.concatenate([h_matrix, j_matrix], axis=1)
+        )
+    except np.linalg.LinAlgError as exc:
+        raise IRValidationError(
+            f"DAE implicit-function sensitivity solve failed: {exc}"
+        ) from exc
+    if not np.all(np.isfinite(sensitivity)):
+        raise IRValidationError("DAE linearization contains non-finite sensitivities")
+    a_matrix = sensitivity[:nx, :nx]
+    b_matrix = sensitivity[:nx, nx:]
+    xdot_operating = q_operating[:nx]
+    dynamics_bias = xdot_operating - a_matrix @ x_operating - b_matrix @ u_operating
+
+    declared_maximum = getattr(system.validity, "max_timestep", None)
+    if declared_maximum is None and maximum_dt is None:
+        raise IRValidationError(
+            "assembled PMDL validity does not declare max_timestep; maximum_dt is required"
+        )
+    max_dt = _finite(
+        declared_maximum if maximum_dt is None else maximum_dt, "maximum_dt"
+    )
+    if max_dt <= 0.0:
+        raise IRValidationError("maximum_dt must be positive")
+    if declared_maximum is not None and max_dt > float(declared_maximum):
+        raise IRValidationError(
+            f"maximum_dt {max_dt} exceeds assembled validity limit {declared_maximum}"
+        )
+    chosen_nominal = min(0.01, max_dt) if nominal_dt is None else _finite(
+        nominal_dt, "nominal_dt"
+    )
+    if chosen_nominal <= 0.0 or chosen_nominal > max_dt:
+        raise IRValidationError("require 0 < nominal_dt <= maximum_dt")
+
+    if nx > _MAX_MEASUREMENTS:
+        raise IRValidationError(
+            "identity differential-state observation exceeds existing C99 measurement "
+            f"limit {_MAX_MEASUREMENTS}"
+        )
+    q_covariance = (
+        np.zeros((nx, nx), dtype=np.float64)
+        if process_covariance is None
+        else process_covariance
+    )
+    r_covariance = (
+        np.eye(nx, dtype=np.float64) * 1e-9
+        if measurement_covariance is None
+        else measurement_covariance
+    )
+    p0_covariance = (
+        np.zeros((nx, nx), dtype=np.float64)
+        if initial_covariance is None
+        else initial_covariance
+    )
+    operating_point = {"time": time_value}
+    operating_point.update(
+        {f"state:{name}": float(x_operating[index]) for index, name in enumerate(differential_names)}
+    )
+    operating_point.update(
+        {f"control:{name}": float(u_operating[index]) for index, name in enumerate(control_names)}
+    )
+    controller_execution = (
+        {
+            "emitted": False,
+            "contract": "no_controller_declared",
+            "reason": "the resolved assembly does not declare a ControlProgram",
+        }
+        if controller is None
+        else {
+            "emitted": False,
+            "contract": "canonical_control_program_runtime_supplies_resolved_control_sources",
+            "reason": "this artifact contains only DAE-derived dynamics and estimator code",
+        }
+    )
+    metadata = {
+        "source": "canonical_resolved_pmdl_assembly",
+        "assembly_sha256": assembly_sha256,
+        "pmdl_sha256": pmdl_sha256,
+        "controller": controller,
+        "controller_execution": controller_execution,
+        "dynamics_completeness": dynamics_completeness,
+        "dae_linearization": {
+            "method": "implicit_function_central_difference",
+            "equation_count": equation_count,
+            "differential_state_names": list(differential_names),
+            "algebraic_names": list(algebraic_names),
+            "operating_state_derivative": xdot_operating.tolist(),
+            "operating_algebraics": q_operating[nx:].tolist(),
+            "dF_dq_rank": rank,
+            "dF_dq_condition": condition,
+            "relative_step": step,
+            "newton_tolerance": tolerance,
+            "newton_iterations": iterations,
+            "residual_max": worst_residual,
+        },
+        "measurement_contract": {
+            "kind": "identity_differential_state_projection",
+            "default_covariance_is_numerical_regularization": measurement_covariance is None,
+        },
+    }
+    ir = OnlineModelIR(
+        state_names=differential_names,
+        input_names=control_names,
+        measurement_names=differential_names,
+        A=a_matrix,
+        B=b_matrix,
+        C=np.eye(nx, dtype=np.float64),
+        D=np.zeros((nx, len(control_names)), dtype=np.float64),
+        process_covariance=q_covariance,
+        measurement_covariance=r_covariance,
+        initial_state=x_operating,
+        initial_covariance=p0_covariance,
+        dynamics_bias=dynamics_bias,
+        measurement_bias=np.zeros(nx, dtype=np.float64),
+        nominal_dt=chosen_nominal,
+        maximum_dt=max_dt,
+        state_bounds=tuple(state_bounds),
+        kind="linearized",
+        operating_point=operating_point,
+        metadata=metadata,
+    )
+
+    prefix = _model_name(model_name)
+    controller_comment = (
+        "none"
+        if controller is None
+        else f"{controller['id']}@{controller['version']} ({controller['sha256']})"
+    )
+    controller_execution_comment = (
+        " * Controller execution: NOT APPLICABLE; no controller is declared.\n"
+        if controller is None
+        else " * Controller execution: NOT EMITTED; canonical controller outputs must "
+        "supply the resolved control-source inputs.\n"
+    )
+    dynamics_comment = (
+        " * Dynamics completeness: "
+        + dynamics_record.status.upper()
+        + "; open gates: "
+        + (
+            ", ".join(gate.id for gate in dynamics_record.open_gates)
+            if dynamics_record.open_gates
+            else "none"
+        )
+        + ".\n"
+    )
+    identity_comment = (
+        "/* Canonical assembly: " + assembly_sha256 + "\n"
+        " * PMDL closure: " + pmdl_sha256 + "\n"
+        " * Controller: " + controller_comment + "\n"
+        + controller_execution_comment
+        + dynamics_comment
+        + " */\n"
+    )
+    header = identity_comment + _header(ir, prefix)
+    source = identity_comment + _source(ir, prefix)
+    manifest = _manifest(ir, prefix, header, source)
+    manifest["assembly_sha256"] = assembly_sha256
+    manifest["pmdl_sha256"] = pmdl_sha256
+    manifest["controller"] = controller
+    manifest["controller_execution"] = dict(metadata["controller_execution"])
+    manifest["dynamics_completeness"] = dynamics_completeness
+    manifest["derivation"] = dict(metadata["dae_linearization"])
+    artifact = CompilationArtifact(prefix, header, source, manifest)
+    if output_directory is not None:
+        artifact.write(output_directory)
+    if check_syntax:
+        result = artifact.syntax_check(compiler)
+        if result.compiler is None:
+            raise CompilerError("no C99 compiler found for requested syntax check")
+        if not result.ok:
+            raise CompilerError(f"generated C99 failed syntax check: {result.stderr}")
+    return artifact
 
 
 def compile_contraption(
-    specification: Mapping[str, Any] | Any,
-    model_registry: Mapping[str, Any] | None = None,
-    assembled_system: OnlineModelIR | Mapping[str, Any] | Any | None = None,
+    resolved: Any,
     output_directory: str | Path | None = None,
     *,
-    operating_point: Mapping[str, float] | None = None,
+    operating_state: Mapping[str, float] | Sequence[float] | None = None,
+    operating_controls: Mapping[str, float] | Sequence[float] | None = None,
+    operating_parameters: Mapping[str, float] | None = None,
+    operating_time: float = 0.0,
     model_name: str = "contraption_model",
     check_syntax: bool = False,
     compiler: str | None = None,
-    _compiler: OnlineCompiler | None = None,
+    **options: Any,
 ) -> CompilationArtifact:
-    """Compile a validated contraption and its assembled linearization.
+    """Compile a contraption from its canonical resolved PMDL assembly.
 
-    Network assembly/linearization is kept behind an explicit trusted adapter:
-    pass a data-only assembled IR, or an object implementing
-    ``assemble_online_ir(specification, operating_point=...)``.  The assembled
-    IR must carry ``metadata.assembly_coverage`` binding it to the exact
-    component instances, model references, connection identifiers, and hashed
-    endpoint topology.  Admission then requires either a full validated PMDL
-    registry or an explicit reviewed-abstraction record in that coverage.
-    Unstructured metadata strings and component-local claims are never
-    sufficient for target-side execution.
+    Raw contraption mappings, hand-authored online matrices, and reviewed
+    aggregate abstractions are deliberately outside this API.  Every emitted
+    artifact is therefore bound to the exact physical/package/model closure by
+    ``assembly_sha256`` and to the composed PMDL closure by ``pmdl_sha256``.
     """
 
-    spec = _plain_mapping(specification)
-    components = _records(spec.get("components"), "components")
-    connections = _records(spec.get("connections"), "connections")
-    if not components:
-        raise IRValidationError("contraption compilation requires components")
-    component_ids = [item.get("id", item.get("name")) for item in components]
-    if (
-        any(not isinstance(value, str) or not value for value in component_ids)
-        or len(set(component_ids)) != len(component_ids)
-    ):
-        raise IRValidationError("contraption components need unique non-empty identifiers")
-    connection_ids = [item.get("id") for item in connections]
-    if (
-        any(not isinstance(value, str) or not value for value in connection_ids)
-        or len(set(connection_ids)) != len(connection_ids)
-    ):
-        raise IRValidationError("contraption connections need unique non-empty identifiers")
-    scope_models = [_component_model_reference(component) for component in components]
-
-    known = set(component_ids)
-    for index, connection in enumerate(connections):
-        connection_id = connection_ids[index]
-        endpoint_ids = _connection_component_ids(connection)
-        endpoints = _connection_endpoints(
-            connection, label=f"contraption.connections[{index}]"
-        )
-        if any(value not in known for value in endpoint_ids):
-            raise IRValidationError(
-                f"connection {connection_id!r} contains an unknown component endpoint"
-            )
-        if len(set(endpoints)) != len(endpoints):
-            raise IRValidationError(
-                f"connection {connection_id!r} repeats an endpoint"
-            )
-        kind = connection.get("kind")
-        if kind not in {"power", "signal", "attachment", "constraint"}:
-            raise IRValidationError(
-                f"connection {connection_id!r} has unsupported kind {kind!r}"
-            )
-        connection_metadata = connection.get("metadata", {})
-        if isinstance(connection_metadata, Mapping) and connection_metadata.get("online_supported") is False:
-            raise IRValidationError(
-                f"connection {connection_id!r} is explicitly excluded from online compilation"
-            )
-
-    # Locate the assembly before admission because its coverage contract binds
-    # the numeric IR to the complete contraption scope.
-    assembly = assembled_system
-    spec_metadata = spec.get("metadata", {})
-    spec_metadata = spec_metadata if isinstance(spec_metadata, Mapping) else {}
-    if assembly is None:
-        assembly = spec.get(
-            "online_model",
-            spec.get(
-                "online_ir",
-                spec_metadata.get("online_model", spec_metadata.get("online_ir")),
-            ),
-        )
-    if assembly is None:
-        raise IRValidationError(
-            "contraption requires a reviewed assembled_system/online_ir; component matrices are not composed implicitly"
-        )
-    if not isinstance(assembly, (OnlineModelIR, Mapping)):
-        adapter = getattr(assembly, "assemble_online_ir", None)
-        if not callable(adapter):
-            adapter = getattr(assembly, "linearize", None)
-        if not callable(adapter):
-            raise IRValidationError(
-                "assembled_system must be data-only IR or a trusted assemble_online_ir adapter"
-            )
-        try:
-            assembly = adapter(specification, operating_point=operating_point or {})
-        except TypeError:
-            # Support compact trusted adapters whose documented signature takes
-            # only the operating point.
-            assembly = adapter(operating_point=operating_point or {})
-    ir_data = assembly.to_dict() if isinstance(assembly, OnlineModelIR) else dict(_plain_mapping(assembly))
-    assembly_metadata = ir_data.get("metadata", {})
-    if not isinstance(assembly_metadata, Mapping):
-        raise IRValidationError("assembled IR metadata must be an object")
-    coverage = _validate_assembly_coverage(
-        assembly_metadata,
-        components,
-        connections,
-        component_ids,
-        connection_ids,
-        scope_models,
-    )
-
-    if model_registry is None:
-        review = coverage.require_reviewed_abstraction()
-        validation_level = "reviewed_abstraction"
-        admission_summary = (
-            "reviewed abstraction coverage; referenced PMDL models were not registry-validated"
-        )
-    else:
-        if not isinstance(model_registry, Mapping):
-            raise IRValidationError("model_registry must implement Mapping")
-        _validate_registry_scope(specification, components, model_registry)
-        review = None
-        validation_level = "validated_model_registry"
-        admission_summary = "all referenced models validated through explicit registry"
-
-    if operating_point is not None:
-        ir_data["operating_point"] = {
-            str(key): _finite(value, f"operating_point.{key}")
-            for key, value in operating_point.items()
-        }
-        if ir_data.get("kind", "linear") == "linear":
-            ir_data["kind"] = "linearized"
-    scope = {
-        "contraption_id": str(spec.get("id", spec.get("name", "contraption"))),
-        "component_ids": component_ids,
-        "connection_ids": connection_ids,
-        "model_references": scope_models,
-        "topology_sha256": coverage.topology_sha256,
-        "operating_point": dict(operating_point or ir_data.get("operating_point", {})),
-        "validation_level": validation_level,
-        "models_registry_validated": model_registry is not None,
-        "admission": admission_summary,
-    }
-    if review is not None:
-        scope["review"] = {
-            "review_id": review["review_id"],
-            "reviewed_by": review["reviewed_by"],
-            "basis": review["basis"],
-            "limitations": list(review["limitations"]),
-        }
-    ir_metadata = dict(assembly_metadata)
-    ir_metadata["contraption_scope"] = scope
-    ir_data["metadata"] = ir_metadata
-    ir = OnlineModelIR.from_dict(ir_data)
-    selected_compiler = _compiler or OnlineCompiler()
-    artifact = selected_compiler.compile(
-        ir,
-        None,
+    return compile_resolved_assembly(
+        resolved,
+        output_directory,
+        operating_state=operating_state,
+        operating_controls=operating_controls,
+        operating_parameters=operating_parameters,
+        operating_time=operating_time,
         model_name=model_name,
         check_syntax=check_syntax,
         compiler=compiler,
+        **options,
     )
-    manifest = dict(artifact.manifest)
-    manifest["contraption_scope"] = scope
-    final_artifact = CompilationArtifact(
-        artifact.model_name, artifact.header, artifact.source, manifest
-    )
-    if output_directory is not None:
-        final_artifact.write(output_directory)
-    return final_artifact
 
 
 def syntax_check(
@@ -1505,7 +1584,6 @@ compile_c99 = compile_online_model
 
 
 __all__ = [
-    "AssemblyCoverage",
     "CompilationArtifact",
     "CompileResult",
     "Compiler",
@@ -1517,5 +1595,6 @@ __all__ = [
     "compile_c99",
     "compile_contraption",
     "compile_online_model",
+    "compile_resolved_assembly",
     "syntax_check",
 ]

@@ -1,0 +1,216 @@
+{
+  "format": "component-package-registry-1",
+  "packages": [
+    {
+      "format": "component-package-1",
+      "id": "scanner.romi_chassis",
+      "version": "1.0.0",
+      "physical_role": "part",
+      "model": {"id": "mechanical.differential_drive_chassis.planar", "version": "1.0.0", "sha256": "sha256:a1761f2ccd2c375a70a0990a3efff49b15e222bed4c2f7d4f3f3bfa3f322cd9e"},
+      "bodies": [{"id": "body", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "solids": [{"id": "deck", "geometry": {"kind": "box", "dimensions_m": [0.163, 0.149, 0.07]}, "local_pose": {"translation_m": [0, 0, 0.035], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "catalog", "source": "Pololu Romi chassis nominal bounding envelope", "reference": "Pololu 3500"}}]}],
+      "connectors": [
+        {"id": "left_drive", "model_port": "left_drive", "body": "body", "domain": "mechanical", "interface": "hub-translation", "local_pose": {"translation_m": [0, 0.075, 0.035], "rotation_quaternion_wxyz": [0.7071067811865476, 0.7071067811865475, 0, 0]}, "provenance": {"kind": "estimated", "source": "left wheel hub center and axle orientation"}},
+        {"id": "right_drive", "model_port": "right_drive", "body": "body", "domain": "mechanical", "interface": "hub-translation", "local_pose": {"translation_m": [0, -0.075, 0.035], "rotation_quaternion_wxyz": [0, 0, 0.7071067811865476, 0.7071067811865475]}, "provenance": {"kind": "derived", "source": "right wheel hub translation frame aligned in full orientation with the assembled right-wheel virtual hub frame"}},
+        {"id": "battery_mount", "model_port": null, "body": "body", "domain": "mechanical", "interface": "scanner-fixed-mount", "local_pose": {"translation_m": [-0.02, 0, 0.045], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "prototype packaging layout"}},
+        {"id": "controller_mount", "model_port": null, "body": "body", "domain": "mechanical", "interface": "scanner-fixed-mount", "local_pose": {"translation_m": [0, 0, 0.078], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "prototype packaging layout"}},
+        {"id": "left_motor_mount", "model_port": null, "body": "body", "domain": "mechanical", "interface": "scanner-fixed-mount", "local_pose": {"translation_m": [0, 0.0565, 0.035], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "prototype drivetrain layout"}},
+        {"id": "right_motor_mount", "model_port": null, "body": "body", "domain": "mechanical", "interface": "scanner-fixed-mount", "local_pose": {"translation_m": [0, -0.0565, 0.035], "rotation_quaternion_wxyz": [0, 0, 0, 1]}, "provenance": {"kind": "estimated", "source": "prototype drivetrain layout"}},
+        {"id": "encoder_mount", "model_port": null, "body": "body", "domain": "mechanical", "interface": "scanner-fixed-mount", "local_pose": {"translation_m": [-0.025, 0, 0.045], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "prototype packaging layout"}},
+        {"id": "regulator_mount", "model_port": null, "body": "body", "domain": "mechanical", "interface": "scanner-fixed-mount", "local_pose": {"translation_m": [-0.045, 0.03, 0.105], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "prototype packaging layout"}},
+        {"id": "lift_servo_mount", "model_port": null, "body": "body", "domain": "mechanical", "interface": "scanner-fixed-mount", "local_pose": {"translation_m": [0, 0, 0.14], "rotation_quaternion_wxyz": [0.5, -0.5, -0.5, -0.5]}, "provenance": {"kind": "derived", "source": "centered lift mount whose shaft is tangential to the orbit and whose linkage sweeps the object-center radial/elevation plane"}},
+        {"id": "compute_mount", "model_port": null, "body": "body", "domain": "mechanical", "interface": "scanner-fixed-mount", "local_pose": {"translation_m": [0.025, 0, 0.1125], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "prototype packaging layout"}}
+      ],
+      "parameter_bindings": [
+        {"model_parameter": "wheel_base", "unit": "m", "absolute_tolerance": 1e-12, "measure": {"kind": "connector_distance", "first_connector": "left_drive", "second_connector": "right_drive"}}
+      ],
+      "provenance": {"kind": "catalog", "source": "Pololu catalog plus explicitly estimated connector locations", "reference": "Pololu 3500"}
+    },
+    {
+      "format": "component-package-1",
+      "id": "scanner.gearmotor",
+      "version": "1.0.0",
+      "physical_role": "part",
+      "model": {"id": "electromechanical.scanner_gearmotor.lumped", "version": "1.0.0", "sha256": "sha256:777708b55dc17f966fd17e914bad27982d447f4b1c7e1b6214cb78cae192fb9d"},
+      "bodies": [{"id": "case", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "solids": [{"id": "motor_case", "geometry": {"kind": "box", "dimensions_m": [0.037, 0.02, 0.027]}, "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "catalog", "source": "Pololu gearmotor envelope", "reference": "Pololu 1520"}}]}],
+      "connectors": [
+        {"id": "case_mount", "model_port": null, "body": "case", "domain": "mechanical", "interface": "scanner-fixed-mount", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "case center mounting approximation"}},
+        {"id": "shaft", "model_port": "shaft", "body": "case", "domain": "mechanical", "interface": "rotational-shaft", "joint_coordinate_state": null, "local_pose": {"translation_m": [0, 0.0185, 0], "rotation_quaternion_wxyz": [0.7071067811865476, 0.7071067811865475, 0, 0]}, "provenance": {"kind": "estimated", "source": "shaft center from catalog envelope; this reduced motor has no independent integrated shaft-angle state"}},
+        {"id": "p", "model_port": "p", "body": "case", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [-0.0185, 0.006, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "terminal location approximation"}},
+        {"id": "n", "model_port": "n", "body": "case", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [-0.0185, -0.006, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "terminal location approximation"}}
+      ],
+      "parameter_bindings": [],
+      "provenance": {"kind": "catalog", "source": "Pololu product envelope with estimated ports", "reference": "Pololu 1520"}
+    },
+    {
+      "format": "component-package-1",
+      "id": "scanner.wheel",
+      "version": "1.0.0",
+      "physical_role": "part",
+      "model": {"id": "mechanical.scanner_wheel.rolling", "version": "1.0.0", "sha256": "sha256:2603b56341b9c25a170312a8cddcfcb4d99491ca315428d90772faf3d4596468"},
+      "bodies": [{"id": "wheel", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "solids": [{"id": "tire", "geometry": {"kind": "cylinder", "dimensions_m": [0.07, 0.07, 0.008]}, "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [0.7071067811865476, 0.7071067811865475, 0, 0]}, "provenance": {"kind": "catalog", "source": "Romi wheel nominal dimensions", "reference": "Pololu Romi wheel"}}]}],
+      "connectors": [
+        {"id": "hub", "model_port": "axle", "body": "wheel", "domain": "mechanical", "interface": "rotational-shaft", "joint_coordinate_state": "angle", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [0.7071067811865476, 0.7071067811865475, 0, 0]}, "provenance": {"kind": "estimated", "source": "wheel-axis center with explicit PMDL angle-state binding"}},
+        {"id": "translation", "model_port": "translation", "body": "wheel", "domain": "mechanical", "interface": "hub-translation", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [0.7071067811865476, 0.7071067811865475, 0, 0]}, "provenance": {"kind": "derived", "source": "non-material rolling-reduced translation frame at wheel hub; local +z follows axle orientation"}, "kinematics": {"kind": "counter_rotation", "state": "angle"}},
+        {"id": "angular_velocity_measurement", "model_port": "angular_velocity_measurement", "body": "wheel", "domain": "signal", "interface": "logic-signal", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "derived", "source": "ideal wheel-rate observation"}}
+      ],
+      "parameter_bindings": [
+        {"model_parameter": "radius", "unit": "m", "absolute_tolerance": 1e-12, "measure": {"kind": "solid_radius", "body": "wheel", "solid": "tire", "axis": "x"}}
+      ],
+      "provenance": {"kind": "catalog", "source": "Pololu nominal dimensions plus derived contact point"}
+    },
+    {
+      "format": "component-package-1",
+      "id": "scanner.position_servo",
+      "version": "1.0.0",
+      "physical_role": "part",
+      "model": {"id": "electromechanical.position_servo.proportional", "version": "1.0.0", "sha256": "sha256:821420de8a389f990f23e4298fc77d50c2c42d6b367cbafa5d9c383fa85d9814"},
+      "bodies": [{"id": "case", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "solids": [{"id": "servo_case", "geometry": {"kind": "box", "dimensions_m": [0.041, 0.02, 0.038]}, "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "catalog", "source": "micro servo nominal envelope", "reference": "Pololu 3550 kit servo"}}]}],
+      "connectors": [
+        {"id": "case_mount", "model_port": null, "body": "case", "domain": "mechanical", "interface": "scanner-fixed-mount", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "case center mounting approximation"}},
+        {"id": "shaft", "model_port": "shaft", "body": "case", "domain": "mechanical", "interface": "rotational-shaft", "joint_coordinate_state": "angle", "local_pose": {"translation_m": [0, 0, 0.019], "rotation_quaternion_wxyz": [0.7071067811865476, -0.7071067811865475, 0, 0]}, "provenance": {"kind": "estimated", "source": "servo horn center with explicit PMDL angle-state binding"}},
+        {"id": "supply_p", "model_port": "supply_p", "body": "case", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [-0.0205, 0.004, -0.01], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "servo lead origin"}},
+        {"id": "supply_n", "model_port": "supply_n", "body": "case", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [-0.0205, -0.004, -0.01], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "servo lead origin"}},
+        {"id": "position_command", "model_port": "position_command", "body": "case", "domain": "signal", "interface": "logic-signal", "local_pose": {"translation_m": [-0.0205, 0, -0.01], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "servo lead origin"}},
+        {"id": "position_measurement", "model_port": "position_measurement", "body": "case", "domain": "signal", "interface": "logic-signal", "local_pose": {"translation_m": [-0.0205, 0.008, -0.01], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "feedback lead origin"}}
+      ],
+      "parameter_bindings": [],
+      "provenance": {"kind": "catalog", "source": "kit envelope with estimated connector frames", "reference": "Pololu 3550"}
+    },
+    {
+      "format": "component-package-1",
+      "id": "scanner.arm_linkage",
+      "version": "1.0.0",
+      "physical_role": "part",
+      "model": {"id": "mechanical.rotational_link.rigid", "version": "1.0.0", "sha256": "sha256:fde4b5c8decb0345374bfb856490d2669db30e5a13ca363d38b575804f943c85"},
+      "bodies": [{"id": "link", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "solids": [{"id": "linkage", "geometry": {"kind": "box", "dimensions_m": [0.18, 0.03, 0.02]}, "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "Romi arm kit envelope"}}]}],
+      "connectors": [
+        {"id": "base", "model_port": "joint", "body": "link", "domain": "mechanical", "interface": "rotational-shaft", "joint_coordinate_state": "angle", "local_pose": {"translation_m": [-0.09, 0, 0], "rotation_quaternion_wxyz": [0.7071067811865476, -0.7071067811865475, 0, 0]}, "provenance": {"kind": "estimated", "source": "linkage base pivot with explicit PMDL angle-state binding"}},
+        {"id": "tilt_servo_mount", "model_port": null, "body": "link", "domain": "mechanical", "interface": "scanner-fixed-mount", "local_pose": {"translation_m": [0.09, 0, 0], "rotation_quaternion_wxyz": [0.7071067811865476, 0, -0.7071067811865475, 0]}, "provenance": {"kind": "derived", "source": "linkage tip frame keeps the camera tilt shaft parallel to the tangential lift shaft, so both joints share one radial/elevation plane through the object center"}}
+      ],
+      "parameter_bindings": [],
+      "provenance": {"kind": "estimated", "source": "prototype arm kit dimensions; connector frames require measurement"}
+    },
+    {
+      "format": "component-package-1",
+      "id": "scanner.camera",
+      "version": "1.0.0",
+      "physical_role": "part",
+      "model": {"id": "electromechanical.camera_payload.rotational", "version": "1.0.0", "sha256": "sha256:4e043b976d12513238f0c2a8ad9333f3097c0aea191f731df8c2fa0a2a77f1e4"},
+      "bodies": [{"id": "camera", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "solids": [{"id": "camera_module", "geometry": {"kind": "box", "dimensions_m": [0.025, 0.024, 0.0124]}, "local_pose": {"translation_m": [0.0125, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "catalog", "source": "Raspberry Pi Camera Module 3 envelope", "reference": "Camera Module 3 Wide"}}]}],
+      "connectors": [
+        {"id": "mount", "model_port": "joint", "body": "camera", "domain": "mechanical", "interface": "rotational-shaft", "joint_coordinate_state": "angle", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [0.7071067811865476, -0.7071067811865475, 0, 0]}, "provenance": {"kind": "derived", "source": "camera bracket pivot with explicit PMDL angle-state binding; connector local +z is camera-body +y, parallel to both tangential servo shafts"}},
+        {"id": "optical_axis", "model_port": null, "body": "camera", "domain": "optical", "interface": "camera-view-axis", "local_pose": {"translation_m": [0.025, 0, 0], "rotation_quaternion_wxyz": [0.7071067811865476, 0, 0.7071067811865475, 0]}, "provenance": {"kind": "derived", "source": "camera viewing frame at the declared front face; connector local +z is camera-body +x, orthogonal to the camera-body +y tilt axis"}},
+        {"id": "supply_p", "model_port": "supply_p", "body": "camera", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [0.0125, 0.008, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "flex cable electrical abstraction"}},
+        {"id": "supply_n", "model_port": "supply_n", "body": "camera", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [0.0125, -0.008, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "flex cable electrical abstraction"}}
+      ],
+      "parameter_bindings": [],
+      "provenance": {"kind": "catalog", "source": "vendor envelope with estimated mount and electrical abstractions", "reference": "Raspberry Pi Camera Module 3 Wide"}
+    },
+    {
+      "format": "component-package-1",
+      "id": "scanner.nimh_battery",
+      "version": "1.0.0",
+      "physical_role": "part",
+      "model": {"id": "electrical.nimh_battery_pack.lumped", "version": "1.0.0", "sha256": "sha256:ec14a4cfc483bfc5f07472661583cd037843cd65161131b1ad86575eed9ecdf4"},
+      "bodies": [{"id": "pack", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "solids": [{"id": "battery_envelope", "geometry": {"kind": "box", "dimensions_m": [0.086, 0.058, 0.052]}, "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "catalog", "source": "six-cell AA holder nominal envelope"}}]}],
+      "connectors": [
+        {"id": "mount", "model_port": null, "body": "pack", "domain": "mechanical", "interface": "scanner-fixed-mount", "local_pose": {"translation_m": [0, 0, -0.026], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "pack bottom mounting face"}},
+        {"id": "positive", "model_port": "positive", "body": "pack", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [0.043, 0.012, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "holder lead exit"}},
+        {"id": "negative", "model_port": "negative", "body": "pack", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [0.043, -0.012, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "holder lead exit"}}
+      ],
+      "parameter_bindings": [],
+      "provenance": {"kind": "catalog", "source": "AA holder envelope with estimated leads"}
+    },
+    {
+      "format": "component-package-1",
+      "id": "scanner.control_board",
+      "version": "1.0.0",
+      "physical_role": "part",
+      "model": {"id": "electrical.dual_hbridge.ideal", "version": "1.0.0", "sha256": "sha256:362d6aa92c09bfd3f2dafb3fb300f0d1ef868a6265abc84c21feb50420c9f70b"},
+      "bodies": [{"id": "board", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "solids": [{"id": "pcb", "geometry": {"kind": "box", "dimensions_m": [0.112, 0.084, 0.01]}, "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "catalog", "source": "Romi control board nominal envelope", "reference": "Pololu 3544"}}]}],
+      "connectors": [
+        {"id": "mount", "model_port": null, "body": "board", "domain": "mechanical", "interface": "scanner-fixed-mount", "local_pose": {"translation_m": [0, 0, -0.005], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "board lower face"}},
+        {"id": "supply_p", "model_port": "supply_p", "body": "board", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [-0.056, 0.03, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "terminal-block approximation"}},
+        {"id": "supply_n", "model_port": "supply_n", "body": "board", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [-0.056, 0.02, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "terminal-block approximation"}},
+        {"id": "left_p", "model_port": "left_p", "body": "board", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [0, 0.042, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "motor header approximation"}},
+        {"id": "left_n", "model_port": "left_n", "body": "board", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [0.012, 0.042, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "motor header approximation"}},
+        {"id": "right_p", "model_port": "right_p", "body": "board", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [0, -0.042, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "motor header approximation"}},
+        {"id": "right_n", "model_port": "right_n", "body": "board", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [0.012, -0.042, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "motor header approximation"}},
+        {"id": "logic_p", "model_port": "logic_p", "body": "board", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [0.056, 0.01, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "logic header approximation"}},
+        {"id": "logic_n", "model_port": "logic_n", "body": "board", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [0.056, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "logic header approximation"}},
+        {"id": "left_command", "model_port": "left_command", "body": "board", "domain": "signal", "interface": "logic-signal", "local_pose": {"translation_m": [-0.02, 0.042, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "on-board control signal"}},
+        {"id": "right_command", "model_port": "right_command", "body": "board", "domain": "signal", "interface": "logic-signal", "local_pose": {"translation_m": [-0.02, -0.042, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "on-board control signal"}},
+        {"id": "left_encoder", "model_port": "left_encoder", "body": "board", "domain": "signal", "interface": "logic-signal", "local_pose": {"translation_m": [0.03, 0.042, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "encoder header approximation"}},
+        {"id": "right_encoder", "model_port": "right_encoder", "body": "board", "domain": "signal", "interface": "logic-signal", "local_pose": {"translation_m": [0.03, -0.042, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "encoder header approximation"}},
+        {"id": "lift_position", "model_port": "lift_position", "body": "board", "domain": "signal", "interface": "logic-signal", "local_pose": {"translation_m": [0.056, -0.02, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "analog header approximation"}},
+        {"id": "tilt_position", "model_port": "tilt_position", "body": "board", "domain": "signal", "interface": "logic-signal", "local_pose": {"translation_m": [0.056, -0.03, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "analog header approximation"}}
+      ],
+      "parameter_bindings": [],
+      "provenance": {"kind": "catalog", "source": "Pololu board envelope and estimated header locations", "reference": "Pololu 3544"}
+    },
+    {
+      "format": "component-package-1",
+      "id": "scanner.encoder_pair",
+      "version": "1.0.0",
+      "physical_role": "part",
+      "model": {"id": "electromechanical.encoder_pair.ideal", "version": "1.0.0", "sha256": "sha256:56f6bd80dd51515aebc4dc254c28aa15d9bda5bf6bc2f09d51efd104dad660f7"},
+      "bodies": [{"id": "board", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "solids": [{"id": "encoder_board", "geometry": {"kind": "box", "dimensions_m": [0.02, 0.019, 0.004]}, "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "catalog", "source": "Romi encoder board nominal envelope", "reference": "Pololu 3542"}}]}],
+      "connectors": [
+        {"id": "mount", "model_port": null, "body": "board", "domain": "mechanical", "interface": "scanner-fixed-mount", "local_pose": {"translation_m": [0, 0, -0.002], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "encoder board mounting face"}},
+        {"id": "supply_p", "model_port": "supply_p", "body": "board", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [-0.01, 0.006, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "header approximation"}},
+        {"id": "supply_n", "model_port": "supply_n", "body": "board", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [-0.01, -0.006, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "header approximation"}},
+        {"id": "left_rate", "model_port": "left_rate", "body": "board", "domain": "signal", "interface": "logic-signal", "local_pose": {"translation_m": [0, 0.006, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "left encoder sensing channel"}},
+        {"id": "right_rate", "model_port": "right_rate", "body": "board", "domain": "signal", "interface": "logic-signal", "local_pose": {"translation_m": [0, -0.006, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "right encoder sensing channel"}},
+        {"id": "left_measurement", "model_port": "left_measurement", "body": "board", "domain": "signal", "interface": "logic-signal", "local_pose": {"translation_m": [0.01, 0.006, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "header approximation"}},
+        {"id": "right_measurement", "model_port": "right_measurement", "body": "board", "domain": "signal", "interface": "logic-signal", "local_pose": {"translation_m": [0.01, -0.006, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "header approximation"}}
+      ],
+      "parameter_bindings": [],
+      "provenance": {"kind": "catalog", "source": "Pololu encoder board envelope with estimated sensing axes", "reference": "Pololu 3542"}
+    },
+    {
+      "format": "component-package-1",
+      "id": "scanner.servo_regulator",
+      "version": "1.0.0",
+      "physical_role": "part",
+      "model": {"id": "electrical.voltage_regulator.fixed", "version": "1.0.0", "sha256": "sha256:918536332a0a576cd6f274b320ba62b96a420bf56ec38bf01d268ffac4f5e8ba"},
+      "bodies": [{"id": "board", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "solids": [{"id": "regulator_board", "geometry": {"kind": "box", "dimensions_m": [0.023, 0.023, 0.01]}, "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "catalog", "source": "regulator nominal envelope", "reference": "Pololu 4981"}}]}],
+      "connectors": [
+        {"id": "mount", "model_port": null, "body": "board", "domain": "mechanical", "interface": "scanner-fixed-mount", "local_pose": {"translation_m": [0, 0, -0.005], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "board lower face"}},
+        {"id": "vin_p", "model_port": "vin_p", "body": "board", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [-0.0115, 0.006, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "terminal approximation"}},
+        {"id": "vin_n", "model_port": "vin_n", "body": "board", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [-0.0115, -0.006, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "terminal approximation"}},
+        {"id": "out_p", "model_port": "out_p", "body": "board", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [0.0115, 0.006, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "terminal approximation"}},
+        {"id": "out_n", "model_port": "out_n", "body": "board", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [0.0115, -0.006, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "terminal approximation"}}
+      ],
+      "parameter_bindings": [],
+      "provenance": {"kind": "catalog", "source": "Pololu nominal envelope with estimated terminal locations", "reference": "Pololu 4981"}
+    },
+    {
+      "format": "component-package-1",
+      "id": "scanner.compute",
+      "version": "1.0.0",
+      "physical_role": "part",
+      "model": {"id": "electrical.resistive_load.constant", "version": "1.0.0", "sha256": "sha256:8fd93292fc21ec3a60e58c639ed06104906d50d20130dcfefdea09ca1fac49bf"},
+      "bodies": [{"id": "board", "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "solids": [{"id": "compute_board", "geometry": {"kind": "box", "dimensions_m": [0.065, 0.03, 0.005]}, "local_pose": {"translation_m": [0, 0, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "catalog", "source": "Raspberry Pi Zero 2 W nominal envelope", "reference": "Raspberry Pi Zero 2 W"}}]}],
+      "connectors": [
+        {"id": "mount", "model_port": null, "body": "board", "domain": "mechanical", "interface": "scanner-fixed-mount", "local_pose": {"translation_m": [0, 0, -0.0025], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "board lower face"}},
+        {"id": "p", "model_port": "p", "body": "board", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [-0.0325, 0.006, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "power header abstraction"}},
+        {"id": "n", "model_port": "n", "body": "board", "domain": "electrical", "interface": "wire-terminal", "local_pose": {"translation_m": [-0.0325, -0.006, 0], "rotation_quaternion_wxyz": [1, 0, 0, 0]}, "provenance": {"kind": "estimated", "source": "power header abstraction"}}
+      ],
+      "parameter_bindings": [],
+      "provenance": {"kind": "catalog", "source": "vendor envelope with equivalent power terminals", "reference": "Raspberry Pi Zero 2 W"}
+    },
+    {
+      "format": "component-package-1",
+      "id": "scanner.electrical_reference",
+      "version": "1.0.0",
+      "physical_role": "boundary",
+      "model": {"id": "electrical.reference.zero", "version": "1.0.0", "sha256": "sha256:62f16239693189c5e2c97229a3adea140f43b8f2045dbcf63384ad25b3c87d1f"},
+      "bodies": [],
+      "connectors": [
+        {"id": "ground", "model_port": "ground", "body": null, "domain": "electrical", "interface": "wire-terminal", "local_pose": null, "provenance": {"kind": "boundary", "source": "explicit electrical gauge boundary"}}
+      ],
+      "parameter_bindings": [],
+      "provenance": {"kind": "boundary", "source": "simulation environment electrical reference"}
+    }
+  ]
+}

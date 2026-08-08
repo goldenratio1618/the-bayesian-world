@@ -7,7 +7,7 @@
     {"name": "emergency_stop", "type": "boolean", "source": "external", "default": false, "unit": "1", "description": "dominant stop input"},
     {"name": "target_speed", "type": "number", "source": "external", "default": 0.12, "minimum": 0.0, "maximum": 0.25, "unit": "m/s", "description": "tangential orbit speed"},
     {"name": "orbit_radius", "type": "number", "source": "external", "default": 0.85, "minimum": 0.65, "maximum": 1.5, "unit": "m", "description": "desired radius from known object center"},
-    {"name": "measured_speed", "type": "number", "source": "sensor", "default": 0.0, "minimum": -0.5, "maximum": 0.5, "unit": "m/s", "description": "encoder/IMU EKF tangential speed"},
+    {"name": "measured_speed", "type": "number", "source": "sensor", "default": 0.0, "minimum": -0.5, "maximum": 0.5, "unit": "m/s", "description": "Ideal chassis forward-speed state used as an estimator proxy at the current simulation fidelity; no IMU/EKF model is present."},
     {"name": "radius_error", "type": "number", "source": "sensor", "default": 0.0, "minimum": -1.0, "maximum": 1.0, "unit": "m", "description": "estimated radius minus commanded radius"},
     {"name": "heading_error", "type": "number", "source": "sensor", "default": 0.0, "minimum": -3.1415926536, "maximum": 3.1415926536, "unit": "rad", "description": "wrapped tangent-heading error"},
     {"name": "orbit_phase", "type": "number", "source": "sensor", "default": 0.0, "minimum": -1000000.0, "maximum": 1000000.0, "unit": "rad", "description": "unwrapped polar angle about object"},

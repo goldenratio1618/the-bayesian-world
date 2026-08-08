@@ -1,0 +1,32 @@
+{
+  "format": "pmdl-1",
+  "id": "electromechanical.encoder_pair.ideal",
+  "name": "Powered dual shaft encoder",
+  "version": "1.0.0",
+  "domains": ["electromechanical", "electrical", "mechanical"],
+  "category": "revolute-joint",
+  "description": "Two ideal nonloading angular-rate sensors with a finite electrical load.",
+  "power_ports": [
+    {"name": "supply_p", "domain": "electrical", "effort": "v_supply_p", "flow": "i_supply_p", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "supply_p", "reference": "encoder supply positive"},
+    {"name": "supply_n", "domain": "electrical", "effort": "v_supply_n", "flow": "i_supply_n", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "supply_n", "reference": "encoder return"}
+  ],
+  "signal_ports": [
+    {"name": "left_rate", "direction": "input", "unit": "rad/s", "dtype": "float64", "shape": [], "description": "Left wheel rate presented to the encoder electronics."},
+    {"name": "right_rate", "direction": "input", "unit": "rad/s", "dtype": "float64", "shape": [], "description": "Right wheel rate presented to the encoder electronics."},
+    {"name": "left_measurement", "direction": "output", "unit": "rad/s", "dtype": "float64", "shape": [], "description": "Left shaft angular rate."},
+    {"name": "right_measurement", "direction": "output", "unit": "rad/s", "dtype": "float64", "shape": [], "description": "Right shaft angular rate."}
+  ],
+  "parameters": [
+    {"name": "equivalent_resistance", "unit": "ohm", "default": 250.0, "bounds": {"lower": 1.0, "upper": 1000000.0}, "uncertainty": {}, "learnable": true}
+  ],
+  "relations": [
+    {"name": "electrical_load", "expression": "v_supply_p - v_supply_n - equivalent_resistance * i_supply_p"},
+    {"name": "supply_return", "expression": "i_supply_p + i_supply_n"},
+    {"name": "left_output", "expression": "left_measurement - left_rate"},
+    {"name": "right_output", "expression": "right_measurement - right_rate"}
+  ],
+  "initialization": {"strategy": "consistent", "constraints": [], "required": []},
+  "validity": {"ranges": {"left_rate": {"lower": -30.0, "upper": 30.0}, "right_rate": {"lower": -30.0, "upper": 30.0}}, "assumptions": ["No shaft loading", "No quantization or missed counts at this fidelity"], "max_timestep": 0.05},
+  "trust": {"structural": "tested", "physical": "reviewed", "numerical": "tested", "empirical": "unverified", "evidence": []},
+  "metadata": {"gold": false, "scanner_component": true, "causality": "acausal", "descriptor_form": "F(t,z,zdot,theta,u)=0", "online_admission": {"admitted": true, "kind": "linear"}}
+}

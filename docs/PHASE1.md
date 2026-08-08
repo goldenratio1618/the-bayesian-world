@@ -4,146 +4,194 @@
 
 The [consumer engineering plan](04_implementation_plan_v2_consumer.md) is the
 high-level design authority. This implementation covers a technical subset of
-its typed IR, simulation, component-package, validation, agent, compiler, and
-artifact-tooling layers. It does not claim to complete the card-workstation
-pilot, physical qualification sequence, five-graph evidence library, or
-microfactory operating model.
+its typed IR, component-package, simulation, validation, compiler, agent, and
+artifact layers. It does not claim to complete the card-workstation pilot,
+physical qualification sequence, five-graph evidence library, or microfactory
+operating model.
 
-The scanner robot is an intentional pre-product lab device. It provides an
+The scanner robot is an intentional pre-product laboratory device. It is an
 end-to-end harness fixture and a future means to acquire 3D structure and
-physical evidence before the first product-level prototype. Its successful
-simulation is E0/E1 engineering evidence only; it does not qualify a physical
-part or supersede the card-workstation family as the strategic pilot.
+physical evidence before the first product-level prototype. A successful
+simulation is E0/E1 engineering evidence only and does not qualify a part.
 
-The PMDL and simulator APIs remain backend-neutral. This Phase 1 reference uses
-NumPy for portability and PyTorch for GPU execution and differentiation. The
-plan's NumPyro/JAX execution backend and independent Stan oracle remain later
-compiler targets; this repository does not imply that PyTorch replaced that
-decision.
+## Canonical representation contract
+
+The source of truth is a strict `contraption-2` assembly plus its referenced
+component-package registry and exact-hash PMDL registry. Component instances do
+not carry independent models or visualization geometry. A component package
+defines its model hash, bodies/solids, connector frames, connector-to-model-port
+bindings, geometry-parameter bindings, and provenance.
+
+`resolve_assembly` validates and compiles that closure into:
+
+1. an assembled PMDL descriptor system;
+2. a physical attachment/joint graph and resolved body/connector poses; and
+3. one assembly SHA-256 shared by every downstream artifact.
+
+Every `contraption-2` source must also carry a strict, hash-bound
+`metadata.dynamics_completeness` record. A `complete` record may have no open
+gates; an `incomplete` record must identify each known missing interaction as an
+open gate. Validation rejects an absent, malformed, or self-contradictory
+record, and simulation reports, scanner acceptance, build plans, and compiled
+C99 artifacts propagate it instead of implying more fidelity than the assembly
+declares.
+
+The separation is a projection boundary, not a second representation:
+
+- NumPy and Torch integrate the namespaced residuals of every component model
+  plus equations induced by typed connections.
+- Runtime network and connector-coincidence checks reject conservation or
+  attachment drift after every accepted timestep.
+- The viewer accepts only a `ResolvedAssembly` plus, optionally, an actual
+  `SimulationResult`; it derives the static scene and hash-bound resolved pose
+  frames internally. It performs no simulation, name-based placement, detached
+  scene ingestion, or visual override.
+- The build planner accepts only `ResolvedAssembly`, derives placement and
+  connector distances from resolved poses, and exposes missing fabrication
+  facts as release gates.
+- The C99 compiler accepts the full `ResolvedAssembly`, derives its local
+  dynamics/estimator system directly from the assembled PMDL DAE, and embeds
+  assembly, PMDL, and controller provenance. Caller-authored online matrices
+  and bare PMDL-system projections are not canonical compilation inputs.
+
+The old scanner aggregate coverage sidecar and authored online-model JSON are
+not part of this architecture.
 
 ## What is implemented
 
-Phase 1 is a modular reference stack for electrical and planar rigid-body
-digital twins:
-
-* a restricted, typed, acausal physical-model DSL with safe expression trees,
-  dimensional analysis, residual descriptor equations, explicit energy and
-  dissipation declarations, and schema-level representations for modes,
-  fidelity levels, validity envelopes, evidence, and property tests;
-* deterministic contraption, connection, internal/external signal, taxonomy,
-  category, subcategory, model, and physical-instantiation specifications;
-* batched Monte Carlo uncertainty propagation and confidence summaries on a
-  NumPy backend, plus an optional PyTorch backend for CUDA vectorization and
-  end-to-end automatic differentiation;
-* descriptor-system integration, electrical and differential-drive/planar
-  mechanics primitives, experimental parameter fitting, and approximate
-  Bayesian candidate-model comparison;
-* a restricted state-machine/expression format for onboard control logic;
-* a conservative online compiler that admits only validated linear or
-  linearizable models and generates fixed-allocation C99 plus an
-  uncertainty-aware extended Kalman filter;
-* budgeted, staged classification and modeling agents whose artifacts are data,
-  never imported code, and require strict validation plus explicit promotion;
-* a dependency-free interactive browser viewer and deterministic build
-  instruction generator; and
-* an end-to-end in-silico apartment scanning robot fixture.
+- A restricted, typed, acausal PMDL with safe expression trees, dimensional
+  analysis, descriptor residuals, energy/dissipation declarations, validity
+  envelopes, evidence, and property-test records. The portable math allow-list
+  includes common dimensionless functions such as `tanh`.
+- Strict component-package schemas for physical bodies, explicit connector
+  locations, provenance, model-port mappings, and state/parameter geometry
+  bindings.
+- Fail-closed assembly of electrical, mechanical, signal, control, and explicit
+  kinematic-only connections, with equation counts and structural-rank checks.
+- Backward-Euler descriptor integration on NumPy and optional GPU-enabled
+  PyTorch, with consistent initialization and runtime network invariants.
+- Batched uncertainty propagation, fitting, and approximate Bayesian
+  candidate-model comparison.
+- A restricted onboard control format and a scanner controller that addresses
+  namespaced canonical assembly state/control variables.
+- DAE-derived, fixed-allocation C99 dynamics plus an uncertainty-aware
+  estimator for constrained onboard execution. Controller state-machine C99
+  emission is not implemented; the manifest says so explicitly.
+- Budgeted, staged classification/modeling agents whose artifacts are inert
+  data until deterministic validation and explicit promotion.
+- A dependency-free, display-only browser viewer and a deterministic,
+  hash-bound build planner.
 
 ## Deliberate Phase 1 limitations
 
-"Rigid-body" currently means a planar chassis with revolute arm coordinates and
-3D visualization transforms. It does not yet include a general-purpose 3D
-contact solver, flexible bodies, fracture, fluid, thermal, or optical physics.
-The camera is mass and geometry only, exactly as requested.
+"Rigid body" currently means a planar root chassis with a declared tree of
+fixed/revolute attachments and three-dimensional visualization transforms. It
+does not include a general 3D contact solver, flexible bodies, fracture, fluid,
+thermal, or optical physics.
 
-The scanner mission uses a hand-authored `DifferentialDriveArmModel` aggregate;
-it is **not** assembled from the component PMDL files. Before the
-contraption-level entry point integrates anything, it requires
-`examples/scanner_robot/contraption.json` and
-`examples/scanner_robot/simulation_coverage.json`. The coverage contract binds,
-with a canonical SHA-256 digest, every component ID and model reference plus
-every connection ID, kind, domain, and ordered endpoint list. Each physical
-element has an explicit state, dynamics-parameter, controller, sensor,
-geometry-only, or excluded mapping. Exclusions require a nonempty limitation.
-Missing/extra entries, changed models or endpoints, invalid exclusions, and a
-stale hash are fatal errors rather than silently reducing the simulation.
+The scanner's hash-bound dynamics record is deliberately `incomplete`. Its
+chassis model uses the published **bare-chassis** mass of 0.160 kg (without
+batteries) and derives yaw inertia from that mass and the canonical estimated
+box envelope in the chassis component package. Fixed battery, electronics,
+motor-case, servo-case, and compute-payload mass/inertia are not folded into a
+hidden whole-robot parameter. Moving arm/camera inertia is only a
+component-local approximation; downstream-body inertial derivation and servo
+case-reaction coupling are not modeled. Caster/floor contact, full-solid
+keep-out, physical localization/encoder observation chains, and supply/fault
+coupling are also open gates.
 
-`make_scanner_aggregate_model` remains available for isolated tests of the
-reduced equations. It carries no physical-coverage or PMDL-composition claim;
-physical scanner runs must use the guarded `simulate_scanner_robot` path.
+Those seven omissions are machine-readable and release-blocking. Scanner
+acceptance includes dynamics completeness, so `accepted` cannot become true
+while any gate remains open. The current
+`root_keepout_violation_probability` checks only the planar root position; it is
+not labeled or treated as full-body collision evidence.
 
-`contraption validate` is structural, type, unit, taxonomy, and reference
-validation; its JSON output labels that scope explicitly. Standalone runtime
-admission is stricter. The simulator executes validity ranges but rejects
-declared modes, initialization constraints, non-identity fidelity selection,
-and unexecuted property tests with `UnsupportedPMDLSemanticsError`. Stateless
-algebraic components also require network assembly rather than standalone
-time integration. These declarations are preserved in the DSL and are never
-silently treated as though their runtime semantics had executed.
+The scanner component PMDL files are prototype models, not experimentally
+qualified gold models. Estimated geometry and connector locations are explicit
+in their package provenance and must be replaced or verified with CAD, catalog,
+measurement, or scan evidence before construction. The build planner therefore
+correctly reports the current design as not build-ready.
 
-The NumPy path is runnable everywhere but is not automatically differentiable
-and does not use a GPU. Install the `gpu` extra to select PyTorch; the simulator
-then keeps tensors on the selected CUDA device and preserves the autograd graph.
-This split avoids pretending that a CPU-only machine has GPU acceleration.
+The NumPy path is portable but neither GPU-accelerated nor automatically
+differentiable. The Torch path retains tensors on the requested CUDA device and
+preserves its autograd graph. An explicit unavailable CUDA request is an error;
+the tooling does not claim acceleration after silently selecting a CPU.
 
-Monte Carlo intervals describe propagated model/parameter/process uncertainty;
-they are not automatically frequentist coverage guarantees. Tests check sample
-moments and analytic special cases. Empirical calibration still requires data
-from the built robot.
+Monte Carlo intervals describe propagated model, parameter, and process
+uncertainty; they are not automatic frequentist coverage guarantees. Model
+evidence uses documented approximations and still needs posterior-predictive
+checks and physical data.
 
-Model evidence uses a documented Laplace/BIC approximation, not an exact
-closed-form Bayes factor. Results are labeled accordingly and should be checked
-with posterior predictive diagnostics.
+Generated floating-point C99 is a portable online reference, not a release-ready
+firmware image. Target execution, numerical equivalence, timing, range analysis,
+hardware-in-the-loop testing, fail-safe behavior, and independent safety
+controls remain release gates. FPGA deployment additionally needs fixed-point
+selection, synthesis, and timing closure.
 
-Generated C is a deterministic simulation/control reference suitable for an
-MCU toolchain. FPGA use requires downstream fixed-point selection, timing
-closure, and hardware-in-the-loop verification; the compiler emits a manifest
-that makes those remaining obligations explicit.
+Compilation remains available for an incomplete assembly, but the generated
+source, model metadata, and manifest all carry the typed completeness status and
+open gates. The artifact therefore cannot truthfully be mistaken for a
+physically complete device model.
 
-## Quick start
+The generated C99 does not execute the declarative `ControlProgram`. It accepts
+the resolved actuator-source vector and requires a separately qualified runtime
+for the exact controller id/version/hash recorded in its source and manifest.
 
-From this directory:
+## Run the scanner fixture
 
-```bash
-python -m pip install -e .
-python -m pytest
-contraption demo --output outputs/scanner_robot
-```
-
-For CUDA/autograd support:
+From the repository root in Linux/WSL:
 
 ```bash
-python -m pip install -e ".[gpu]"
-contraption doctor
+source .venv/bin/activate
+contraption validate
+contraption simulate --backend torch --device cuda --output outputs/scanner_demo
+contraption view --trajectory outputs/scanner_demo/trajectory.json \
+  --output outputs/scanner_demo/viewer
+python -m http.server 8000 --directory outputs/scanner_demo/viewer
 ```
 
-For a reproducible GPU-first environment, use
-[the Linux installation guide](INSTALLATION.md) rather than relying on the
-minimal commands above.
+Open <http://127.0.0.1:8000>. The emitted `physical-scene.json`, exact-sample
+trajectory, viewer payload, build plan, and compiler manifest carry the same
+assembly hash. Viewer poses are reconstructed from that trajectory through the
+resolved assembly; the detached physical-scene artifact is diagnostic output,
+not another viewer input representation.
 
-The demo produces a trajectory/UQ JSON file, a self-contained viewer, generated
-C99 online runtime, compiler manifest, and Markdown assembly instructions.
+For user-set external controls, run `contraption serve --backend torch
+--device cuda`. Its same-origin loopback API derives the UI schema from the
+hash-bound declarative controller, validates every POST, reruns the Python
+assembly, and returns only a complete canonical physical scene. The JavaScript
+viewer never integrates dynamics or composes physical transforms.
+
+Compile and inspect the build release gates with:
+
+```bash
+contraption compile --output outputs/scanner_demo/online
+contraption build --output outputs/scanner_demo/build
+```
 
 ## Verification ladder
 
-1. Parse and validate every bundled `.pmdl` model and JSON specification.
-2. Compare electrical and mechanical special cases with analytic solutions.
-3. Check Monte Carlo moments, deterministic seeding, interval ordering, and
-   batch invariance.
-4. Fit synthetic observations and confirm parameter recovery.
-5. Compare candidate-model evidence on generated data.
-6. Verify restricted control programs and their safety clamps.
-7. Compile generated C with any available C99 compiler and execute a smoke step.
-8. Verify the scanner aggregate coverage contract, then run the mission and
-   check orbit, pointing, clearance, and uncertainty acceptance criteria.
-9. Load the viewer and inspect 3D/electrical views and controls.
-10. Treat all physical instances as `unverified` until dimensional, electrical,
-    and dynamic measurements are recorded.
+1. Parse the contraption, package registry, and exact-hash PMDL closure.
+2. Verify complete connector/model-port and geometry/state/parameter bindings.
+3. Reject incompatible domains, interfaces, units, underconstrained attachment
+   trees, stale content hashes, or structurally singular networks.
+4. Compute a consistent descriptor initial state and check network invariants.
+5. Integrate on NumPy and Torch; verify accepted timesteps preserve network and
+   physical attachment boundary conditions.
+6. Generate pose frames from the physical resolver and reject missing, extra,
+   or stale-hash viewer frames.
+7. Derive C99 from the assembled DAE, compile it with a host C99 compiler, and
+   retain both closure hashes in the manifest/source.
+8. Confirm every canonical component/connection appears in the build record and
+   that unknown fabrication facts remain unresolved.
+9. Treat all physical instances as `unverified` until independent dimensional,
+   electrical, dynamic, and safety measurements are recorded.
 
 ## Safety boundary
 
 This is engineering software, not a certified controller. Before powering real
-hardware, add a physical power switch, fuse as appropriate, conservative current
-limits, a software and hardware stop, mechanical travel stops, cable strain
-relief, guarded moving joints, and a low-speed lift test. Keep the robot on the
-floor, clear of people, pets, stairs, liquids, and fragile objects. Do not infer
-safe continuous operation from stall ratings.
+hardware, add a physical power switch, appropriate fuse/current limiting,
+software and hardware stops, mechanical travel stops, cable strain relief, and
+guards. Commission at low energy with the robot lifted or restrained and keep
+it clear of people, pets, stairs, liquids, and fragile objects. Do not infer
+safe continuous operation from a simulation or catalog stall rating.

@@ -13,7 +13,6 @@ import numpy as np
 from contraption.backend import NumpyBackend, TorchBackend, get_backend
 from contraption.simulator import (
     DCMotorSystem,
-    DifferentialDriveArmModel,
     OfflineSimulator,
     PlanarRigidBodySystem,
     RCCircuit,
@@ -101,51 +100,6 @@ class MechanicalBaselineTests(unittest.TestCase):
         self.assertAlmostEqual(float(result.series("velocity_x")[0, -1]), 4.0, places=8)
         self.assertAlmostEqual(float(result.series("y")[0, -1]), 0.0, places=12)
 
-    def test_scanner_entry_point_and_arm_geometry(self) -> None:
-        model = DifferentialDriveArmModel(
-            {
-                "roughness_std": 0.0,
-                "contact_jitter_std": 0.0,
-                "arm_azimuth_offset": math.pi / 2.0,
-            }
-        )
-        result = model.simulate(
-            duration=1.0,
-            dt=0.01,
-            controls={
-                "left_voltage": 6.0,
-                "right_voltage": 6.0,
-                "arm_command": 0.5,
-                "camera_pitch": -0.2,
-            },
-            num_samples=1,
-            use_model_uncertainty=False,
-            process_noise=False,
-        )
-        self.assertEqual(result.state_names, model.state_names)
-        self.assertGreater(float(result.series("x")[0, -1]), 0.2)
-        self.assertAlmostEqual(float(result.series("y")[0, -1]), 0.0, places=10)
-        self.assertAlmostEqual(float(result.series("yaw")[0, -1]), 0.0, places=10)
-        elevation = float(result.series("arm_elevation")[0, -1])
-        x = float(result.series("x")[0, -1])
-        camera_x = float(result.series("camera_x", outputs_first=True)[0, -1])
-        camera_y = float(result.series("camera_y", outputs_first=True)[0, -1])
-        camera_z = float(result.series("camera_z", outputs_first=True)[0, -1])
-        radial = 0.09 + 0.45 * math.cos(elevation)
-        self.assertAlmostEqual(camera_x, x, places=9)
-        self.assertAlmostEqual(camera_y, radial, places=9)
-        self.assertAlmostEqual(camera_z, 0.25 + 0.45 * math.sin(elevation), places=9)
-
-    def test_offline_scanner_convenience(self) -> None:
-        engine = OfflineSimulator(SimulationConfig(dt=0.02, num_samples=4, seed=9))
-        result = engine.simulate_scanner_robot(
-            duration=0.1,
-            controls={"left_voltage": 1.0, "right_voltage": 1.0},
-            model_parameters={"roughness_std": 0.0, "contact_jitter_std": 0.0},
-        )
-        self.assertEqual(result.samples.shape, (4, 6, 7))
-
-
 class DescriptorAndControlTests(unittest.TestCase):
     @staticmethod
     def _descriptor(residual, *, initial_state=(1.0,)) -> ResidualSystem:
@@ -224,6 +178,66 @@ class DescriptorAndControlTests(unittest.TestCase):
         )
         expected = (1.0 / 1.02) ** 100
         self.assertAlmostEqual(float(result.mean[-1, 0]), expected, places=7)
+
+    def test_consistent_initializer_defines_the_published_first_frame(self) -> None:
+        class ConsistentlyInitializedSystem:
+            state_names = ("x", "algebraic_copy")
+            initial_state = (2.0, 0.0)
+            default_parameters = {}
+            control_names = ()
+
+            @staticmethod
+            def consistent_initial_state(t, state, parameters, controls, backend):
+                return backend.stack((state[:, 0], state[:, 0]), axis=-1)
+
+            @staticmethod
+            def residual(t, state, state_dot, parameters, controls, backend):
+                return backend.stack(
+                    (state_dot[:, 0], state[:, 1] - state[:, 0]), axis=-1
+                )
+
+        result = simulate(
+            ConsistentlyInitializedSystem(),
+            duration=0.1,
+            dt=0.1,
+            num_samples=1,
+            process_noise=False,
+        )
+
+        np.testing.assert_allclose(result.samples[0, 0], [2.0, 2.0])
+
+    def test_resolved_wrapper_validates_complete_result_before_return(self) -> None:
+        class ExplicitSystem:
+            state_names = ("x",)
+            initial_state = (0.0,)
+            default_parameters = {}
+
+            @staticmethod
+            def derivative(t, state, parameters, controls, backend):
+                return state * 0.0
+
+        class ValidatedContraption:
+            system = ExplicitSystem()
+            controller = None
+
+            def __init__(self) -> None:
+                self.validated = False
+
+            def validate_simulation_result(self, result) -> None:
+                self.validated = True
+                self.asserted_shape = tuple(result.samples.shape)
+
+        contraption = ValidatedContraption()
+        result = simulate(
+            contraption,
+            duration=0.1,
+            dt=0.1,
+            num_samples=2,
+            process_noise=False,
+        )
+        self.assertTrue(contraption.validated)
+        self.assertEqual(contraption.asserted_shape, (2, 2, 1))
+        self.assertEqual(result.samples.shape, (2, 2, 1))
 
     def test_singular_descriptor_jacobian_fails_with_context(self) -> None:
         model = self._descriptor(lambda t, state, state_dot, parameters, controls: state * 0.0)

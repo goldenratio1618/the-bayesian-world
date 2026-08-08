@@ -76,6 +76,15 @@
       "description": "Two-terminal component imposing an electrical potential difference."
     },
     {
+      "id": "power-converter",
+      "name": "Electrical power converter",
+      "domains": ["electrical"],
+      "required_power_ports": [],
+      "ideal_models": [],
+      "constraints": ["Every input and output rail is explicit", "Conversion and loss approximations are declared"],
+      "description": "A multiport electrical converter or driver whose rail-specific port contract is model-defined."
+    },
+    {
       "id": "motor",
       "name": "Motor",
       "domains": ["electromechanical", "electrical", "mechanical"],
@@ -235,8 +244,9 @@
       "condition": "unverified",
       "parameters": {"resistance": 100.0},
       "parameter_uncertainty": {"resistance": {"distribution": "normal", "std": 5.0}},
+      "geometry": {"kind": "box", "dimensions": [0.01, 0.01, 0.01], "unit": "m", "frame": "body", "metadata": {"provenance": "estimated"}},
       "connection_info": {"lead_type": "through-hole"},
-      "metadata": {"placeholder_geometry": true}
+      "metadata": {"geometry_note": "explicit rough envelope; replace with measured or catalog dimensions"}
     },
     {
       "id": "generic-camera-module",

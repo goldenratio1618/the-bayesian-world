@@ -689,16 +689,12 @@ class ModelSpec(StrictRecord):
 
 @dataclass(frozen=True, slots=True)
 class GeometrySpec(StrictRecord):
-    kind: str = "box"
-    dimensions: tuple[float, float, float] = (0.01, 0.01, 0.01)
+    kind: str
+    dimensions: tuple[float, float, float]
     unit: str = "m"
     uri: str | None = None
     frame: str = "body"
     metadata: FrozenDict[Any] = FrozenDict()
-
-    @classmethod
-    def placeholder_cube(cls) -> "GeometrySpec":
-        return cls()
 
     def __post_init__(self) -> None:
         if len(self.dimensions) != 3 or any(value <= 0 or not math.isfinite(value) for value in self.dimensions):
@@ -712,13 +708,24 @@ class GeometrySpec(StrictRecord):
     @classmethod
     def from_dict(cls, data: Mapping[str, Any] | None) -> "GeometrySpec":
         if data is None:
-            return cls.placeholder_cube()
+            raise SpecError(
+                "geometry is required; use an explicit estimated box when measured, "
+                "catalog, CAD, or scan geometry is unavailable"
+            )
         data = _object(data, "geometry")
-        _keys(data, ("kind", "dimensions", "unit", "uri", "frame", "metadata"), "geometry")
-        dimensions = tuple(_number(item, f"geometry.dimensions[{i}]") for i, item in enumerate(_sequence(data.get("dimensions", [0.01] * 3), "geometry.dimensions")))
+        _keys(
+            data,
+            ("kind", "dimensions", "unit", "uri", "frame", "metadata"),
+            "geometry",
+            ("kind", "dimensions"),
+        )
+        dimensions = tuple(
+            _number(item, f"geometry.dimensions[{i}]")
+            for i, item in enumerate(_sequence(data["dimensions"], "geometry.dimensions"))
+        )
         if len(dimensions) != 3:
             raise SpecError("geometry.dimensions must have length three")
-        return cls(_string(data.get("kind", "box"), "geometry.kind"), dimensions, _string(data.get("unit", "m"), "geometry.unit"),
+        return cls(_string(data["kind"], "geometry.kind"), dimensions, _string(data.get("unit", "m"), "geometry.unit"),
                    None if data.get("uri") is None else _string(data["uri"], "geometry.uri"),
                    _string(data.get("frame", "body"), "geometry.frame"), _freeze(_object(data.get("metadata", {}), "geometry.metadata")))
 
@@ -727,9 +734,9 @@ class GeometrySpec(StrictRecord):
 class ComponentInstanceSpec(StrictRecord):
     id: str
     model: str
+    geometry: GeometrySpec
     taxonomy: str | None = None
     parameters: FrozenDict[Any] = FrozenDict()
-    geometry: GeometrySpec = GeometrySpec()
     condition: str = "unverified"
     version: str = "1.0.0"
     metadata: FrozenDict[Any] = FrozenDict()
@@ -746,12 +753,17 @@ class ComponentInstanceSpec(StrictRecord):
     def from_dict(cls, data: Mapping[str, Any]) -> "ComponentInstanceSpec":
         data = _object(data, "component")
         names = ("id", "model", "taxonomy", "parameters", "geometry", "condition", "version", "metadata")
-        _keys(data, names, "component", ("id", "model"))
-        return cls(_identifier(data["id"], "component.id"), _identifier(data["model"], "component.model"),
-                   None if data.get("taxonomy") is None else _identifier(data["taxonomy"], "component.taxonomy"),
-                   _freeze(_object(data.get("parameters", {}), "component.parameters")), GeometrySpec.from_dict(data.get("geometry")),
-                   _string(data.get("condition", "unverified"), "component.condition"),
-                   _string(data.get("version", "1.0.0"), "component.version"), _freeze(_object(data.get("metadata", {}), "component.metadata")))
+        _keys(data, names, "component", ("id", "model", "geometry"))
+        return cls(
+            id=_identifier(data["id"], "component.id"),
+            model=_identifier(data["model"], "component.model"),
+            geometry=GeometrySpec.from_dict(data["geometry"]),
+            taxonomy=None if data.get("taxonomy") is None else _identifier(data["taxonomy"], "component.taxonomy"),
+            parameters=_freeze(_object(data.get("parameters", {}), "component.parameters")),
+            condition=_string(data.get("condition", "unverified"), "component.condition"),
+            version=_string(data.get("version", "1.0.0"), "component.version"),
+            metadata=_freeze(_object(data.get("metadata", {}), "component.metadata")),
+        )
 
 
 ComponentSpec = ComponentInstanceSpec

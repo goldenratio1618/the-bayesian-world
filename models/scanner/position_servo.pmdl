@@ -1,0 +1,38 @@
+{
+  "format": "pmdl-1",
+  "id": "electromechanical.position_servo.proportional",
+  "name": "Position-controlled hobby servo",
+  "version": "1.0.0",
+  "domains": ["electromechanical", "electrical", "mechanical"],
+  "category": "brushed-dc-motor",
+  "description": "A proportional shaft-effort servo driven by an angular command.",
+  "power_ports": [
+    {"name": "supply_p", "domain": "electrical", "effort": "v_supply_p", "flow": "i_supply_p", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "supply_p", "reference": "servo positive supply"},
+    {"name": "supply_n", "domain": "electrical", "effort": "v_supply_n", "flow": "i_supply_n", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "supply_n", "reference": "servo return"},
+    {"name": "shaft", "domain": "mechanical", "effort": "torque_shaft", "flow": "omega_shaft", "effort_unit": "N*m", "flow_unit": "rad/s", "orientation": "into_component", "frame": "shaft", "reference": "positive commanded rotation"}
+  ],
+  "signal_ports": [
+    {"name": "position_command", "direction": "input", "unit": "rad", "dtype": "float64", "shape": [], "description": "Requested shaft angle."},
+    {"name": "position_measurement", "direction": "output", "unit": "rad", "dtype": "float64", "shape": [], "description": "Integrated shaft-angle estimate."}
+  ],
+  "states": [
+    {"name": "angle", "unit": "rad", "initial": 0.0, "derivative": "angle_dot", "description": "Servo shaft angle."}
+  ],
+  "parameters": [
+    {"name": "stiffness", "unit": "N*m/rad", "default": 1.1, "bounds": {"lower": 0.001, "upper": 100.0}, "uncertainty": {"distribution": "normal", "parameters": {"std": 0.12}}, "learnable": true},
+    {"name": "damping", "unit": "N*m*s/rad", "default": 0.08, "bounds": {"lower": 0.000001, "upper": 10.0}, "uncertainty": {"distribution": "normal", "parameters": {"std": 0.01}}, "learnable": true},
+    {"name": "efficiency", "unit": "1", "default": 0.65, "bounds": {"lower": 0.05, "upper": 1.0}, "uncertainty": {}, "learnable": true},
+    {"name": "torque_per_amp", "unit": "N*m/A", "default": 0.30, "bounds": {"lower": 0.001, "upper": 100.0}, "uncertainty": {}, "learnable": true}
+  ],
+  "relations": [
+    {"name": "angle_kinematics", "expression": "angle_dot - omega_shaft"},
+    {"name": "position_effort", "expression": "torque_shaft + stiffness * (position_command - angle) - damping * omega_shaft"},
+    {"name": "supply_return", "expression": "i_supply_p + i_supply_n"},
+    {"name": "low_fidelity_current_demand", "expression": "efficiency * i_supply_p + torque_shaft / torque_per_amp"},
+    {"name": "position_feedback", "expression": "position_measurement - angle"}
+  ],
+  "initialization": {"strategy": "consistent", "constraints": [], "required": ["angle"]},
+  "validity": {"ranges": {"angle": {"lower": -1.2, "upper": 1.2}, "position_command": {"lower": -1.2, "upper": 1.2}, "omega_shaft": {"lower": -8.0, "upper": 8.0}}, "assumptions": ["Servo electronics are an ideal proportional effort source", "Gear backlash, saturation, and dead band are omitted"], "max_timestep": 0.05},
+  "trust": {"structural": "tested", "physical": "reviewed", "numerical": "tested", "empirical": "unverified", "evidence": []},
+  "metadata": {"gold": false, "scanner_component": true, "causality": "acausal", "descriptor_form": "F(t,z,zdot,theta,u)=0", "online_admission": {"admitted": true, "kind": "linearizable"}}
+}

@@ -45,6 +45,7 @@ button {
 
 button:hover { border-color: rgba(85, 229, 197, 0.58); background: rgba(85, 229, 197, 0.09); }
 button:active { transform: translateY(1px); }
+button:disabled { cursor: wait; opacity: 0.58; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
 
 .app-shell { width: min(1720px, 100%); margin: 0 auto; padding: 1.2rem clamp(0.8rem, 2vw, 2rem) 1rem; }
@@ -123,6 +124,8 @@ h2 { margin: 0; font-size: 1rem; font-weight: 640; }
 .controls-panel, .transparency-panel { min-height: 0; }
 .control-stack { display: grid; gap: 0.1rem; padding: 0.65rem 1rem 1rem; max-height: 31vh; overflow: auto; }
 .control-stack.compact { max-height: 27vh; }
+.live-control-heading { margin-top: 0.9rem; padding-top: 0.85rem; border-top: 1px solid var(--line); }
+.live-run-button { width: 100%; margin-top: 0.75rem; }
 
 .slider-row { display: grid; grid-template-columns: 1fr auto; gap: 0.2rem 0.75rem; padding: 0.7rem 0; color: var(--muted); font-size: 0.78rem; }
 .slider-row output { color: var(--ink); font: 650 0.75rem ui-monospace, monospace; }

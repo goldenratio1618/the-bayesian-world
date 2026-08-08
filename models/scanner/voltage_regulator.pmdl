@@ -1,0 +1,29 @@
+{
+  "format": "pmdl-1",
+  "id": "electrical.voltage_regulator.fixed",
+  "name": "Fixed-output voltage regulator",
+  "version": "1.0.0",
+  "domains": ["electrical"],
+  "category": "power-converter",
+  "description": "A fixed-output regulator with an explicitly approximate constant-efficiency current-conversion relation.",
+  "power_ports": [
+    {"name": "vin_p", "domain": "electrical", "effort": "v_vin_p", "flow": "i_vin_p", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "vin_p", "reference": "input positive"},
+    {"name": "vin_n", "domain": "electrical", "effort": "v_vin_n", "flow": "i_vin_n", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "vin_n", "reference": "input return"},
+    {"name": "out_p", "domain": "electrical", "effort": "v_out_p", "flow": "i_out_p", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "out_p", "reference": "output positive"},
+    {"name": "out_n", "domain": "electrical", "effort": "v_out_n", "flow": "i_out_n", "effort_unit": "V", "flow_unit": "A", "orientation": "into_component", "frame": "out_n", "reference": "output return"}
+  ],
+  "parameters": [
+    {"name": "output_voltage", "unit": "V", "default": 6.0, "bounds": {"lower": 0.1, "upper": 20.0}, "uncertainty": {}, "learnable": false},
+    {"name": "efficiency", "unit": "1", "default": 0.88, "bounds": {"lower": 0.1, "upper": 1.0}, "uncertainty": {"distribution": "normal", "parameters": {"std": 0.04}}, "learnable": true}
+  ],
+  "relations": [
+    {"name": "fixed_output", "expression": "v_out_p - v_out_n - output_voltage"},
+    {"name": "input_return", "expression": "i_vin_p + i_vin_n"},
+    {"name": "output_return", "expression": "i_out_p + i_out_n"},
+    {"name": "low_fidelity_current_conversion", "expression": "efficiency * i_vin_p + i_out_p"}
+  ],
+  "initialization": {"strategy": "consistent", "constraints": [], "required": []},
+  "validity": {"ranges": {"i_out_p": {"lower": -2.5, "upper": 2.5}}, "assumptions": ["Continuous conduction", "Constant current-conversion efficiency at this fidelity", "Voltage-ratio effects and current limiting are omitted"], "max_timestep": 0.05},
+  "trust": {"structural": "tested", "physical": "reviewed", "numerical": "tested", "empirical": "unverified", "evidence": []},
+  "metadata": {"gold": false, "scanner_component": true, "causality": "acausal", "descriptor_form": "F(t,z,zdot,theta,u)=0", "online_admission": {"admitted": true, "kind": "linearizable"}}
+}

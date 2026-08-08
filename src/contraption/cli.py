@@ -11,6 +11,8 @@ import shutil
 import sys
 from typing import Any, Mapping
 
+import numpy as np
+
 from .agents import (
     ClassificationAgent,
     ModelingAgent,
@@ -23,19 +25,22 @@ from .agents import (
 from .backend import infer_backend
 from .budget import BudgetLedger
 from .build import generate_build_instructions
-from .compiler import OnlineModelIR, compile_contraption, syntax_check
+from .compiler import compile_resolved_assembly, syntax_check
 from .controls import ControlProgram
 from .dsl import ModelRegistry
+from .live import LiveScannerApplication, serve_live_scanner
 from .paths import asset_root, source_root
+from .physical import ComponentPackageRegistry
+from .resolved import ResolvedAssembly, resolve_assembly
 from .scanner import (
-    load_scanner_mission,
+    ScannerMission,
     scanner_metrics,
+    scanner_physical_scene,
     simulate_scanner_robot,
-    validate_scanner_simulation_coverage,
 )
-from .specs import ContraptionSpec
+from .simulator import SimulationResult
 from .taxonomy import load_default_taxonomy
-from .validation import validate_contraption_structure
+from .uq import summarize_samples
 from .visualization import generate_viewer
 
 
@@ -46,6 +51,10 @@ OUTPUT_ROOT = Path(
     os.environ.get("CONTRAPTION_OUTPUT_ROOT", str(WORK_ROOT / "outputs"))
 ).expanduser().resolve()
 SCANNER_ROOT = PROJECT_ROOT / "examples" / "scanner_robot"
+DEFAULT_SPEC = SCANNER_ROOT / "contraption.json"
+DEFAULT_PACKAGES = SCANNER_ROOT / "component_packages.json"
+DEFAULT_MODEL_ROOT = PROJECT_ROOT / "models"
+DEFAULT_CONTROLLER_ROOT = SCANNER_ROOT / "controls"
 DEFAULT_OUTPUT = OUTPUT_ROOT / "scanner_demo"
 AGENT_PROPOSALS = OUTPUT_ROOT / "agent-proposals"
 AGENT_STAGING = OUTPUT_ROOT / "agent-staging"
@@ -68,6 +77,15 @@ _MODELING_CONTEXT: dict[str, tuple[str, ...]] = {
 }
 
 
+def _controller_identity(assembly: ResolvedAssembly) -> dict[str, str] | None:
+    reference = assembly.specification.controller
+    if reference is None:
+        return None
+    return {
+        name: str(reference[name]) for name in ("id", "version", "sha256")
+    }
+
+
 def _default_dotenv_path() -> Path:
     """Resolve the canonical local dotenv without silently choosing ambiguity."""
 
@@ -82,8 +100,25 @@ def _default_dotenv_path() -> Path:
     return existing[0] if existing else candidates[0]
 
 
+def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key {key!r}")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(value: str) -> Any:
+    raise ValueError(f"non-finite JSON number {value!r} is forbidden")
+
+
 def _load_json(path: str | Path) -> dict[str, Any]:
-    value = json.loads(Path(path).read_text(encoding="utf-8"))
+    value = json.loads(
+        Path(path).read_text(encoding="utf-8"),
+        object_pairs_hook=_strict_json_object,
+        parse_constant=_reject_json_constant,
+    )
     if not isinstance(value, dict):
         raise ValueError(f"{path} must contain a JSON object")
     return value
@@ -93,18 +128,73 @@ def _write_json(path: str | Path, value: Any) -> Path:
     return write_json_atomic(path, value)
 
 
-def _model_report() -> tuple[ModelRegistry, list[dict[str, Any]]]:
+def _load_resolved_assembly(
+    specification_path: str | Path = DEFAULT_SPEC,
+    package_path: str | Path = DEFAULT_PACKAGES,
+    model_paths: list[str | Path] | tuple[str | Path, ...] | None = None,
+    controller_paths: list[str | Path] | tuple[str | Path, ...] | None = None,
+) -> ResolvedAssembly:
+    """Load and verify one canonical contraption/package/PMDL closure."""
+
+    roots = tuple(
+        Path(path).expanduser().resolve()
+        for path in (model_paths or (DEFAULT_MODEL_ROOT,))
+    )
+    if not roots:
+        raise ValueError("at least one PMDL model root is required")
     registry = ModelRegistry()
-    reports: list[dict[str, Any]] = []
-    for path in sorted((PROJECT_ROOT / "models").rglob("*.pmdl")):
-        try:
-            model = registry.load(path)
-            reports.append({"path": str(path), "id": model.id, "valid": True})
-        except Exception as exc:
-            reports.append(
-                {"path": str(path), "valid": False, "error": f"{type(exc).__name__}: {exc}"}
-            )
-    return registry, reports
+    for root in roots:
+        if root.is_dir():
+            paths = sorted(root.rglob("*.pmdl"))
+        elif root.is_file() and root.suffix == ".pmdl":
+            paths = [root]
+        else:
+            raise FileNotFoundError(f"PMDL model path does not exist: {root}")
+        if not paths:
+            raise FileNotFoundError(f"PMDL model path contains no .pmdl files: {root}")
+        for path in paths:
+            # Resolution strictly validates every model in the selected package
+            # closure.  Unreferenced library entries are parsed for identity and
+            # duplicate protection but cannot block an unrelated contraption.
+            registry.load(path, validate=False)
+    packages = ComponentPackageRegistry.load(Path(package_path).expanduser().resolve())
+    controller_roots = tuple(
+        Path(path).expanduser().resolve()
+        for path in (controller_paths or (DEFAULT_CONTROLLER_ROOT,))
+    )
+    controllers: dict[str, ControlProgram] = {}
+    for root in controller_roots:
+        if root.is_dir():
+            paths = sorted(root.rglob("*.json"))
+        elif root.is_file() and root.suffix == ".json":
+            paths = [root]
+        else:
+            raise FileNotFoundError(f"controller path does not exist: {root}")
+        if not paths:
+            raise FileNotFoundError(f"controller path contains no JSON files: {root}")
+        for path in paths:
+            program = ControlProgram.from_dict(_load_json(path))
+            if program.name in controllers:
+                raise ValueError(
+                    f"controller id {program.name!r} is duplicated in the controller registry"
+                )
+            controllers[program.name] = program
+    specification = _load_json(Path(specification_path).expanduser().resolve())
+    return resolve_assembly(
+        specification,
+        packages,
+        registry,
+        control_programs=controllers,
+    )
+
+
+def _assembly_from_args(args: argparse.Namespace) -> ResolvedAssembly:
+    return _load_resolved_assembly(
+        args.spec,
+        args.packages,
+        args.model_root,
+        args.controller_root,
+    )
 
 
 def _torch_diagnostics() -> dict[str, Any]:
@@ -174,150 +264,404 @@ def command_doctor(_args: argparse.Namespace) -> int:
     return 0
 
 
-def command_validate(_args: argparse.Namespace) -> int:
+def command_validate(args: argparse.Namespace) -> int:
     taxonomy = load_default_taxonomy()
-    registry, models = _model_report()
-    raw_spec = _load_json(SCANNER_ROOT / "contraption.json")
-    spec = ContraptionSpec.from_dict(raw_spec)
-    structural = validate_contraption_structure(spec)
-    coverage_digest = validate_scanner_simulation_coverage(
-        spec, _load_json(SCANNER_ROOT / "simulation_coverage.json")
-    )
-    program = ControlProgram.from_dict(_load_json(SCANNER_ROOT / "controls" / "scanner.control.json"))
-    ir = OnlineModelIR.from_dict(_load_json(SCANNER_ROOT / "online_model.json"))
+    assembly = _assembly_from_args(args)
+    dynamics_completeness = assembly.dynamics_completeness
     report = {
+        "valid": True,
+        "scope": "canonical_package_model_physical_and_pmdl_closure",
         "taxonomy": {
             "domains": len(taxonomy.domains),
             "categories": len(taxonomy.categories),
             "subcategories": len(taxonomy.subcategories),
             "instantiations": len(taxonomy.instantiations),
         },
-        "models": models,
-        "model_count": len(registry),
-        "contraption": {
-            "scope": "structural_and_component_references_only",
-            **structural.to_dict(),
+        "assembly": assembly.diagnostics(),
+        "controller": _controller_identity(assembly),
+        "dynamics_completeness": dynamics_completeness.to_dict(),
+        "packages": {
+            "registered": len(assembly.packages),
+            "used": len({item.package for item in assembly.specification.components}),
         },
-        "controller": {"name": program.name, "states": [item.name for item in program.states]},
-        "online_ir": {
-            "states": len(ir.state_names),
-            "inputs": len(ir.input_names),
-            "measurements": len(ir.measurement_names),
-        },
-        "simulation_coverage": {
-            "valid": True,
-            "topology_sha256": coverage_digest,
+        "artifact_closure": {
+            "simulation": assembly.assembly_sha256,
+            "visualization": assembly.assembly_sha256,
+            "build": assembly.assembly_sha256,
+            "compiler": assembly.assembly_sha256,
         },
     }
     print(json.dumps(report, indent=2, sort_keys=True))
-    return 0 if structural.valid and all(item["valid"] for item in models) else 1
+    return 0
 
 
 def _trajectory_payload(result: Any, metrics: Mapping[str, Any]) -> dict[str, Any]:
+    if not isinstance(result, SimulationResult):
+        raise TypeError("trajectory serialization requires an actual SimulationResult")
     numerical = infer_backend(result.samples)
     return {
-        "schema": "contraption.trajectory/v1",
+        "schema": "contraption.trajectory/v2",
         "time": numerical.to_numpy(result.time).tolist(),
         "state_names": list(result.state_names),
+        "samples": numerical.to_numpy(result.samples).tolist(),
         "output_names": list(result.output_names),
-        "mean": numerical.to_numpy(result.mean).tolist(),
-        "state_distribution": result.summary.to_dict(),
-        "output_distribution": result.output_summary.to_dict(),
+        "output_samples": numerical.to_numpy(result.output_samples).tolist(),
         "metadata": dict(result.metadata),
         "metrics": dict(metrics),
     }
 
 
-def command_demo(args: argparse.Namespace) -> int:
-    output = Path(args.output).resolve()
-    output.mkdir(parents=True, exist_ok=True)
-    raw_spec = _load_json(SCANNER_ROOT / "contraption.json")
-    spec = ContraptionSpec.from_dict(raw_spec)
-    validation = validate_contraption_structure(spec)
-    validation.require_valid()
-    program = ControlProgram.from_dict(_load_json(SCANNER_ROOT / "controls" / "scanner.control.json"))
-    mission = load_scanner_mission(SCANNER_ROOT / "scanner_parameters.json")
-    simulation_coverage = _load_json(SCANNER_ROOT / "simulation_coverage.json")
-    duration = float(args.duration) if args.duration is not None else (10.0 if args.quick else None)
-    # With zero observed collisions, roughly 2,703 samples are needed before a
-    # one-sided 95% Wilson upper bound can demonstrate probability below 0.001.
-    # 128 keeps the fixed-seed quick motion metrics stable on both NumPy and
-    # Torch while remaining explicitly underpowered for the collision bound.
-    samples = int(args.samples) if args.samples is not None else (128 if args.quick else 4096)
+def _trajectory_result(
+    assembly: ResolvedAssembly, trajectory_path: str | Path
+) -> SimulationResult:
+    """Reconstruct an exact ensemble artifact for canonical pose resolution."""
+
+    trajectory = _load_json(trajectory_path)
+    required = {
+        "schema",
+        "time",
+        "state_names",
+        "samples",
+        "output_names",
+        "output_samples",
+        "metadata",
+        "metrics",
+    }
+    if set(trajectory) != required:
+        raise ValueError(
+            "trajectory must contain exactly the v2 provenance fields; "
+            f"missing={sorted(required - set(trajectory))}, "
+            f"unknown={sorted(set(trajectory) - required)}"
+        )
+    if trajectory["schema"] != "contraption.trajectory/v2":
+        raise ValueError(
+            "viewer requires contraption.trajectory/v2 with exact per-sample states; "
+            f"got {trajectory['schema']!r}"
+        )
+    metadata = trajectory["metadata"]
+    metrics = trajectory["metrics"]
+    if not isinstance(metadata, Mapping) or any(
+        not isinstance(key, str) for key in metadata
+    ):
+        raise ValueError("trajectory.metadata must be an object with string keys")
+    if "body_pose_frames" in metadata:
+        raise ValueError(
+            "trajectory.metadata.body_pose_frames is a forbidden redundant physical "
+            "representation; poses are reconstructed from exact samples"
+        )
+    if not isinstance(metrics, Mapping) or any(
+        not isinstance(key, str) for key in metrics
+    ):
+        raise ValueError("trajectory.metrics must be an object with string keys")
+    state_names_value = trajectory["state_names"]
+    output_names_value = trajectory["output_names"]
+    if not isinstance(state_names_value, list) or any(
+        not isinstance(name, str) or not name for name in state_names_value
+    ):
+        raise ValueError("trajectory.state_names must be an array of non-empty strings")
+    if not isinstance(output_names_value, list) or any(
+        not isinstance(name, str) or not name for name in output_names_value
+    ):
+        raise ValueError("trajectory.output_names must be an array of non-empty strings")
+    state_names = tuple(state_names_value)
+    output_names = tuple(output_names_value)
+    if len(set(state_names)) != len(state_names):
+        raise ValueError("trajectory.state_names must be unique")
+    if len(set(output_names)) != len(output_names):
+        raise ValueError("trajectory.output_names must be unique")
+    if state_names != tuple(assembly.system.state_names):
+        raise ValueError("trajectory.state_names do not exactly match the resolved assembly")
+    try:
+        time = np.asarray(trajectory["time"], dtype=np.float64)
+        samples = np.asarray(trajectory["samples"], dtype=np.float64)
+        output_samples = np.asarray(trajectory["output_samples"], dtype=np.float64)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"trajectory arrays must be numeric: {exc}") from exc
+    if time.ndim != 1 or len(time) < 1:
+        raise ValueError("trajectory.time must be a non-empty one-dimensional array")
+    if not np.all(np.isfinite(time)) or abs(float(time[0])) > 1e-12 or np.any(
+        np.diff(time) <= 0.0
+    ):
+        raise ValueError(
+            "trajectory.time must be finite, start at zero, and increase strictly"
+        )
+    if (
+        samples.ndim != 3
+        or samples.shape[0] < 1
+        or samples.shape[1:] != (len(time), len(state_names))
+    ):
+        raise ValueError(
+            "trajectory.samples must have shape [sample,time,state] matching its declarations"
+        )
+    expected_output_shape = (samples.shape[0], len(time), len(output_names))
+    if output_samples.ndim != 3 or output_samples.shape != expected_output_shape:
+        raise ValueError(
+            "trajectory.output_samples must have shape [sample,time,output] "
+            "matching its declarations"
+        )
+    if not np.all(np.isfinite(samples)) or not np.all(np.isfinite(output_samples)):
+        raise ValueError("trajectory samples must contain only finite values")
+    if metadata.get("assembly_sha256") != assembly.assembly_sha256:
+        raise ValueError("trajectory assembly hash does not match the resolved assembly")
+    if metadata.get("pmdl_sha256") != assembly.system.pmdl_sha256:
+        raise ValueError("trajectory PMDL hash does not match the resolved assembly")
+    declared_samples = metadata.get("sample_count")
+    if (
+        isinstance(declared_samples, bool)
+        or not isinstance(declared_samples, int)
+        or declared_samples != samples.shape[0]
+    ):
+        raise ValueError("trajectory metadata.sample_count does not match its sample axis")
+    return SimulationResult(
+        time=time,
+        state_names=state_names,
+        samples=samples,
+        output_names=output_names,
+        output_samples=output_samples,
+        summary=summarize_samples(samples, backend="numpy"),
+        output_summary=summarize_samples(output_samples, backend="numpy"),
+        metadata=dict(metadata),
+    )
+
+
+def _simulate_and_write(
+    assembly: ResolvedAssembly,
+    args: argparse.Namespace,
+    output: Path,
+) -> tuple[Any, ScannerMission, Mapping[str, Any], Path, Path, Mapping[str, Any]]:
+    mission = ScannerMission.from_assembly(assembly)
     result = simulate_scanner_robot(
-        program,
+        assembly,
         mission,
-        physical_spec=spec,
-        simulation_coverage=simulation_coverage,
-        duration=duration,
+        duration=args.duration,
         dt=float(args.dt),
-        num_samples=samples,
+        num_samples=int(args.samples),
         seed=int(args.seed),
         backend=args.backend,
         device=args.device,
+        use_model_uncertainty=bool(args.model_uncertainty),
+        process_noise=bool(args.process_noise),
     )
-    metrics = scanner_metrics(result, mission)
-    trajectory = _trajectory_payload(result, metrics)
-    trajectory_path = _write_json(output / "trajectory.json", trajectory)
+    metrics = scanner_metrics(assembly, result)
+    trajectory_path = _write_json(
+        output / "trajectory.json", _trajectory_payload(result, metrics)
+    )
+    scene = scanner_physical_scene(assembly, result)
+    if scene.get("assembly_sha256") != assembly.assembly_sha256:
+        raise RuntimeError("scanner scene is not bound to the resolved assembly hash")
+    scene_path = _write_json(output / "physical-scene.json", scene)
+    return result, mission, metrics, trajectory_path, scene_path, scene
 
-    online_data = _load_json(SCANNER_ROOT / "online_model.json")
-    online_ir = OnlineModelIR.from_dict(online_data)
-    artifact = compile_contraption(
-        raw_spec,
-        assembled_system=online_data,
-        model_name="scanner_online",
-    )
-    compiled_paths = artifact.write(output / "online")
-    syntax = syntax_check(artifact)
 
-    build_plan = generate_build_instructions(raw_spec, output / "build")
-    viewer = generate_viewer(
-        raw_spec,
-        trajectory,
-        output / "viewer",
-        title="Apartment scanner robot — probabilistic mission",
-        runtime_model=online_ir,
-    )
-    motion_smoke_passed = bool(
-        metrics["acceptance"]["orbit_radius_rmse"]
-        and metrics["acceptance"]["camera_pointing_p95"]
-        and metrics["collision_probability"] <= 0.001
+def command_simulate(args: argparse.Namespace) -> int:
+    output = Path(args.output).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    assembly = _assembly_from_args(args)
+    _result, _mission, metrics, trajectory_path, scene_path, _scene = _simulate_and_write(
+        assembly, args, output
     )
     report = {
-        "schema": "contraption.demo-report/v1",
-        "accepted": bool(metrics["accepted"]),
-        "acceptance_scope": "in_silico_motion_with_statistical_collision_bound",
-        "quick_smoke": bool(args.quick),
-        "quick_smoke_passed": bool(args.quick and motion_smoke_passed),
-        "physical_build_ready": len(build_plan.unresolved) == 0,
-        "deployment_ready": False,
+        "schema": "contraption.simulation-report/v2",
+        "assembly_sha256": assembly.assembly_sha256,
+        "pmdl_sha256": assembly.system.pmdl_sha256,
+        "controller": _controller_identity(assembly),
+        "accepted": bool(metrics.get("accepted", False)),
+        "acceptance_scope": "in_silico_component_assembly_only",
+        "dynamics_completeness": metrics.get("dynamics_completeness"),
         "metrics": metrics,
-        "validation": {
-            "scope": "structural_and_component_references_only",
-            **validation.to_dict(),
-        },
-        "build": {
-            "bom_items": len(build_plan.bill_of_materials),
-            "steps": len(build_plan.steps),
-            "unresolved_safety_gate_items": len(build_plan.unresolved),
-        },
-        "online_compiler": {
-            "model": artifact.model_name,
-            "files": {name: str(path) for name, path in compiled_paths.items()},
-            "c99_syntax_checked": syntax.ok,
-            "compiler": syntax.compiler,
-            "stderr": syntax.stderr,
-        },
         "artifacts": {
             "trajectory": str(trajectory_path),
-            "viewer": str(output / "viewer" / "index.html"),
-            "build_plan": str(output / "build" / "BUILD_INSTRUCTIONS.md"),
-            "online_manifest": str(output / "online" / "scanner_online.manifest.json"),
+            "physical_scene": str(scene_path),
         },
     }
     report_path = _write_json(output / "report.json", report)
     print(json.dumps({"report": str(report_path), **report}, indent=2, sort_keys=True))
-    return 0 if report["accepted"] or report["quick_smoke_passed"] else 1
+    return 0
+
+
+def command_view(args: argparse.Namespace) -> int:
+    assembly = _assembly_from_args(args)
+    result = (
+        None
+        if args.trajectory is None
+        else _trajectory_result(assembly, args.trajectory)
+    )
+    sample_index = (
+        0
+        if result is None
+        else result.metadata.get("pose_frame_sample_index", 0)
+    )
+    output = Path(args.output).resolve()
+    artifact = generate_viewer(
+        assembly,
+        result,
+        sample_index=sample_index,
+        title=args.title,
+    )
+    paths = artifact.write(output)
+    print(
+        json.dumps(
+            {
+                "assembly_sha256": assembly.assembly_sha256,
+                "controller": _controller_identity(assembly),
+                "viewer": str(paths["index.html"]),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def command_compile(args: argparse.Namespace) -> int:
+    assembly = _assembly_from_args(args)
+    output = Path(args.output).resolve()
+    artifact = compile_resolved_assembly(
+        assembly,
+        model_name=args.model_name,
+        nominal_dt=float(args.nominal_dt),
+        expected_assembly_sha256=assembly.assembly_sha256,
+        expected_pmdl_sha256=assembly.system.pmdl_sha256,
+        check_syntax=not args.skip_syntax_check,
+        compiler=args.compiler,
+    )
+    paths = artifact.write(output)
+    check = (
+        syntax_check(artifact, args.compiler)
+        if not args.skip_syntax_check
+        else None
+    )
+    print(
+        json.dumps(
+            {
+                "assembly_sha256": assembly.assembly_sha256,
+                "pmdl_sha256": assembly.system.pmdl_sha256,
+                "controller": _controller_identity(assembly),
+                "dynamics_completeness": artifact.manifest[
+                    "dynamics_completeness"
+                ],
+                "files": {name: str(path) for name, path in paths.items()},
+                "syntax": {
+                    "checked": check is not None and check.compiler is not None,
+                    "ok": None if check is None else check.ok,
+                    "compiler": None if check is None else check.compiler,
+                    "stderr": "" if check is None else check.stderr,
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def command_build(args: argparse.Namespace) -> int:
+    assembly = _assembly_from_args(args)
+    output = Path(args.output).resolve()
+    plan = generate_build_instructions(assembly, output)
+    print(
+        json.dumps(
+            {
+                "assembly_sha256": plan.assembly_sha256,
+                "pmdl_sha256": plan.pmdl_sha256,
+                "controller": None if plan.controller is None else dict(plan.controller),
+                "build_ready": plan.build_ready,
+                "unresolved_count": len(plan.unresolved),
+                "output": str(output),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def command_serve(args: argparse.Namespace) -> int:
+    assembly = _assembly_from_args(args)
+    application = LiveScannerApplication(
+        assembly,
+        duration=args.duration,
+        dt=float(args.dt),
+        backend=args.backend,
+        device=args.device,
+        seed=int(args.seed),
+    )
+    address = f"http://{args.host}:{args.port}"
+    print(
+        json.dumps(
+            {
+                "assembly_sha256": assembly.assembly_sha256,
+                "controller": _controller_identity(assembly),
+                "viewer": address,
+                "simulation_endpoint": address + "/api/simulate",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        flush=True,
+    )
+    serve_live_scanner(application, host=args.host, port=args.port)
+    return 0
+
+
+def command_demo(args: argparse.Namespace) -> int:
+    output = Path(args.output).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    assembly = _assembly_from_args(args)
+    result, _mission, metrics, trajectory_path, scene_path, _scene = _simulate_and_write(
+        assembly, args, output
+    )
+    generate_viewer(
+        assembly,
+        result,
+        sample_index=result.metadata.get("pose_frame_sample_index", 0),
+        output=output / "viewer",
+        title="Apartment scanner robot — component-assembly simulation",
+    )
+    build_plan = generate_build_instructions(assembly, output / "build")
+    compiled = compile_resolved_assembly(
+        assembly,
+        output / "online",
+        model_name="scanner_online",
+        nominal_dt=float(args.dt),
+        expected_assembly_sha256=assembly.assembly_sha256,
+        expected_pmdl_sha256=assembly.system.pmdl_sha256,
+        check_syntax=not args.skip_syntax_check,
+        compiler=args.compiler,
+    )
+    syntax = (
+        syntax_check(compiled, args.compiler)
+        if not args.skip_syntax_check
+        else None
+    )
+    report = {
+        "schema": "contraption.demo-report/v2",
+        "assembly_sha256": assembly.assembly_sha256,
+        "pmdl_sha256": assembly.system.pmdl_sha256,
+        "controller": _controller_identity(assembly),
+        "accepted": bool(metrics.get("accepted", False)),
+        "physical_build_ready": build_plan.build_ready,
+        "deployment_ready": False,
+        "metrics": metrics,
+        "online_compiler": {
+            "model": compiled.model_name,
+            "c99_syntax_checked": syntax is not None and syntax.compiler is not None,
+            "c99_syntax_ok": None if syntax is None else syntax.ok,
+            "compiler": None if syntax is None else syntax.compiler,
+        },
+        "artifacts": {
+            "trajectory": str(trajectory_path),
+            "physical_scene": str(scene_path),
+            "viewer": str(output / "viewer" / "index.html"),
+            "build_plan": str(output / "build" / "BUILD_INSTRUCTIONS.md"),
+            "online_manifest": str(
+                output / "online" / f"{compiled.model_name}.manifest.json"
+            ),
+        },
+    }
+    report_path = _write_json(output / "report.json", report)
+    print(json.dumps({"report": str(report_path), **report}, indent=2, sort_keys=True))
+    return 0
 
 
 def _agent_ledger(path: str | None) -> BudgetLedger:
@@ -486,24 +830,110 @@ def command_agent_run(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="contraption")
     commands = parser.add_subparsers(dest="command", required=True)
+
+    def assembly_inputs(command: argparse.ArgumentParser) -> None:
+        command.add_argument("--spec", default=str(DEFAULT_SPEC))
+        command.add_argument("--packages", default=str(DEFAULT_PACKAGES))
+        command.add_argument(
+            "--model-root",
+            action="append",
+            help="PMDL file/directory (repeatable; defaults to the bundled models tree)",
+        )
+        command.add_argument(
+            "--controller-root",
+            action="append",
+            help="controller JSON/directory (repeatable; defaults to scanner controls)",
+        )
+
+    def simulation_options(command: argparse.ArgumentParser) -> None:
+        command.add_argument("--duration", type=float)
+        command.add_argument("--samples", type=int, default=1)
+        command.add_argument("--dt", type=float, default=0.05)
+        command.add_argument("--seed", type=int, default=20260806)
+        command.add_argument(
+            "--backend", choices=("numpy", "torch", "auto"), default="numpy"
+        )
+        command.add_argument("--device")
+        command.add_argument("--model-uncertainty", action="store_true")
+        command.add_argument("--process-noise", action="store_true")
+
+    def compiler_options(command: argparse.ArgumentParser) -> None:
+        command.add_argument("--compiler")
+        command.add_argument(
+            "--skip-syntax-check",
+            action="store_true",
+            help="emit C99 without requiring a local host compiler check",
+        )
+
     commands.add_parser("doctor", help="report optional runtime/tool availability").set_defaults(
         handler=command_doctor
     )
-    commands.add_parser(
+    validate = commands.add_parser(
         "validate",
-        help="validate PMDLs plus scanner manifest structure/component references",
-    ).set_defaults(
-        handler=command_validate
+        help="resolve and validate one canonical package/model/physical/PMDL closure",
     )
-    demo = commands.add_parser("demo", help="run the scanner mission and generate artifacts")
+    assembly_inputs(validate)
+    validate.set_defaults(handler=command_validate)
+
+    simulate_command = commands.add_parser(
+        "simulate", help="simulate the canonical scanner component assembly"
+    )
+    assembly_inputs(simulate_command)
+    simulation_options(simulate_command)
+    simulate_command.add_argument("--output", default=str(DEFAULT_OUTPUT))
+    simulate_command.set_defaults(handler=command_simulate)
+
+    view = commands.add_parser(
+        "view", help="generate a display-only viewer from a canonical resolved assembly"
+    )
+    assembly_inputs(view)
+    view.add_argument(
+        "--trajectory",
+        help="v2 trajectory containing exact hash-bound simulation samples",
+    )
+    view.add_argument("--output", default=str(DEFAULT_OUTPUT / "viewer"))
+    view.add_argument("--title")
+    view.set_defaults(handler=command_view)
+
+    compile_command = commands.add_parser(
+        "compile",
+        help="derive and syntax-check dynamics/estimator C99 from the resolved assembly",
+    )
+    assembly_inputs(compile_command)
+    compiler_options(compile_command)
+    compile_command.add_argument("--output", default=str(DEFAULT_OUTPUT / "online"))
+    compile_command.add_argument("--model-name", default="scanner_online")
+    compile_command.add_argument("--nominal-dt", type=float, default=0.05)
+    compile_command.set_defaults(handler=command_compile)
+
+    build_command = commands.add_parser(
+        "build", help="derive a hash-bound build plan from the resolved assembly"
+    )
+    assembly_inputs(build_command)
+    build_command.add_argument("--output", default=str(DEFAULT_OUTPUT / "build"))
+    build_command.set_defaults(handler=command_build)
+
+    serve = commands.add_parser(
+        "serve",
+        help="serve live controls that rerun the canonical Python simulation",
+    )
+    assembly_inputs(serve)
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8000)
+    serve.add_argument("--duration", type=float, default=2.0)
+    serve.add_argument("--dt", type=float, default=0.05)
+    serve.add_argument("--seed", type=int, default=20260806)
+    serve.add_argument("--backend", choices=("numpy", "torch"), default="numpy")
+    serve.add_argument("--device")
+    serve.set_defaults(handler=command_serve)
+
+    demo = commands.add_parser(
+        "demo", help="simulate, view, compile, and plan the canonical scanner assembly"
+    )
+    assembly_inputs(demo)
+    simulation_options(demo)
+    compiler_options(demo)
     demo.add_argument("--output", default=str(DEFAULT_OUTPUT))
-    demo.add_argument("--quick", action="store_true")
-    demo.add_argument("--duration", type=float)
-    demo.add_argument("--samples", type=int)
-    demo.add_argument("--dt", type=float, default=0.05)
-    demo.add_argument("--seed", type=int, default=20260806)
-    demo.add_argument("--backend", choices=("numpy", "torch", "auto"), default="numpy")
-    demo.add_argument("--device")
     demo.set_defaults(handler=command_demo)
     budget = commands.add_parser("budget", help="show the hard agent-dollar ledger")
     budget.add_argument("--ledger")

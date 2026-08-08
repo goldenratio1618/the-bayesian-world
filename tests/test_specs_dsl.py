@@ -112,14 +112,34 @@ class ModelContractTests(unittest.TestCase):
         cls.paths = sorted(MODELS.rglob("*.pmdl"))
 
     def test_every_gold_model_is_strict_and_valid(self) -> None:
-        self.assertGreaterEqual(len(self.paths), 8)
-        for path in self.paths:
+        gold_paths = [
+            path for path in self.paths if bool(load_model(path).metadata.get("gold", False))
+        ]
+        self.assertGreaterEqual(len(gold_paths), 8)
+        for path in gold_paths:
             with self.subTest(path=path):
                 model = load_model(path)
                 report = validate_model(model, self.taxonomy)
                 self.assertTrue(report.valid, "\n".join(str(issue) for issue in report.issues))
                 self.assertEqual(model.metadata["descriptor_form"], "F(t,z,zdot,theta,u)=0")
                 self.assertTrue(model.metadata["gold"])
+
+    def test_every_bundled_model_is_structurally_valid(self) -> None:
+        """Prototype device models are valid PMDL without claiming taxonomy gold status."""
+
+        self.assertGreaterEqual(len(self.paths), 8)
+        for path in self.paths:
+            with self.subTest(path=path):
+                model = load_model(path)
+                report = validate_model(model)
+                self.assertTrue(report.valid, "\n".join(str(issue) for issue in report.issues))
+                self.assertEqual(model.metadata["descriptor_form"], "F(t,z,zdot,theta,u)=0")
+
+    def test_scanner_hbridge_has_truthful_electrical_taxonomy(self) -> None:
+        model = load_model(MODELS / "scanner" / "dual_hbridge.pmdl")
+        self.assertEqual(model.domains, ("electrical",))
+        report = validate_model(model, self.taxonomy)
+        self.assertTrue(report.valid, "\n".join(str(issue) for issue in report.issues))
 
     def test_serialization_is_deterministic_and_round_trips(self) -> None:
         model = load_model(MODELS / "electrical" / "capacitor.pmdl")
@@ -177,8 +197,8 @@ class ContraptionContractTests(unittest.TestCase):
         return ContraptionSpec(
             format="contraption-1", id="bench-circuit", name="Bench circuit", version="1.0.0",
             components=(
-                ComponentInstanceSpec(id="source", model="electrical.voltage_source.ideal"),
-                ComponentInstanceSpec(id="load", model="electrical.resistor.ideal", parameters={"resistance": 100.0}),
+                ComponentInstanceSpec(id="source", model="electrical.voltage_source.ideal", geometry=GeometrySpec("box", (0.01, 0.01, 0.01))),
+                ComponentInstanceSpec(id="load", model="electrical.resistor.ideal", geometry=GeometrySpec("box", (0.01, 0.01, 0.01)), parameters={"resistance": 100.0}),
             ),
             connections=(
                 ConnectionSpec(id="positive-net", kind="power", endpoints=(PortRef("source", "p"), PortRef("load", "p")), domain="electrical"),
@@ -214,8 +234,8 @@ class ContraptionContractTests(unittest.TestCase):
         spec = ContraptionSpec(
             format="contraption-1", id="bad-attachment", name="Bad attachment", version="1.0.0",
             components=(
-                ComponentInstanceSpec(id="resistor", model="electrical.resistor.ideal"),
-                ComponentInstanceSpec(id="motor", model="electromechanical.dc_motor.ideal"),
+                ComponentInstanceSpec(id="resistor", model="electrical.resistor.ideal", geometry=GeometrySpec("box", (0.01, 0.01, 0.01))),
+                ComponentInstanceSpec(id="motor", model="electromechanical.dc_motor.ideal", geometry=GeometrySpec("box", (0.01, 0.01, 0.01))),
             ),
             connections=(
                 ConnectionSpec(
@@ -244,9 +264,23 @@ class TaxonomyTests(unittest.TestCase):
         self.assertEqual(taxonomy.ancestry("camera-mass"), ("inert-object", "planar-rigid-body", "camera-mass"))
         self.assertEqual(taxonomy.category_for("brushed-dc-motor").id, "motor")
 
-    def test_instantiation_defaults_are_safe_and_explicit(self) -> None:
+    def test_instantiation_requires_explicit_geometry(self) -> None:
         taxonomy = load_default_taxonomy()
-        instance = taxonomy.instantiate(id="camera-serial-001", name="Camera 001", taxonomy_node="camera-mass", model="mechanical.camera_mass.planar")
+        with self.assertRaises(TypeError):
+            taxonomy.instantiate(id="camera-serial-001", name="Camera 001", taxonomy_node="camera-mass", model="mechanical.camera_mass.planar")
+        with self.assertRaises(SpecError):
+            GeometrySpec.from_dict(None)
+        instance = taxonomy.instantiate(
+            id="camera-serial-001",
+            name="Camera 001",
+            taxonomy_node="camera-mass",
+            model="mechanical.camera_mass.planar",
+            geometry=GeometrySpec(
+                "box",
+                (0.01, 0.01, 0.01),
+                metadata={"provenance": "estimated"},
+            ),
+        )
         self.assertEqual(instance.condition, "unverified")
         self.assertEqual(instance.geometry.kind, "box")
         self.assertEqual(instance.geometry.dimensions, (0.01, 0.01, 0.01))

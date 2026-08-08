@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-import shutil
 import tempfile
 import unittest
 
@@ -12,9 +10,6 @@ from contraption.compiler import (
     IRValidationError,
     OnlineCompiler,
     OnlineModelIR,
-    _records,
-    _topology_sha256,
-    compile_contraption,
 )
 from contraption.controls import (
     ControlProgram,
@@ -23,12 +18,6 @@ from contraption.controls import (
     evaluate_state_outputs,
     load_control_program,
 )
-from contraption.specs import ModelSpec
-
-
-ROOT = Path(__file__).resolve().parents[1]
-
-
 def controller_data() -> dict:
     return {
         "name": "arm_controller",
@@ -151,43 +140,6 @@ def online_ir_data() -> dict:
     }
 
 
-def covered_online_ir(spec: dict, *, reviewed: bool) -> dict:
-    data = online_ir_data()
-    components = _records(spec["components"], "components")
-    connections = _records(spec.get("connections", []), "connections")
-    coverage = {
-        "schema": "contraption.online-assembly-coverage/v1",
-        "component_ids": [component["id"] for component in components],
-        "connection_ids": [connection["id"] for connection in connections],
-        "component_models": {
-            component["id"]: component["model"] for component in components
-        },
-        "topology_sha256": _topology_sha256(components, connections),
-    }
-    if reviewed:
-        coverage["review"] = {
-            "review_id": "unit-test-review",
-            "reviewed_by": "compiler unit test",
-            "basis": "Explicit fixture review of the tiny affine abstraction.",
-            "component_contracts_reviewed": True,
-            "ports_and_connections_reviewed": True,
-            "assembled_ir_coverage_reviewed": True,
-            "limitations": ["The matrix fixture is synthetic."],
-        }
-    data["metadata"] = {"assembly_coverage": coverage}
-    return data
-
-
-def admitted_fixture_model(relative_path: str) -> ModelSpec:
-    data = json.loads((ROOT / relative_path).read_text(encoding="utf-8"))
-    data.setdefault("metadata", {})["online_admission"] = {
-        "admitted": True,
-        "kind": "linearizable",
-        "mechanics": "rigid_body",
-    }
-    return ModelSpec.from_dict(data)
-
-
 class ControlProgramTests(unittest.TestCase):
     def test_synchronous_state_machine_and_bounded_register(self) -> None:
         runtime = ControllerRuntime(controller_data())
@@ -288,170 +240,6 @@ class CompilerTests(unittest.TestCase):
         bad["B"] = [[1.0], [2.0], [3.0]]
         with self.assertRaisesRegex(IRValidationError, "B must"):
             OnlineModelIR.from_dict(bad)
-
-    def test_contraption_facade_checks_model_admission(self) -> None:
-        spec = {
-            "format": "contraption-1",
-            "id": "tiny_bot",
-            "name": "Tiny bot",
-            "version": "1.0.0",
-            "components": [
-                {
-                    "id": "body",
-                    "model": "rigid_body",
-                    "online_admission": {"admitted": True, "kind": "linearizable", "mechanics": "rigid_body"},
-                },
-                {
-                    "id": "motor",
-                    "model": "dc_motor",
-                    "online_admission": {"admitted": True, "kind": "linearized", "mechanics": "rigid_body"},
-                },
-            ],
-            "connections": [
-                {
-                    "id": "mount",
-                    "kind": "attachment",
-                    "endpoints": [
-                        {"component": "body", "port": "mount"},
-                        {"component": "motor", "port": "case"},
-                    ],
-                }
-            ],
-        }
-        artifact = compile_contraption(
-            spec,
-            assembled_system=covered_online_ir(spec, reviewed=True),
-            model_name="tiny_bot",
-        )
-        self.assertEqual(artifact.manifest["contraption_scope"]["component_ids"], ["body", "motor"])
-        self.assertEqual(
-            artifact.manifest["contraption_scope"]["connection_ids"], ["mount"]
-        )
-        self.assertEqual(
-            artifact.manifest["contraption_scope"]["validation_level"],
-            "reviewed_abstraction",
-        )
-        self.assertFalse(
-            artifact.manifest["contraption_scope"]["models_registry_validated"]
-        )
-        self.assertIn(
-            "not registry-validated",
-            artifact.manifest["contraption_scope"]["admission"],
-        )
-
-        legacy = online_ir_data()
-        legacy["metadata"] = {
-            "admitted_models": ["rigid_body", "dc_motor"]
-        }
-        with self.assertRaisesRegex(IRValidationError, "not an admission contract"):
-            compile_contraption(spec, assembled_system=legacy)
-
-    def test_assembly_coverage_rejects_component_connection_and_topology_drift(self) -> None:
-        spec = {
-            "format": "contraption-1",
-            "id": "covered_bot",
-            "name": "Covered bot",
-            "version": "1.0.0",
-            "components": [
-                {"id": "body", "model": "rigid_body"},
-                {"id": "motor", "model": "dc_motor"},
-            ],
-            "connections": [
-                {
-                    "id": "mount",
-                    "kind": "attachment",
-                    "endpoints": ["body.mount", "motor.case"],
-                }
-            ],
-        }
-
-        missing_component = covered_online_ir(spec, reviewed=True)
-        coverage = missing_component["metadata"]["assembly_coverage"]
-        coverage["component_ids"].remove("motor")
-        coverage["component_models"].pop("motor")
-        with self.assertRaisesRegex(IRValidationError, "component_ids.*missing"):
-            compile_contraption(spec, assembled_system=missing_component)
-
-        missing_connection = covered_online_ir(spec, reviewed=True)
-        missing_connection["metadata"]["assembly_coverage"]["connection_ids"] = []
-        with self.assertRaisesRegex(IRValidationError, "connection_ids.*missing"):
-            compile_contraption(spec, assembled_system=missing_connection)
-
-        extra_connection = covered_online_ir(spec, reviewed=True)
-        extra_connection["metadata"]["assembly_coverage"]["connection_ids"].append(
-            "not-represented"
-        )
-        with self.assertRaisesRegex(IRValidationError, "connection_ids.*extra"):
-            compile_contraption(spec, assembled_system=extra_connection)
-
-        stale_topology = covered_online_ir(spec, reviewed=True)
-        spec["connections"][0]["endpoints"][1] = "motor.other_case"
-        with self.assertRaisesRegex(IRValidationError, "topology_sha256"):
-            compile_contraption(spec, assembled_system=stale_topology)
-
-        unknown_component = covered_online_ir(spec, reviewed=True)
-        spec["connections"][0]["endpoints"][1] = "ghost.case"
-        with self.assertRaisesRegex(IRValidationError, "unknown component endpoint"):
-            compile_contraption(spec, assembled_system=unknown_component)
-
-    def test_full_registry_validates_models_ports_and_domains(self) -> None:
-        resistor = admitted_fixture_model("models/electrical/resistor.pmdl")
-        motor = admitted_fixture_model("models/electrical/dc_motor.pmdl")
-        registry = {resistor.id: resistor, motor.id: motor}
-
-        def spec_with_motor_port(port: str) -> dict:
-            return {
-                "format": "contraption-1",
-                "id": "registry_bot",
-                "name": "Registry bot",
-                "version": "1.0.0",
-                "components": [
-                    {"id": "resistor", "model": resistor.id},
-                    {"id": "motor", "model": motor.id},
-                ],
-                "connections": [
-                    {
-                        "id": "electrical-link",
-                        "kind": "power",
-                        "endpoints": ["resistor.p", f"motor.{port}"],
-                    }
-                ],
-            }
-
-        valid = spec_with_motor_port("p")
-        artifact = compile_contraption(
-            valid,
-            model_registry=registry,
-            assembled_system=covered_online_ir(valid, reviewed=False),
-        )
-        scope = artifact.manifest["contraption_scope"]
-        self.assertEqual(scope["validation_level"], "validated_model_registry")
-        self.assertTrue(scope["models_registry_validated"])
-        self.assertEqual(
-            scope["admission"],
-            "all referenced models validated through explicit registry",
-        )
-
-        unknown_port = spec_with_motor_port("missing_port")
-        with self.assertRaisesRegex(
-            IRValidationError, "compatibility validation failed.*reference.port"
-        ):
-            compile_contraption(
-                unknown_port,
-                model_registry=registry,
-                assembled_system=covered_online_ir(unknown_port, reviewed=False),
-            )
-
-        incompatible_domain = spec_with_motor_port("shaft")
-        with self.assertRaisesRegex(
-            IRValidationError, "compatibility validation failed.*connection.domain"
-        ):
-            compile_contraption(
-                incompatible_domain,
-                model_registry=registry,
-                assembled_system=covered_online_ir(incompatible_domain, reviewed=False),
-            )
-
 
 if __name__ == "__main__":
     unittest.main()

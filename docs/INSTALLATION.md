@@ -5,6 +5,13 @@ with Python 3.10 or newer. A C99 compiler is required for the generated online
 runtime checks. GPU-enabled PyTorch is the preferred simulator backend; NumPy
 remains the explicit CPU fallback.
 
+On Windows, use Ubuntu WSL and keep the checkout in the Linux filesystem rather
+than under `/mnt/c`:
+
+```bash
+cd ~/src_bayesian/the-bayesian-world
+```
+
 ## 1. Install distribution packages
 
 Choose the command for the host distribution.
@@ -57,9 +64,16 @@ For an NVIDIA GPU, confirm that the Linux environment can see the device:
 nvidia-smi
 ```
 
+When using WSL, install or update the NVIDIA display driver on **Windows**.
+Do not install a Linux NVIDIA display driver inside WSL: Microsoft/NVIDIA map
+the Windows host driver into WSL. Follow the official
+[CUDA on WSL guide](https://docs.nvidia.com/cuda/wsl-user-guide/) for supported
+driver and toolkit setup.
+
 Then use the [official PyTorch Linux selector](https://pytorch.org/get-started/locally/)
 to choose the stable `pip` wheel for the CUDA version supported by the installed
-driver. For example, when CUDA 12.6 is the appropriate wheel channel:
+driver. The selector is authoritative; the following is only an example for a
+host where CUDA 12.6 is the appropriate wheel channel:
 
 ```bash
 python -m pip install torch --index-url https://download.pytorch.org/whl/cu126
@@ -105,7 +119,42 @@ trajectory. On a deliberate CPU installation, use `--expect cpu` instead.
 Run the full GPU scanner fixture with:
 
 ```bash
-contraption demo --backend torch --device cuda --output outputs/scanner_demo
+contraption simulate \
+  --backend torch --device cuda \
+  --output outputs/scanner_demo
+
+contraption view \
+  --trajectory outputs/scanner_demo/trajectory.json \
+  --output outputs/scanner_demo/viewer
+
+python -m http.server 8000 --directory outputs/scanner_demo/viewer
+```
+
+Open <http://127.0.0.1:8000>. The simulator and viewer resolve the same
+contraption/package/PMDL/controller closure and require the same assembly hash.
+The browser is display-only: it does not infer placement or execute a second
+model. The CLI reconstructs poses from the trajectory's exact per-sample states
+through that resolved assembly; detached scene JSON is not an admitted input.
+
+To change the controller's declared external inputs interactively, run the
+loopback live server instead of `http.server`:
+
+```bash
+contraption serve \
+  --backend torch --device cuda \
+  --host 127.0.0.1 --port 8000
+```
+
+Each UI change reruns the canonical Python simulation and returns a strict
+hash-bound scene. The server refuses unknown/out-of-range controls and stale
+assembly hashes. It intentionally refuses non-loopback binding; authenticated
+remote deployment is outside Phase 1.
+
+Generate and host-compile the DAE-derived onboard reference separately:
+
+```bash
+contraption compile --output outputs/scanner_demo/online
+contraption build --output outputs/scanner_demo/build
 ```
 
 ## 5. Configure optional component agents
