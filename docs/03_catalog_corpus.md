@@ -11,7 +11,7 @@ The corpus is designed as a **provenance-first seed**, not an indiscriminate dat
 - `deferred`: useful and potentially usable, but too large or in need of per-model ingestion work.
 - `quarantine`: ambiguous, mixed, noncommercial or record-specific rights; excluded from the trusted corpus pending review.
 
-The authoritative source list is [catalog_manifest.csv](./catalog_manifest.csv). It contains 52 artifact/source decisions: 34 core entries, 6 larger asset entries, 6 deferred sources and 6 quarantine sources.
+The authoritative source list is [catalog_manifest.csv](../src/contraption/catalog_mining/catalog_manifest.csv). It contains 52 artifact/source decisions: 34 core entries, 6 larger asset entries, 6 deferred sources and 6 quarantine sources.
 
 The bootstrap target is:
 
@@ -162,13 +162,13 @@ The right principle is “federate the gigantic, snapshot the compact and high-v
 
 The supplied scripts are:
 
-- [bootstrap_catalogs.ps1](../work/bootstrap_catalogs.ps1): validates a marked dedicated directory on D: or F:, enforces path containment and a configurable free-space reserve, downloads through conditionally resumable `.part` files, never overwrites a completed raw artifact, validates known sizes/checksums, captures HTTP validators, pins and checks Git snapshots, retains immutable manifest snapshots and writes per-run success/failure provenance.
-- [verify_catalogs.ps1](../work/verify_catalogs.ps1): validates the root marker and exact manifest, hashes every completed raw file outside Git internals, checks acquisition SHA-256 baselines plus known upstream MD5/length contracts, archive signatures and ZIP central directories, verifies the exact Google owner/license/count/size/index contract, records Git origins/commits/tags/LFS/cleanliness and full FreeCAD history, and fails on missing artifacts, integrity errors or incomplete `.part` files. `-DeepArchiveValidation` additionally reads every ZIP member and complete compressed stream and asks `tar` to list complete tar-family archives.
+- [bootstrap_catalogs.ps1](../src/contraption/catalog_mining/bootstrap_catalogs.ps1): validates a marked dedicated directory on D: or F:, enforces path containment and a configurable free-space reserve, downloads through conditionally resumable `.part` files, never overwrites a completed raw artifact, validates known sizes/checksums, captures HTTP validators, pins and checks Git snapshots, retains immutable manifest snapshots and writes per-run success/failure provenance.
+- [verify_catalogs.ps1](../src/contraption/catalog_mining/verify_catalogs.ps1): validates the root marker and exact manifest, hashes every completed raw file outside Git internals, checks acquisition SHA-256 baselines plus known upstream MD5/length contracts, archive signatures and ZIP central directories, verifies the exact Google owner/license/count/size/index contract, records Git origins/commits/tags/LFS/cleanliness and full FreeCAD history, and fails on missing artifacts, integrity errors or incomplete `.part` files. `-DeepArchiveValidation` additionally reads every ZIP member and complete compressed stream and asks `tar` to list complete tar-family archives.
 
 Re-run the transfer safely with:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\work\bootstrap_catalogs.ps1 `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\src\contraption\catalog_mining\bootstrap_catalogs.ps1 `
   -Root D:\WorldModelCatalogs -Profile CoreAndAssets -MinimumFreeGiB 12
 ```
 
@@ -177,7 +177,7 @@ The secure default leaves Windows certificate-revocation checks enabled. On this
 Then verify with:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\work\verify_catalogs.ps1 `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\src\contraption\catalog_mining\verify_catalogs.ps1 `
   -Root D:\WorldModelCatalogs -Profile CoreAndAssets -DeepArchiveValidation
 ```
 

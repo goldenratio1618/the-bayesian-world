@@ -19,9 +19,9 @@ The first recommended engineering proof is a guarded tabletop trading-card works
 - [Probabilistic programming framework assessment](./02_probabilistic_frameworks.md)
 - [Machine-readable PPL compatibility smoke results](./ppl_smoke_results.json)
 - [Open-catalog corpus and licensing plan](./03_catalog_corpus.md)
-- [Catalog artifact/source manifest](./catalog_manifest.csv)
-- [Resumable catalog bootstrap script](../work/bootstrap_catalogs.ps1)
-- [SHA-256 catalog verification script](../work/verify_catalogs.ps1)
+- [Catalog artifact/source manifest](../src/contraption/catalog_mining/catalog_manifest.csv)
+- [Resumable catalog bootstrap script](../src/contraption/catalog_mining/bootstrap_catalogs.ps1)
+- [SHA-256 catalog verification script](../src/contraption/catalog_mining/verify_catalogs.ps1)
 - [Reproducible PPL smoke-test notes](../work/ppl-smoke/README.md)
 
 ## Preserved original framing
