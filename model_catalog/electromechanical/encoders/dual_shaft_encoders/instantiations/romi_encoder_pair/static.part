@@ -1,0 +1,234 @@
+{
+  "format": "static-part-1",
+  "id": "scanner.encoder_pair",
+  "name": "Romi encoder pair",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "board",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "encoder_board",
+          "geometry": {
+            "kind": "box",
+            "dimensions_m": [
+              0.02,
+              0.019,
+              0.004
+            ]
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "catalog",
+            "source": "Romi encoder board nominal envelope",
+            "reference": "Pololu 3542"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "mount",
+      "model_port": null,
+      "body": "board",
+      "domain": "mechanical",
+      "interface": "scanner-fixed-mount",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          -0.002
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "encoder board mounting face"
+      }
+    },
+    {
+      "id": "supply_p",
+      "model_port": "supply_p",
+      "body": "board",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          -0.01,
+          0.006,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "header approximation"
+      }
+    },
+    {
+      "id": "supply_n",
+      "model_port": "supply_n",
+      "body": "board",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          -0.01,
+          -0.006,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "header approximation"
+      }
+    },
+    {
+      "id": "left_rate",
+      "model_port": "left_rate",
+      "body": "board",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0.006,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "left encoder sensing channel"
+      }
+    },
+    {
+      "id": "right_rate",
+      "model_port": "right_rate",
+      "body": "board",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [
+          0,
+          -0.006,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "right encoder sensing channel"
+      }
+    },
+    {
+      "id": "left_measurement",
+      "model_port": "left_measurement",
+      "body": "board",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [
+          0.01,
+          0.006,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "header approximation"
+      }
+    },
+    {
+      "id": "right_measurement",
+      "model_port": "right_measurement",
+      "body": "board",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [
+          0.01,
+          -0.006,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "header approximation"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "catalog",
+    "source": "Pololu encoder board envelope with estimated sensing axes",
+    "reference": "Pololu 3542"
+  },
+  "purchasing": {},
+  "metadata": {}
+}

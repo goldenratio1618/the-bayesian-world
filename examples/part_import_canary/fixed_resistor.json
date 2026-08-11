@@ -1,0 +1,18 @@
+{
+  "manufacturer": "Canary Components",
+  "manufacturer_part_number": "CR-220R-1PCT",
+  "product": "220 ohm 1% fixed resistor",
+  "purpose": "part-import pipeline canary",
+  "domains": ["electrical"],
+  "published_parameters": {
+    "resistance_ohm": 220.0,
+    "tolerance_fraction": 0.01,
+    "power_rating_w": 0.25,
+    "maximum_working_voltage_v": 200.0,
+    "body_length_m": 0.0063,
+    "body_diameter_m": 0.0023
+  },
+  "evidence": [
+    "Synthetic, non-purchasable fixture whose explicit values exercise category, device, model, static-part, and model-instance validation."
+  ]
+}

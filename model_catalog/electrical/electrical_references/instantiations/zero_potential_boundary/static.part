@@ -1,0 +1,29 @@
+{
+  "format": "static-part-1",
+  "id": "scanner.electrical_reference",
+  "name": "Zero-potential boundary",
+  "version": "1.0.0",
+  "physical_role": "boundary",
+  "bodies": [],
+  "connectors": [
+    {
+      "id": "ground",
+      "model_port": "ground",
+      "body": null,
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": null,
+      "provenance": {
+        "kind": "boundary",
+        "source": "explicit electrical gauge boundary"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "boundary",
+    "source": "simulation environment electrical reference"
+  },
+  "purchasing": {},
+  "metadata": {}
+}

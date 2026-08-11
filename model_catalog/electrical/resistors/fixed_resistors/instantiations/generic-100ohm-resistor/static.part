@@ -1,0 +1,114 @@
+{
+  "format": "static-part-1",
+  "id": "generic-100ohm-resistor",
+  "name": "Generic 100 ohm resistor",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "body",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "envelope",
+          "geometry": {
+            "kind": "box",
+            "dimensions_m": [
+              0.01,
+              0.01,
+              0.01
+            ]
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "estimated",
+            "source": "explicit rough envelope; replace with measured or catalog dimensions"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "p",
+      "model_port": "p",
+      "body": "body",
+      "domain": "electrical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          -0.005,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "generic catalog connector frame"
+      }
+    },
+    {
+      "id": "n",
+      "model_port": "n",
+      "body": "body",
+      "domain": "electrical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          0.005,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "generic catalog connector frame"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "estimated",
+    "source": "explicit rough envelope; replace with measured or catalog dimensions"
+  },
+  "purchasing": {},
+  "metadata": {
+    "geometry_note": "explicit rough envelope; replace with measured or catalog dimensions"
+  }
+}

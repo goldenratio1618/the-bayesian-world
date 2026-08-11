@@ -1,0 +1,16 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "domain",
+  "abstract": true,
+  "id": "optical",
+  "name": "Optical",
+  "version": "1.0.0",
+  "requires_physics": [
+    "optical"
+  ],
+  "allowed_port_domains": [
+    "electrical",
+    "mechanical"
+  ],
+  "description": "Optical sensing and image-formation devices with explicit coupled physics."
+}

@@ -1,0 +1,25 @@
+{
+  "format": "model-instance-1",
+  "id": "scanner.wheel.v1",
+  "variant": "v1",
+  "part": "scanner.wheel",
+  "version": "1.0.0",
+  "model": {
+    "id": "mechanical.scanner_wheel.rolling",
+    "version": "1.0.0",
+    "sha256": "sha256:f239e61532675457a2faefa755470df5a83223eddf54a3d7e29b4c45dcd1f045"
+  },
+  "parameters": {
+    "radius": 0.035,
+    "rolling_ratio": 0.9
+  },
+  "parameter_uncertainty": {},
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1.0,
+    "notes": "Catalog baseline model."
+  },
+  "metadata": {
+    "source_component": "left-wheel"
+  }
+}

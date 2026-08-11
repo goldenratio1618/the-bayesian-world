@@ -27,8 +27,15 @@ def adjacent_data_root() -> Path:
 
 def _is_asset_root(path: Path) -> bool:
     return (
-        (path / "data" / "taxonomy.json").is_file()
-        and (path / "models" / "electrical" / "resistor.pmdl").is_file()
+        (path / "model_catalog" / "electrical" / "interface.pmdl").is_file()
+        and (
+            path
+            / "model_catalog"
+            / "electrical"
+            / "resistors"
+            / "fixed_resistors"
+            / "resistor.pmdl"
+        ).is_file()
         and (path / "examples" / "scanner_robot" / "contraption.json").is_file()
     )
 
@@ -54,7 +61,7 @@ def asset_root() -> Path:
             return candidate
     searched = ", ".join(str(path) for path in unique)
     raise FileNotFoundError(
-        "Contraption runtime assets are incomplete; expected taxonomy, models, "
+        "Contraption runtime assets are incomplete; expected model_catalog interfaces/models "
         f"and scanner example under one root. Searched: {searched}"
     )
 

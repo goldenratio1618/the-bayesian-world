@@ -1,0 +1,28 @@
+{
+  "format": "model-instance-1",
+  "id": "scanner.romi_chassis.v1",
+  "variant": "v1",
+  "part": "scanner.romi_chassis",
+  "version": "1.0.0",
+  "model": {
+    "id": "mechanical.differential_drive_chassis.planar",
+    "version": "1.0.0",
+    "sha256": "sha256:6dfc9eb221aa660c21a53f79ea7aea7187bb7ea80ef710f629e2af96944a0f8f"
+  },
+  "parameters": {
+    "mass": 0.16,
+    "yaw_inertia": 0.0006502666666666667,
+    "wheel_base": 0.15,
+    "linear_drag": 1.2,
+    "angular_drag": 0.06
+  },
+  "parameter_uncertainty": {},
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1.0,
+    "notes": "Catalog baseline model."
+  },
+  "metadata": {
+    "source_component": "chassis"
+  }
+}

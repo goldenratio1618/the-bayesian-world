@@ -1,0 +1,35 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "resistor",
+  "name": "Resistor",
+  "version": "1.0.0",
+  "domains": [
+    "electrical"
+  ],
+  "required_power_ports": [
+    {
+      "name": "p",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "n",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    }
+  ],
+  "required_signal_ports": [],
+  "ideal_models": [
+    "electrical.resistor.ideal"
+  ],
+  "constraints": [
+    "Exactly two terminals in the ideal contract",
+    "Positive resistance",
+    "Passive sign convention"
+  ],
+  "description": "Two-terminal component whose ideal constitutive law is Ohm's law."
+}

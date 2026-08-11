@@ -330,7 +330,7 @@ Minimum first-class entities:
 - `TestProtocol`, `BuildOutcome`, `QualificationEvidence`;
 - `FirmwareArtifact`, `CADArtifact`, `Substitution`, `RepairAction`.
 
-Every reusable component package should include:
+Every reusable part instantiation should include:
 
 - typed mechanical, electrical, optical and digital ports;
 - geometry/footprint and reference frames;
@@ -556,7 +556,7 @@ Deliverables: task grammar, safety policy, pilot RFC, baseline scorecard, demand
 ### Weeks 3–4: harness skeleton and smoke test
 
 - Implement content-addressed registry, provenance, typed ports and evidence tiers.
-- Implement `TaskContract`, component-package and physical-build schemas.
+- Implement `TaskContract`, model-instantiation and physical-build schemas.
 - Add deterministic lints, unit checks, hazard rules and compiler skeleton.
 - Create 15–20 low-voltage motion, sensing and structural packages at E0/E1; identify the 5–8 consequential packages that must reach E2 during physical characterization.
 - Use a geometry-specific dry track/groove cleaner or fixture as a smoke test for user measurements, generated CAD, fit/tolerance, BOM, assembly instructions and physical verification.

@@ -31,12 +31,12 @@ required inputs include:
 The compiler refuses caller-authored `OnlineModelIR` at this entry point. The
 scanner no longer loads an `online_model.json`, reviewed aggregate matrix, or
 separate topology-coverage document. Every state, input, residual, parameter,
-and topology dependency comes from the same component packages/PMDL closure
+and topology dependency comes from the same catalog instantiations/PMDL closure
 used by offline simulation.
 
 Both expected hashes can be supplied at the API/CLI boundary. A mismatch is a
 hard error. A bare `AssembledPMDLSystem` is refused because it has discarded the
-physical/package/controller closure. Generated headers, sources, and manifests
+physical/instantiation/controller closure. Generated headers, sources, and manifests
 embed the assembly and PMDL hashes plus the canonical controller id, version,
 and content hash (or explicit `null`). They also embed the dynamics-completeness
 status and open-gate identifiers; the manifest and model metadata retain the
@@ -51,7 +51,7 @@ F(t, x, xdot, a, u, θ) = 0
 ```
 
 where `x` is the differential state, `a` is the algebraic state, `u` is the
-declared control-source vector, and `θ` is the package-resolved parameter
+declared control-source vector, and `θ` is the instantiation-resolved parameter
 vector. At the requested operating point, the compiler solves for
 `q = [xdot, a]`, then differentiates the assembled residual to obtain:
 
@@ -115,7 +115,7 @@ contraption validate
 contraption compile --output outputs/scanner_demo/online
 ```
 
-The command resolves the contraption, component-package registry, PMDL registry,
-and canonical data-only controller dependency before deriving C99. Inspect the
+The command resolves the contraption, interface tree, model-instantiation and
+PMDL registries, and canonical data-only controller before deriving C99. Inspect the
 manifest hashes and compiler diagnostics before using the output in any target
 toolchain.

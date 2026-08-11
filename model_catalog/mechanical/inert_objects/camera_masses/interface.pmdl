@@ -1,0 +1,26 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "camera-mass",
+  "name": "Camera represented as rigid mass",
+  "version": "1.0.0",
+  "parent": "inert-object",
+  "model_specificity": "Adds camera-specific mass, inertia, center-of-mass, and enclosure geometry defaults while excluding optical physics.",
+  "changes_contract": true,
+  "required_power_ports": [],
+  "required_signal_ports": [
+    {
+      "name": "yaw_measurement",
+      "direction": "output",
+      "unit": "rad"
+    }
+  ],
+  "models": [
+    "mechanical.camera_mass.planar"
+  ],
+  "constraints": [
+    "Optics and image formation are outside Phase 1"
+  ],
+  "description": ""
+}

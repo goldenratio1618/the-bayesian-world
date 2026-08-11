@@ -126,12 +126,12 @@
     components.forEach((component, componentIndex) => {
       const componentLabel = `scene.components[${componentIndex}]`;
       requireObject(component, componentLabel);
-      requireKeys(component, ["id", "package", "model", "physical_role", "bodies", "connectors"], [], componentLabel);
+      requireKeys(component, ["id", "part", "model", "physical_role", "bodies", "connectors"], [], componentLabel);
       const instanceId = requireString(component.id, `${componentLabel}.id`);
       requireCondition(!instanceId.includes("/"), `${componentLabel}.id cannot contain '/'`);
       requireCondition(!instanceIds.has(instanceId), `duplicate component id ${JSON.stringify(instanceId)}`);
       instanceIds.add(instanceId);
-      requireString(component.package, `${componentLabel}.package`);
+      requireString(component.part, `${componentLabel}.part`);
       requireString(component.model, `${componentLabel}.model`);
       requireCondition(["part", "boundary", "software"].includes(component.physical_role),
         `${componentLabel}.physical_role is unsupported`);

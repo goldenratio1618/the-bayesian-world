@@ -1,0 +1,29 @@
+{
+  "format": "model-instance-1",
+  "id": "generic-100ohm-resistor.v1",
+  "variant": "v1",
+  "part": "generic-100ohm-resistor",
+  "version": "1.0.0",
+  "model": {
+    "id": "electrical.resistor.ideal",
+    "version": "1.0.0",
+    "sha256": "sha256:8435156e22a8adecda051f672e6a9a277db1a94a648792e2c0372e34ef5a86bb"
+  },
+  "parameters": {
+    "resistance": 100.0
+  },
+  "parameter_uncertainty": {
+    "resistance": {
+      "distribution": "normal",
+      "std": 5.0
+    }
+  },
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1.0,
+    "notes": "Generic catalog baseline."
+  },
+  "metadata": {
+    "geometry_note": "explicit rough envelope; replace with measured or catalog dimensions"
+  }
+}

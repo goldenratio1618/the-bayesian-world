@@ -1,72 +1,97 @@
-# Phase 1 architecture contract
+# Architecture contract
 
-This repository is a runnable engineering reference, not a certification claim.
-The consumer engineering plan remains the strategic authority; the scanner is
-a pre-product laboratory/3D-evidence fixture rather than the market pilot.
+This repository is a runnable engineering reference, not a certification
+claim. The scanner is a pre-product laboratory fixture rather than a product
+taxonomy or a physical domain.
+
+## Model catalog
+
+`model_catalog/` is the only model and part catalog. Its filesystem hierarchy
+is semantic and validated:
+
+```text
+model_catalog/
+  <physical-domain>/
+    interface.pmdl
+    <category>/
+      interface.pmdl
+      [general-model.pmdl]
+      [<device>/
+        interface.pmdl
+        [device-model.pmdl]
+        instantiations/<part-id>/
+          static.part
+          v1.model
+          [v2.model ...]]
+```
+
+Every top-level directory declares one or more kinds of physics through an
+abstract domain `interface.pmdl`. Categories describe general object classes;
+the optional device layer describes a more specific device type. Concrete PMDL
+classes declare the category or device contract they implement and must live at
+that layer. There is no parallel JSON taxonomy.
+
+`static.part` owns model-invariant geometry, connector frames, provenance,
+purchasing information, and metadata. Each `vN.model` selects an exact
+id/version/hash PMDL class, initializes all of its parameters, declares
+parameter uncertainty and condition, and records relative compute cost. Several
+model files may coexist for one physical part so inference can compare their
+likelihood and cost.
 
 ## Canonical closure
 
-The only complete device representation is a `contraption-2` specification
-resolved with its component-package, exact-hash PMDL, and data-only controller
-registries. Packages own physical bodies, connector frames, model-port and
-geometry bindings, and provenance. Resolution rejects stale, missing,
-incompatible, underconstrained, or singular dependencies and produces one
-assembly closure hash.
-
-Simulation, physical pose generation, visualization, build planning, and C99
-derivation consume that `ResolvedAssembly`. They may produce different artifact
-formats, but none may add or override the represented object:
+The only complete contraption source is a `contraption-3` document. Components
+contain exactly an id and a catalog model-instantiation id. Parameters and
+geometry cannot be authored in a contraption. Connections, control bindings,
+the physical root, controller reference, environment, and metadata complete
+the source.
 
 ```text
-contraption-2 + packages + PMDL + controller
-                    |
-              resolve/validate
-                    |
-             ResolvedAssembly
-          /         |          \
-   PMDL simulation  poses      DAE-derived C99
-          |          |                |
-   runtime checks   viewer          manifest
-          \          |                /
-             hash-bound artifacts
-                    |
-                 build plan
+contraption-3 + model_catalog + controller
+                       |
+                 resolve/validate
+                       |
+                ResolvedAssembly
+             /         |          \
+      PMDL simulation  poses      DAE-derived C99
+             |          |                |
+      runtime checks   viewer          manifest
+             \          |                /
+                hash-bound artifacts
+                       |
+                    build plan
 ```
 
-The viewer is display-only and receives fully resolved body and connector poses.
-The build planner accepts only the resolved closure and leaves unknown routing,
-ratings, and retention details unresolved. The online compiler derives its
-local dynamics/estimator from the assembled descriptor residual; it does not
-admit an authored scanner matrix or bare assembled-system projection as an
-alternate model. It retains controller provenance but does not yet emit
-controller state-machine C99, which remains an explicit external-runtime gate.
+Resolution verifies every interface, catalog path, PMDL hash, initialized
+parameter, physical binding, and controller hash before producing one assembly
+closure hash. Simulation, physical poses, visualization, build planning, and
+C99 derivation consume that `ResolvedAssembly`; none may add or override the
+represented object.
 
-## Layers
+## Source modules
 
-1. `specs`, `units`, `dsl`, `controls`, `physical`, and `validation` define
-   strict inert-data contracts.
-2. `resolved` verifies package/model/controller hashes and compiles physical and
-   PMDL projections with one identity.
-3. `assembly`, `backend`, and `simulator` compose component residuals, integrate
-   on NumPy/Torch, and enforce network/attachment invariants.
-4. `visualization`, `build`, and `compiler` consume only verified projections
-   carrying the canonical closure hash.
-5. `agents` may stage inert proposals; deterministic validation and explicit
-   promotion are required before they enter a registry.
-6. `examples/scanner_robot` is the bounded end-to-end acceptance fixture.
+- `contraption.physics` owns PMDL parsing, validation, assembly, simulation,
+  fitting, uncertainty, physical resolution, and the electrical/mechanical
+  reference systems.
+- `contraption.catalog` owns abstract interface discovery and model
+  instantiations.
+- `contraption.part_import` owns classification, guarded modeling, budgets, and
+  deterministic candidate validation.
+- `contraption.visualization` owns the display-only viewer, scanner scene
+  projection, and loopback live server.
+- `contraption.manufacturing` owns closure-bound build instructions.
+- `contraption.applications` owns scanner-specific runtime policy.
 
 ## Shared guarantees
 
-- Unknown fields and duplicate identifiers are errors.
+- Unknown fields, duplicate identifiers, invalid catalog layers, and stale
+  hashes are errors.
 - PMDL has universal residual form `F(t, z, zdot, theta, u) = 0` and an
-  allow-listed expression tree; arbitrary generated Python is never executed.
-- Connector domain/interface mismatches and incomplete port/binding coverage
-  fail before simulation.
-- Every accepted timestep preserves assembled network equations and resolved
-  physical boundary conditions within declared tolerances.
-- Dynamic viewer frames require exact body/connector key coverage and the
-  matching assembly hash.
-- Generated C99 embeds both the assembly and PMDL hashes and remains subject to
-  target/HIL qualification.
-- Physical instances remain `unverified` until independent measurement and
-  acceptance evidence says otherwise.
+  allow-listed expression tree; generated host code is never executed.
+- Connector and interface mismatches, incomplete parameter initialization, and
+  geometry/parameter disagreement fail before simulation.
+- Every accepted timestep preserves assembled network equations and physical
+  boundary conditions within declared tolerances.
+- Viewer frames and generated C99 remain bound to the exact assembly closure.
+- Model instances remain `unverified` until independent evidence changes their
+  declared condition.

@@ -13,7 +13,15 @@ from typing import Any, Mapping
 
 import numpy as np
 
-from .agents import (
+from .applications.scanner import (
+    ScannerMission,
+    scanner_metrics,
+    simulate_scanner_robot,
+)
+from .catalog.instantiations import PartInstantiationRegistry
+from .catalog.interfaces import interface_paths, load_interface_catalog
+from .manufacturing.build import generate_build_instructions
+from .part_import.agents import (
     ClassificationAgent,
     ModelingAgent,
     ModelingInputs,
@@ -22,26 +30,18 @@ from .agents import (
     run_modeling_proposal,
     write_json_atomic,
 )
-from .backend import infer_backend
-from .budget import BudgetLedger
-from .build import generate_build_instructions
-from .compiler import compile_resolved_assembly, syntax_check
-from .controls import ControlProgram
-from .dsl import ModelRegistry
-from .live import LiveScannerApplication, serve_live_scanner
+from .part_import.budget import BudgetLedger
 from .paths import asset_root, source_root
-from .physical import ComponentPackageRegistry
-from .resolved import ResolvedAssembly, resolve_assembly
-from .scanner import (
-    ScannerMission,
-    scanner_metrics,
-    scanner_physical_scene,
-    simulate_scanner_robot,
-)
-from .simulator import SimulationResult
-from .taxonomy import load_default_taxonomy
-from .uq import summarize_samples
-from .visualization import generate_viewer
+from .physics.backend import infer_backend
+from .physics.compiler import compile_resolved_assembly, syntax_check
+from .physics.controls import ControlProgram
+from .physics.dsl import ModelRegistry
+from .physics.resolved import ResolvedAssembly, resolve_assembly
+from .physics.simulator import SimulationResult
+from .physics.uq import summarize_samples
+from .visualization.scanner_scene import scanner_physical_scene
+from .visualization.server import LiveScannerApplication, serve_live_scanner
+from .visualization.viewer import generate_viewer
 
 
 PROJECT_ROOT = asset_root()
@@ -51,9 +51,9 @@ OUTPUT_ROOT = Path(
     os.environ.get("CONTRAPTION_OUTPUT_ROOT", str(WORK_ROOT / "outputs"))
 ).expanduser().resolve()
 SCANNER_ROOT = PROJECT_ROOT / "examples" / "scanner_robot"
+PART_IMPORT_CANARY_ROOT = PROJECT_ROOT / "examples" / "part_import_canary"
 DEFAULT_SPEC = SCANNER_ROOT / "contraption.json"
-DEFAULT_PACKAGES = SCANNER_ROOT / "component_packages.json"
-DEFAULT_MODEL_ROOT = PROJECT_ROOT / "models"
+DEFAULT_CATALOG = PROJECT_ROOT / "model_catalog"
 DEFAULT_CONTROLLER_ROOT = SCANNER_ROOT / "controls"
 DEFAULT_OUTPUT = OUTPUT_ROOT / "scanner_demo"
 AGENT_PROPOSALS = OUTPUT_ROOT / "agent-proposals"
@@ -68,12 +68,12 @@ SCANNER_AGENT_TARGETS = (
 )
 
 _MODELING_CONTEXT: dict[str, tuple[str, ...]] = {
-    "camera_compute": ("mechanical/camera_mass.pmdl",),
-    "power": ("electrical/voltage_source.pmdl", "electrical/capacitor.pmdl"),
-    "romi_arm": ("electrical/dc_motor.pmdl", "mechanical/revolute_joint.pmdl"),
-    "romi_control": ("electrical/voltage_source.pmdl",),
-    "romi_drive": ("electrical/dc_motor.pmdl", "mechanical/wheel_contact.pmdl"),
-    "romi_encoders": ("mechanical/revolute_joint.pmdl", "mechanical/wheel_contact.pmdl"),
+    "camera_compute": ("mechanical/inert_objects/camera_masses/camera_mass.pmdl",),
+    "power": ("electrical/voltage_sources/voltage_source.pmdl", "electrical/capacitors/ceramic_capacitors/capacitor.pmdl"),
+    "romi_arm": ("electromechanical/motors/brushed_dc_motors/dc_motor.pmdl", "mechanical/joints/revolute_joints/revolute_joint.pmdl"),
+    "romi_control": ("electrical/voltage_sources/voltage_source.pmdl",),
+    "romi_drive": ("electromechanical/motors/brushed_dc_motors/dc_motor.pmdl", "mechanical/wheels/driven_wheels/wheel_contact.pmdl"),
+    "romi_encoders": ("mechanical/joints/revolute_joints/revolute_joint.pmdl", "mechanical/wheels/driven_wheels/wheel_contact.pmdl"),
 }
 
 
@@ -130,34 +130,16 @@ def _write_json(path: str | Path, value: Any) -> Path:
 
 def _load_resolved_assembly(
     specification_path: str | Path = DEFAULT_SPEC,
-    package_path: str | Path = DEFAULT_PACKAGES,
-    model_paths: list[str | Path] | tuple[str | Path, ...] | None = None,
+    catalog_path: str | Path = DEFAULT_CATALOG,
     controller_paths: list[str | Path] | tuple[str | Path, ...] | None = None,
 ) -> ResolvedAssembly:
-    """Load and verify one canonical contraption/package/PMDL closure."""
+    """Load and verify one canonical contraption/catalog/PMDL closure."""
 
-    roots = tuple(
-        Path(path).expanduser().resolve()
-        for path in (model_paths or (DEFAULT_MODEL_ROOT,))
-    )
-    if not roots:
-        raise ValueError("at least one PMDL model root is required")
+    catalog_root = Path(catalog_path).expanduser().resolve()
+    interfaces = load_interface_catalog(catalog_root)
     registry = ModelRegistry()
-    for root in roots:
-        if root.is_dir():
-            paths = sorted(root.rglob("*.pmdl"))
-        elif root.is_file() and root.suffix == ".pmdl":
-            paths = [root]
-        else:
-            raise FileNotFoundError(f"PMDL model path does not exist: {root}")
-        if not paths:
-            raise FileNotFoundError(f"PMDL model path contains no .pmdl files: {root}")
-        for path in paths:
-            # Resolution strictly validates every model in the selected package
-            # closure.  Unreferenced library entries are parsed for identity and
-            # duplicate protection but cannot block an unrelated contraption.
-            registry.load(path, validate=False)
-    packages = ComponentPackageRegistry.load(Path(package_path).expanduser().resolve())
+    registry.load_directory(catalog_root, interfaces=interfaces)
+    instantiations = PartInstantiationRegistry.load_catalog(catalog_root, models=registry)
     controller_roots = tuple(
         Path(path).expanduser().resolve()
         for path in (controller_paths or (DEFAULT_CONTROLLER_ROOT,))
@@ -182,7 +164,7 @@ def _load_resolved_assembly(
     specification = _load_json(Path(specification_path).expanduser().resolve())
     return resolve_assembly(
         specification,
-        packages,
+        instantiations,
         registry,
         control_programs=controllers,
     )
@@ -191,8 +173,7 @@ def _load_resolved_assembly(
 def _assembly_from_args(args: argparse.Namespace) -> ResolvedAssembly:
     return _load_resolved_assembly(
         args.spec,
-        args.packages,
-        args.model_root,
+        args.catalog,
         args.controller_root,
     )
 
@@ -265,24 +246,23 @@ def command_doctor(_args: argparse.Namespace) -> int:
 
 
 def command_validate(args: argparse.Namespace) -> int:
-    taxonomy = load_default_taxonomy()
+    interfaces = load_interface_catalog(args.catalog)
     assembly = _assembly_from_args(args)
     dynamics_completeness = assembly.dynamics_completeness
     report = {
         "valid": True,
-        "scope": "canonical_package_model_physical_and_pmdl_closure",
-        "taxonomy": {
-            "domains": len(taxonomy.domains),
-            "categories": len(taxonomy.categories),
-            "subcategories": len(taxonomy.subcategories),
-            "instantiations": len(taxonomy.instantiations),
+        "scope": "canonical_catalog_instantiation_physical_and_pmdl_closure",
+        "interfaces": {
+            "domains": len(interfaces.domains),
+            "categories": len(interfaces.categories),
+            "devices": len(interfaces.devices),
         },
         "assembly": assembly.diagnostics(),
         "controller": _controller_identity(assembly),
         "dynamics_completeness": dynamics_completeness.to_dict(),
-        "packages": {
-            "registered": len(assembly.packages),
-            "used": len({item.package for item in assembly.specification.components}),
+        "parts": {
+            "registered": len(assembly.parts),
+            "used": len({item.part for item in assembly.specification.components}),
         },
         "artifact_closure": {
             "simulation": assembly.assembly_sha256,
@@ -689,10 +669,10 @@ def command_agent_canary(args: argparse.Namespace) -> int:
             }
         else:
             try:
-                component = _load_json(SCANNER_ROOT / "component_inputs" / "romi_drive.json")
-                taxonomy = _load_json(PROJECT_ROOT / "data" / "taxonomy.json")
+                component = _load_json(PART_IMPORT_CANARY_ROOT / "fixed_resistor.json")
+                interface_data = load_interface_catalog(DEFAULT_CATALOG).to_dict()
                 value, usage, charged = ClassificationAgent(ledger, api_key=key).classify(
-                    component, taxonomy, canary=True
+                    component, interface_data, canary=True
                 )
                 results["classification"] = {
                     "status": "completed",
@@ -710,14 +690,18 @@ def command_agent_canary(args: argparse.Namespace) -> int:
         try:
             inputs = ModelingInputs(
                 constraints=PROJECT_ROOT / "prompts" / "model_constraints.md",
-                gold_templates=(PROJECT_ROOT / "models" / "electrical" / "resistor.pmdl",),
-                taxonomy=PROJECT_ROOT / "data" / "taxonomy.json",
-                direct_hierarchy=(
-                    PROJECT_ROOT / "models" / "mechanical" / "camera_mass.pmdl",
+                gold_templates=(
+                    DEFAULT_CATALOG / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl",
+                    DEFAULT_CATALOG / "electrical" / "resistors" / "fixed_resistors" / "instantiations" / "generic-100ohm-resistor" / "static.part",
+                    DEFAULT_CATALOG / "electrical" / "resistors" / "fixed_resistors" / "instantiations" / "generic-100ohm-resistor" / "v1.model",
                 ),
-                component_information=(
-                    SCANNER_ROOT / "component_inputs" / "camera_compute.json"
+                interfaces=(
+                    DEFAULT_CATALOG / "electrical" / "interface.pmdl",
+                    DEFAULT_CATALOG / "electrical" / "resistors" / "interface.pmdl",
+                    DEFAULT_CATALOG / "electrical" / "resistors" / "fixed_resistors" / "interface.pmdl",
                 ),
+                direct_hierarchy=(),
+                component_information=PART_IMPORT_CANARY_ROOT / "fixed_resistor.json",
             )
             agent = ModelingAgent(
                 ledger,
@@ -758,14 +742,16 @@ def _agent_failure_reason(exc: Exception, key: str | None) -> str:
 def _full_modeling_inputs(target: str) -> ModelingInputs:
     if target not in SCANNER_AGENT_TARGETS:
         raise ValueError(f"unknown scanner agent target {target!r}")
-    model_root = PROJECT_ROOT / "models"
+    model_root = DEFAULT_CATALOG
     return ModelingInputs(
         constraints=PROJECT_ROOT / "prompts" / "model_constraints.md",
         gold_templates=(
-            model_root / "electrical" / "resistor.pmdl",
-            model_root / "mechanical" / "rigid_body_planar.pmdl",
+            model_root / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl",
+            model_root / "electrical" / "resistors" / "fixed_resistors" / "instantiations" / "generic-100ohm-resistor" / "static.part",
+            model_root / "electrical" / "resistors" / "fixed_resistors" / "instantiations" / "generic-100ohm-resistor" / "v1.model",
+            model_root / "mechanical" / "inert_objects" / "planar_rigid_bodies" / "rigid_body_planar.pmdl",
         ),
-        taxonomy=PROJECT_ROOT / "data" / "taxonomy.json",
+        interfaces=interface_paths(DEFAULT_CATALOG),
         direct_hierarchy=tuple(model_root / relative for relative in _MODELING_CONTEXT[target]),
         component_information=SCANNER_ROOT / "component_inputs" / f"{target}.json",
     )
@@ -791,7 +777,7 @@ def command_agent_run(args: argparse.Namespace) -> int:
             results = run_classification_batch(
                 ClassificationAgent(ledger, api_key=key),
                 component_paths,
-                PROJECT_ROOT / "data" / "taxonomy.json",
+                DEFAULT_CATALOG,
                 proposal_root / "classification",
                 force=args.force,
             )
@@ -833,11 +819,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     def assembly_inputs(command: argparse.ArgumentParser) -> None:
         command.add_argument("--spec", default=str(DEFAULT_SPEC))
-        command.add_argument("--packages", default=str(DEFAULT_PACKAGES))
         command.add_argument(
-            "--model-root",
-            action="append",
-            help="PMDL file/directory (repeatable; defaults to the bundled models tree)",
+            "--catalog",
+            default=str(DEFAULT_CATALOG),
+            help="model_catalog root containing interfaces, PMDLs, and instantiations",
         )
         command.add_argument(
             "--controller-root",
@@ -870,7 +855,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     validate = commands.add_parser(
         "validate",
-        help="resolve and validate one canonical package/model/physical/PMDL closure",
+        help="resolve and validate one canonical catalog/physical/PMDL closure",
     )
     assembly_inputs(validate)
     validate.set_defaults(handler=command_validate)

@@ -1,0 +1,18 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "screw",
+  "name": "Screw",
+  "version": "1.0.0",
+  "domains": [
+    "mechanical"
+  ],
+  "required_power_ports": [],
+  "required_signal_ports": [],
+  "ideal_models": [],
+  "constraints": [
+    "Instantiation records thread standard, diameter, pitch, length, and head type"
+  ],
+  "description": "Threaded mechanical fastener."
+}

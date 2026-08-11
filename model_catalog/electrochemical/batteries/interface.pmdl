@@ -1,0 +1,19 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "battery",
+  "name": "Battery",
+  "version": "1.0.0",
+  "domains": [
+    "electrochemical",
+    "electrical"
+  ],
+  "required_power_ports": [],
+  "required_signal_ports": [],
+  "ideal_models": [],
+  "constraints": [
+    "Stored charge and terminal polarity are explicit."
+  ],
+  "description": "Electrochemical electrical energy store."
+}

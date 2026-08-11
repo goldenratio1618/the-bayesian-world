@@ -1,0 +1,16 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "domain",
+  "abstract": true,
+  "id": "electrochemical",
+  "name": "Electrochemical",
+  "version": "1.0.0",
+  "requires_physics": [
+    "electrochemical",
+    "electrical"
+  ],
+  "allowed_port_domains": [
+    "electrical"
+  ],
+  "description": "Charge storage and conversion coupled to electrical terminals."
+}

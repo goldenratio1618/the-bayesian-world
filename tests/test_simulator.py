@@ -10,19 +10,17 @@ from unittest.mock import patch
 
 import numpy as np
 
-from contraption.backend import NumpyBackend, TorchBackend, get_backend
-from contraption.simulator import (
-    DCMotorSystem,
+from contraption.physics.backend import NumpyBackend, TorchBackend, get_backend
+from contraption.physics.electrical import RCCircuit, RLCircuit
+from contraption.physics.mechanical import DCMotorSystem, PlanarRigidBodySystem
+from contraption.physics.simulator import (
     OfflineSimulator,
-    PlanarRigidBodySystem,
-    RCCircuit,
-    RLCircuit,
     ResidualSystem,
     SimulationConfig,
     linearize_dynamics,
     simulate,
 )
-from contraption.uq import (
+from contraption.physics.uq import (
     GaussianParameterDistribution,
     Normal,
     ekf_predict,
@@ -712,7 +710,7 @@ class BackendSelectionTests(unittest.TestCase):
 
     def test_auto_cuda_propagates_unavailable_cuda_error(self) -> None:
         with patch(
-            "contraption.backend.TorchBackend",
+            "contraption.physics.backend.TorchBackend",
             side_effect=RuntimeError("mock CUDA unavailable"),
         ) as constructor:
             with self.assertRaisesRegex(RuntimeError, "mock CUDA unavailable"):

@@ -6,12 +6,12 @@ import unittest
 
 import numpy as np
 
-from contraption.compiler import (
+from contraption.physics.compiler import (
     IRValidationError,
     OnlineCompiler,
     OnlineModelIR,
 )
-from contraption.controls import (
+from contraption.physics.controls import (
     ControlProgram,
     ControlValidationError,
     ControllerRuntime,

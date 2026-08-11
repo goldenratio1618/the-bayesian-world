@@ -1,0 +1,20 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "brushed-dc-motor",
+  "name": "Brushed DC motor",
+  "version": "1.0.0",
+  "parent": "motor",
+  "model_specificity": "Uses a single armature circuit with torque and back-EMF constants coupled to one rotating shaft.",
+  "changes_contract": false,
+  "required_power_ports": [],
+  "required_signal_ports": [],
+  "models": [
+    "electromechanical.dc_motor.ideal"
+  ],
+  "constraints": [
+    "Armature polarity and positive shaft rotation are declared"
+  ],
+  "description": ""
+}

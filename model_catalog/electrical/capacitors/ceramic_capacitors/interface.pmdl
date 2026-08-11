@@ -1,0 +1,20 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "ceramic-capacitor",
+  "name": "Ceramic capacitor",
+  "version": "1.0.0",
+  "parent": "capacitor",
+  "model_specificity": "A higher-fidelity model may add voltage and temperature coefficient parameters characteristic of ceramic dielectrics.",
+  "changes_contract": false,
+  "required_power_ports": [],
+  "required_signal_ports": [],
+  "models": [
+    "electrical.capacitor.ideal"
+  ],
+  "constraints": [
+    "Document dielectric class when known"
+  ],
+  "description": ""
+}

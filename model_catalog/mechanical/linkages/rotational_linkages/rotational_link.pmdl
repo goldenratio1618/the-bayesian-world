@@ -1,0 +1,140 @@
+{
+  "format": "pmdl-1",
+  "id": "mechanical.rotational_link.rigid",
+  "name": "Rigid single-axis linkage",
+  "version": "1.0.0",
+  "domains": [
+    "mechanical"
+  ],
+  "description": "A rigid link rotating about one joint with lumped inertia, damping, and gravity torque.",
+  "power_ports": [
+    {
+      "name": "joint",
+      "domain": "mechanical",
+      "effort": "torque_joint",
+      "flow": "omega_joint",
+      "effort_unit": "N*m",
+      "flow_unit": "rad/s",
+      "orientation": "into_component",
+      "frame": "base",
+      "reference": "positive elevation rotation"
+    }
+  ],
+  "states": [
+    {
+      "name": "angle",
+      "unit": "rad",
+      "initial": 0.0,
+      "derivative": "angle_dot"
+    },
+    {
+      "name": "angular_velocity",
+      "unit": "rad/s",
+      "initial": 0.0,
+      "derivative": "angular_velocity_dot"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "inertia",
+      "unit": "kg*m^2",
+      "default": 0.002,
+      "bounds": {
+        "lower": 1e-07,
+        "upper": 10.0
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.0003
+        }
+      },
+      "learnable": true
+    },
+    {
+      "name": "damping",
+      "unit": "N*m*s/rad",
+      "default": 0.04,
+      "bounds": {
+        "lower": 0.0,
+        "upper": 10.0
+      },
+      "uncertainty": {},
+      "learnable": true
+    },
+    {
+      "name": "gravity_torque",
+      "unit": "N*m",
+      "default": 0.12,
+      "bounds": {
+        "lower": 0.0,
+        "upper": 10.0
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.02
+        }
+      },
+      "learnable": true
+    }
+  ],
+  "relations": [
+    {
+      "name": "angle_kinematics",
+      "expression": "angle_dot - angular_velocity"
+    },
+    {
+      "name": "joint_dynamics",
+      "expression": "inertia * angular_velocity_dot - torque_joint + damping * angular_velocity + gravity_torque * sin(angle)"
+    },
+    {
+      "name": "joint_velocity",
+      "expression": "omega_joint - angular_velocity"
+    }
+  ],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [],
+    "required": [
+      "angle",
+      "angular_velocity"
+    ]
+  },
+  "validity": {
+    "ranges": {
+      "angle": {
+        "lower": -1.2,
+        "upper": 1.2
+      },
+      "angular_velocity": {
+        "lower": -8.0,
+        "upper": 8.0
+      }
+    },
+    "assumptions": [
+      "Single rigid axis",
+      "Lumped inertia",
+      "Small bearing compliance"
+    ],
+    "max_timestep": 0.05
+  },
+  "trust": {
+    "structural": "tested",
+    "physical": "reviewed",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": []
+  },
+  "metadata": {
+    "gold": false,
+    "scanner_component": true,
+    "causality": "acausal",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0",
+    "online_admission": {
+      "admitted": true,
+      "kind": "linearizable"
+    }
+  },
+  "implements": "rotational-linkage"
+}

@@ -1,0 +1,24 @@
+{
+  "format": "model-instance-1",
+  "id": "scanner.compute.v1",
+  "variant": "v1",
+  "part": "scanner.compute",
+  "version": "1.0.0",
+  "model": {
+    "id": "electrical.resistive_load.constant",
+    "version": "1.0.0",
+    "sha256": "sha256:d3b16326407ce89e72b297018b98dae5f49f3b9e1c5e01ee139ca57c32fd6248"
+  },
+  "parameters": {
+    "resistance": 6.25
+  },
+  "parameter_uncertainty": {},
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1.0,
+    "notes": "Catalog baseline model."
+  },
+  "metadata": {
+    "source_component": "compute"
+  }
+}

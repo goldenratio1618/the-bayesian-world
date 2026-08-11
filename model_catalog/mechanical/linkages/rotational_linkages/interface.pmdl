@@ -1,0 +1,27 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "rotational-linkage",
+  "name": "Rotational linkage",
+  "version": "1.0.0",
+  "parent": "linkage",
+  "model_specificity": "One rotational coordinate captures a rigid arm link with inertia, damping, and gravity loading.",
+  "changes_contract": true,
+  "required_power_ports": [
+    {
+      "name": "joint",
+      "domain": "mechanical",
+      "effort_unit": "N*m",
+      "flow_unit": "rad/s"
+    }
+  ],
+  "required_signal_ports": [],
+  "models": [
+    "mechanical.rotational_link.rigid"
+  ],
+  "constraints": [
+    "The joint axis and zero angle are declared."
+  ],
+  "description": ""
+}

@@ -1,0 +1,20 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "planar-rigid-body",
+  "name": "Planar rigid body",
+  "version": "1.0.0",
+  "parent": "inert-object",
+  "model_specificity": "Restricts motion to two translations and one rotation while preserving planar kinetic energy.",
+  "changes_contract": false,
+  "required_power_ports": [],
+  "required_signal_ports": [],
+  "models": [
+    "mechanical.rigid_body.planar"
+  ],
+  "constraints": [
+    "Out-of-plane dynamics are outside the validity envelope"
+  ],
+  "description": ""
+}

@@ -1,0 +1,17 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "domain",
+  "abstract": true,
+  "id": "electromechanical",
+  "name": "Electromechanical",
+  "version": "1.0.0",
+  "requires_physics": [
+    "electrical",
+    "mechanical"
+  ],
+  "allowed_port_domains": [
+    "electrical",
+    "mechanical"
+  ],
+  "description": "Components that exchange power across electrical and rigid-body mechanical ports."
+}

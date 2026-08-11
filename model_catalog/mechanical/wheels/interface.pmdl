@@ -1,0 +1,21 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "wheel",
+  "name": "Wheel and contact",
+  "version": "1.0.0",
+  "domains": [
+    "mechanical"
+  ],
+  "required_power_ports": [],
+  "required_signal_ports": [],
+  "ideal_models": [
+    "mechanical.wheel_contact.ideal"
+  ],
+  "constraints": [
+    "Positive rolling radius",
+    "Contact model states its slip approximation"
+  ],
+  "description": "Rotational-to-translational wheel interface, including a declared contact approximation."
+}

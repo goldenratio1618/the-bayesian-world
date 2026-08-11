@@ -1,0 +1,256 @@
+{
+  "format": "pmdl-1",
+  "id": "mechanical.rigid_body.planar",
+  "name": "Planar rigid body",
+  "version": "1.0.0",
+  "domains": [
+    "mechanical"
+  ],
+  "description": "Six-state planar rigid body with force and torque power ports.",
+  "power_ports": [
+    {
+      "name": "force_x",
+      "domain": "mechanical",
+      "effort": "force_x_effort",
+      "flow": "velocity_x_port",
+      "effort_unit": "N",
+      "flow_unit": "m/s",
+      "orientation": "into_component",
+      "frame": "world",
+      "reference": "positive world x"
+    },
+    {
+      "name": "force_y",
+      "domain": "mechanical",
+      "effort": "force_y_effort",
+      "flow": "velocity_y_port",
+      "effort_unit": "N",
+      "flow_unit": "m/s",
+      "orientation": "into_component",
+      "frame": "world",
+      "reference": "positive world y"
+    },
+    {
+      "name": "rotation",
+      "domain": "mechanical",
+      "effort": "torque_effort",
+      "flow": "angular_velocity_port",
+      "effort_unit": "N*m",
+      "flow_unit": "rad/s",
+      "orientation": "into_component",
+      "frame": "body",
+      "reference": "right-hand positive yaw"
+    }
+  ],
+  "states": [
+    {
+      "name": "position_x",
+      "unit": "m",
+      "initial": 0.0,
+      "derivative": "position_x_dot"
+    },
+    {
+      "name": "position_y",
+      "unit": "m",
+      "initial": 0.0,
+      "derivative": "position_y_dot"
+    },
+    {
+      "name": "yaw",
+      "unit": "rad",
+      "initial": 0.0,
+      "derivative": "yaw_dot"
+    },
+    {
+      "name": "velocity_x",
+      "unit": "m/s",
+      "initial": 0.0,
+      "derivative": "velocity_x_dot"
+    },
+    {
+      "name": "velocity_y",
+      "unit": "m/s",
+      "initial": 0.0,
+      "derivative": "velocity_y_dot"
+    },
+    {
+      "name": "angular_velocity",
+      "unit": "rad/s",
+      "initial": 0.0,
+      "derivative": "angular_velocity_dot"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "mass",
+      "unit": "kg",
+      "default": 1.0,
+      "bounds": {
+        "lower": 1e-09,
+        "upper": 1000000000.0
+      },
+      "uncertainty": {
+        "distribution": "lognormal",
+        "parameters": {
+          "std": 0.05
+        }
+      },
+      "learnable": true
+    },
+    {
+      "name": "inertia",
+      "unit": "kg*m^2",
+      "default": 0.01,
+      "bounds": {
+        "lower": 1e-12,
+        "upper": 1000000000.0
+      },
+      "uncertainty": {
+        "distribution": "lognormal",
+        "parameters": {
+          "std": 0.1
+        }
+      },
+      "learnable": true
+    }
+  ],
+  "relations": [
+    {
+      "name": "x_kinematics",
+      "expression": "position_x_dot - velocity_x"
+    },
+    {
+      "name": "y_kinematics",
+      "expression": "position_y_dot - velocity_y"
+    },
+    {
+      "name": "yaw_kinematics",
+      "expression": "yaw_dot - angular_velocity"
+    },
+    {
+      "name": "x_dynamics",
+      "expression": "mass * velocity_x_dot - force_x_effort"
+    },
+    {
+      "name": "y_dynamics",
+      "expression": "mass * velocity_y_dot - force_y_effort"
+    },
+    {
+      "name": "yaw_dynamics",
+      "expression": "inertia * angular_velocity_dot - torque_effort"
+    },
+    {
+      "name": "x_port_velocity",
+      "expression": "velocity_x_port - velocity_x"
+    },
+    {
+      "name": "y_port_velocity",
+      "expression": "velocity_y_port - velocity_y"
+    },
+    {
+      "name": "rotation_port_velocity",
+      "expression": "angular_velocity_port - angular_velocity"
+    }
+  ],
+  "stored_energy": [
+    {
+      "name": "kinetic_energy",
+      "expression": "0.5 * mass * (velocity_x ** 2 + velocity_y ** 2) + 0.5 * inertia * angular_velocity ** 2",
+      "unit": "J",
+      "nonnegative": true
+    }
+  ],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [],
+    "required": [
+      "position_x",
+      "position_y",
+      "yaw",
+      "velocity_x",
+      "velocity_y",
+      "angular_velocity"
+    ]
+  },
+  "validity": {
+    "ranges": {
+      "yaw": {
+        "lower": -1000000.0,
+        "upper": 1000000.0
+      }
+    },
+    "assumptions": [
+      "Perfectly rigid body",
+      "Planar motion",
+      "Applied forces act through center of mass",
+      "Relativistic effects neglected"
+    ],
+    "max_timestep": 0.001
+  },
+  "fidelity_levels": [
+    {
+      "name": "ideal",
+      "description": "Newton-Euler planar dynamics.",
+      "active_relations": [
+        "x_kinematics",
+        "y_kinematics",
+        "yaw_kinematics",
+        "x_dynamics",
+        "y_dynamics",
+        "yaw_dynamics",
+        "x_port_velocity",
+        "y_port_velocity",
+        "rotation_port_velocity"
+      ],
+      "parameter_overrides": {},
+      "approximation_error": "Flexibility and out-of-plane dynamics omitted",
+      "relative_cost": 1.0
+    }
+  ],
+  "properties": [
+    {
+      "name": "positive_mass",
+      "kind": "parameter_bounds",
+      "expression": "mass > 0 * mass",
+      "expected": true,
+      "samples": 32,
+      "tolerance": 0.0
+    },
+    {
+      "name": "positive_inertia",
+      "kind": "parameter_bounds",
+      "expression": "inertia > 0 * inertia",
+      "expected": true,
+      "samples": 32,
+      "tolerance": 0.0
+    },
+    {
+      "name": "nonnegative_kinetic_energy",
+      "kind": "nonnegative_energy",
+      "expression": "0.5 * mass * (velocity_x ** 2 + velocity_y ** 2) + 0.5 * inertia * angular_velocity ** 2 >= 0 * mass * velocity_x ** 2",
+      "expected": true,
+      "samples": 64,
+      "tolerance": 1e-12
+    }
+  ],
+  "trust": {
+    "structural": "tested",
+    "physical": "reviewed",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": [
+      {
+        "kind": "textbook",
+        "reference": "Planar Newton-Euler equations",
+        "summary": "Canonical rigid-body mechanics."
+      }
+    ]
+  },
+  "metadata": {
+    "gold": true,
+    "causality": "acausal",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0",
+    "coordinate_frame": "world_xy_body_yaw"
+  },
+  "implements": "planar-rigid-body"
+}

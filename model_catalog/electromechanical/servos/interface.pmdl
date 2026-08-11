@@ -1,0 +1,20 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "servo",
+  "name": "Servo",
+  "version": "1.0.0",
+  "domains": [
+    "electromechanical",
+    "electrical",
+    "mechanical"
+  ],
+  "required_power_ports": [],
+  "required_signal_ports": [],
+  "ideal_models": [],
+  "constraints": [
+    "Supply and mechanical shaft are explicit."
+  ],
+  "description": "Closed-loop electromechanical position actuator."
+}

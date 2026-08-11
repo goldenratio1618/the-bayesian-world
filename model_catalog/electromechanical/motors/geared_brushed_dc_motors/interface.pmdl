@@ -1,0 +1,20 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "geared-brushed-dc-motor",
+  "name": "Geared brushed DC motor",
+  "version": "1.0.0",
+  "parent": "motor",
+  "model_specificity": "Lumped armature and gearbox dynamics expose the geared output shaft rather than the bare rotor.",
+  "changes_contract": false,
+  "required_power_ports": [],
+  "required_signal_ports": [],
+  "models": [
+    "electromechanical.scanner_gearmotor.lumped"
+  ],
+  "constraints": [
+    "Gearbox reduction is included in effective constants."
+  ],
+  "description": ""
+}

@@ -1,0 +1,100 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "dual-hbridge",
+  "name": "Dual H-bridge",
+  "version": "1.0.0",
+  "parent": "power-converter",
+  "model_specificity": "Two bidirectional motor-drive channels with explicit logic, supply, and output rails.",
+  "changes_contract": true,
+  "required_power_ports": [
+    {
+      "name": "supply_p",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "supply_n",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "left_p",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "left_n",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "right_p",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "right_n",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "logic_p",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "logic_n",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    }
+  ],
+  "required_signal_ports": [
+    {
+      "name": "left_command",
+      "direction": "input",
+      "unit": "V"
+    },
+    {
+      "name": "right_command",
+      "direction": "input",
+      "unit": "V"
+    },
+    {
+      "name": "left_encoder",
+      "direction": "input",
+      "unit": "rad/s"
+    },
+    {
+      "name": "right_encoder",
+      "direction": "input",
+      "unit": "rad/s"
+    },
+    {
+      "name": "lift_position",
+      "direction": "input",
+      "unit": "rad"
+    },
+    {
+      "name": "tilt_position",
+      "direction": "input",
+      "unit": "rad"
+    }
+  ],
+  "models": [
+    "electrical.dual_hbridge.ideal"
+  ],
+  "constraints": [
+    "Both bridge channels expose their terminal rails."
+  ],
+  "description": ""
+}

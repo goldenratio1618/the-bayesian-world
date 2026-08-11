@@ -9,15 +9,16 @@ import unittest
 
 import numpy as np
 
-from contraption.assembly import assemble_contraption
-from contraption.compiler import (
+from contraption.physics.assembly import assemble_contraption as _assemble_contraption
+from contraption.physics.compiler import (
     IRValidationError,
     OnlineModelIR,
     compile_resolved_assembly,
 )
-from contraption.controls import ControlProgram
-from contraption.dsl import parse_model
-from contraption.resolved import ResolvedAssembly
+from contraption.physics.controls import ControlProgram
+from contraption.physics.dsl import parse_model
+from contraption.physics.resolved import ResolvedAssembly
+from contraption.physics.specs import ControlBindingSpec
 
 
 CANONICAL_HASH = "sha256:" + "b" * 64
@@ -30,6 +31,36 @@ TEST_GEOMETRY = {
         "source": "nonphysical compiler unit-test fixture",
     },
 }
+
+
+def assemble_contraption(specification, *args, **kwargs):
+    """Build the strict resolved-record boundary used by these compiler fixtures."""
+
+    if isinstance(specification, dict):
+        source = dict(specification)
+        components = tuple(
+            SimpleNamespace(
+                id=item["id"],
+                model_id=item.get("model_id", item.get("model")),
+                parameters=item.get("parameters", {}),
+            )
+            for item in source["components"]
+        )
+        specification = SimpleNamespace(
+            id=source["id"],
+            name=source["name"],
+            version=source["version"],
+            components=components,
+            connections=(),
+            controls=tuple(
+                ControlBindingSpec.from_dict(item)
+                for item in source.get("controls", [])
+            ),
+            environment=source.get("environment", {}),
+            metadata=source.get("metadata", {}),
+            to_dict=lambda: source,
+        )
+    return _assemble_contraption(specification, *args, **kwargs)
 
 
 def _controlled_model(*, singular: bool = False):
@@ -50,7 +81,7 @@ def _controlled_model(*, singular: bool = False):
             "name": "Controlled PMDL test system",
             "version": "1.0.0",
             "domains": ["control"],
-            "category": "controlled-state",
+            "implements": "controlled-state",
             "signal_ports": [
                 {"name": "command", "direction": "input", "unit": "Hz"}
             ],
@@ -76,7 +107,7 @@ def _controlled_model(*, singular: bool = False):
 def _assembled_system(*, canonical: bool = True, singular: bool = False):
     model = _controlled_model(singular=singular)
     specification = {
-        "format": "contraption-1",
+        "format": "resolved-assembly-test-1",
         "id": "test.c99-source",
         "name": "Resolved compiler source",
         "version": "1.0.0",
@@ -184,7 +215,7 @@ def _resolved(
             controller=reference if controller else None,
             metadata=metadata,
         ),
-        "packages": None,
+        "parts": None,
         "component_models": None,
         "connector_bindings": None,
         "controller": program if controller else None,

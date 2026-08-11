@@ -1,0 +1,25 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "electrical-reference",
+  "name": "Electrical reference",
+  "version": "1.0.0",
+  "domains": [
+    "electrical"
+  ],
+  "required_power_ports": [
+    {
+      "name": "ground",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    }
+  ],
+  "required_signal_ports": [],
+  "ideal_models": [],
+  "constraints": [
+    "Defines an explicit potential gauge."
+  ],
+  "description": "Electrical potential boundary."
+}

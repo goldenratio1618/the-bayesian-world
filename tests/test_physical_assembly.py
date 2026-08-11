@@ -5,26 +5,38 @@ import copy
 import json
 import math
 from pathlib import Path
-from tempfile import TemporaryDirectory
 import unittest
 
-from contraption.physical import (
+from contraption.catalog.instantiations import PartInstantiationRegistry
+from contraption.catalog.interfaces import load_interface_catalog
+from contraption.physics.dsl import ModelRegistry
+from contraption.physics.physical import (
     AssemblyCycleError,
     AssemblyUnderconstrainedError,
-    ComponentPackageRegistry,
-    ComponentPackageSpec,
+    ResolvedPartRegistry,
+    ResolvedPartSpec,
     ConnectorCoincidenceError,
     ConnectorCompatibilityError,
     PhysicalSpecError,
     TransformSpec,
     resolve_configuration,
-    resolve_physical_assembly,
+    resolve_physical_assembly as _resolve_physical_assembly,
     validate_connector_coincidence,
 )
-from contraption.visualization import validate_physical_scene
+from contraption.visualization.viewer import validate_physical_scene
 
 
 MODEL_DIGEST = "sha256:" + "0" * 64
+
+
+def resolve_physical_assembly(contraption, parts, *args, **kwargs):
+    if not isinstance(parts, ResolvedPartRegistry):
+        values = parts.values() if isinstance(parts, dict) else parts
+        parts = ResolvedPartRegistry(
+            value if isinstance(value, ResolvedPartSpec) else ResolvedPartSpec.from_dict(value)
+            for value in values
+        )
+    return _resolve_physical_assembly(contraption, parts, *args, **kwargs)
 
 
 def pose(
@@ -72,19 +84,19 @@ def connector(
     return result
 
 
-def part_package(
-    package_id: str,
+def resolved_part(
+    part_id: str,
     connectors: list[dict[str, object]],
     *,
     dimensions: tuple[float, float, float] = (0.2, 0.1, 0.05),
 ) -> dict[str, object]:
     return {
-        "format": "component-package-1",
-        "id": package_id,
+        "format": "resolved-part-1",
+        "id": part_id,
         "version": "1.0.0",
         "physical_role": "part",
         "model": {
-            "id": f"{package_id}.model",
+            "id": f"{part_id}.model",
             "version": "1.0.0",
             "sha256": MODEL_DIGEST,
         },
@@ -111,14 +123,14 @@ def part_package(
     }
 
 
-def boundary_package(package_id: str = "ground-boundary") -> dict[str, object]:
+def boundary_part(part_id: str = "ground-boundary") -> dict[str, object]:
     return {
-        "format": "component-package-1",
-        "id": package_id,
+        "format": "resolved-part-1",
+        "id": part_id,
         "version": "1.0.0",
         "physical_role": "boundary",
         "model": {
-            "id": f"{package_id}.model",
+            "id": f"{part_id}.model",
             "version": "1.0.0",
             "sha256": MODEL_DIGEST,
         },
@@ -192,10 +204,10 @@ def contraption(
     }
 
 
-class PackageParsingTests(unittest.TestCase):
-    def test_package_is_strict_explicit_and_immutable(self) -> None:
-        raw = part_package("base-package", [connector("mount")])
-        package = ComponentPackageSpec.from_dict(raw)
+class ResolvedPartParsingTests(unittest.TestCase):
+    def test_resolved_part_is_strict_explicit_and_immutable(self) -> None:
+        raw = resolved_part("base-package", [connector("mount")])
+        package = ResolvedPartSpec.from_dict(raw)
 
         self.assertEqual(package.bodies[0].solids[0].geometry.dimensions_m, (0.2, 0.1, 0.05))
         self.assertIsNone(package.connectors[0].model_port)
@@ -204,82 +216,65 @@ class PackageParsingTests(unittest.TestCase):
 
         extra = copy.deepcopy(raw)
         extra["viewer_transform"] = pose()
-        with self.assertRaisesRegex(PhysicalSpecError, "unknown component package field"):
-            ComponentPackageSpec.from_dict(extra)
+        with self.assertRaisesRegex(PhysicalSpecError, "unknown resolved part field"):
+            ResolvedPartSpec.from_dict(extra)
 
         with self.assertRaisesRegex(PhysicalSpecError, "duplicate JSON field 'format'"):
-            ComponentPackageSpec.from_json(
-                '{"format":"component-package-1","format":"component-package-1"}'
+            ResolvedPartSpec.from_json(
+                '{"format":"resolved-part-1","format":"resolved-part-1"}'
             )
 
     def test_parts_require_real_geometry_and_nonphysical_roles_forbid_it(self) -> None:
-        no_bodies = part_package("empty-part", [])
+        no_bodies = resolved_part("empty-part", [])
         no_bodies["bodies"] = []
         with self.assertRaisesRegex(PhysicalSpecError, "placeholder geometry is not permitted"):
-            ComponentPackageSpec.from_dict(no_bodies)
+            ResolvedPartSpec.from_dict(no_bodies)
 
-        empty_solids = part_package("empty-body", [])
+        empty_solids = resolved_part("empty-body", [])
         empty_solids["bodies"][0]["solids"] = []  # type: ignore[index]
         with self.assertRaisesRegex(PhysicalSpecError, "at least one solid"):
-            ComponentPackageSpec.from_dict(empty_solids)
+            ResolvedPartSpec.from_dict(empty_solids)
 
-        boundary = ComponentPackageSpec.from_dict(boundary_package())
+        boundary = ResolvedPartSpec.from_dict(boundary_part())
         self.assertEqual(boundary.physical_role, "boundary")
         self.assertEqual(boundary.bodies, ())
         self.assertFalse(boundary.connectors[0].spatial)
 
-        hidden_cube = boundary_package()
-        hidden_cube["bodies"] = part_package("donor", [])["bodies"]
+        hidden_cube = boundary_part()
+        hidden_cube["bodies"] = resolved_part("donor", [])["bodies"]
         with self.assertRaisesRegex(PhysicalSpecError, "may not carry hidden geometry"):
-            ComponentPackageSpec.from_dict(hidden_cube)
+            ResolvedPartSpec.from_dict(hidden_cube)
 
-        wrong_provenance = boundary_package()
+        wrong_provenance = boundary_part()
         wrong_provenance["provenance"] = provenance("estimated")
-        with self.assertRaisesRegex(PhysicalSpecError, "requires package provenance.kind"):
-            ComponentPackageSpec.from_dict(wrong_provenance)
+        with self.assertRaisesRegex(PhysicalSpecError, "requires part provenance.kind"):
+            ResolvedPartSpec.from_dict(wrong_provenance)
 
     def test_geometry_conventions_are_unambiguous(self) -> None:
-        raw = part_package("cylinder", [])
+        raw = resolved_part("cylinder", [])
         geometry = raw["bodies"][0]["solids"][0]["geometry"]  # type: ignore[index]
         geometry.update({"kind": "cylinder", "dimensions_m": [0.1, 0.2, 0.3]})
         with self.assertRaisesRegex(PhysicalSpecError, "equal X/Y diameters"):
-            ComponentPackageSpec.from_dict(raw)
+            ResolvedPartSpec.from_dict(raw)
 
-        raw = part_package("sphere", [])
+        raw = resolved_part("sphere", [])
         geometry = raw["bodies"][0]["solids"][0]["geometry"]  # type: ignore[index]
         geometry.update({"kind": "sphere", "dimensions_m": [0.1, 0.1, 0.2]})
         with self.assertRaisesRegex(PhysicalSpecError, "three equal diameters"):
-            ComponentPackageSpec.from_dict(raw)
+            ResolvedPartSpec.from_dict(raw)
 
-    def test_registry_loads_json_and_rejects_duplicate_package_ids(self) -> None:
-        package = ComponentPackageSpec.from_dict(part_package("base-package", []))
-        with self.assertRaisesRegex(PhysicalSpecError, "duplicate component package id"):
-            ComponentPackageRegistry([package, package])
+    def test_registry_rejects_duplicate_part_ids_and_is_immutable(self) -> None:
+        package = ResolvedPartSpec.from_dict(resolved_part("base-package", []))
+        with self.assertRaisesRegex(PhysicalSpecError, "duplicate component part id"):
+            ResolvedPartRegistry([package, package])
 
-        with TemporaryDirectory() as directory:
-            path = Path(directory) / "base.component.json"
-            path.write_text(json.dumps(package.to_dict()), encoding="utf-8")
-            loaded = ComponentPackageRegistry.load_package(path)
-            registry = ComponentPackageRegistry.load_directory(directory)
-            registry_path = Path(directory) / "registry.json"
-            registry_path.write_text(
-                json.dumps(
-                    {
-                        "format": "component-package-registry-1",
-                        "packages": [package.to_dict()],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            wrapped_registry = ComponentPackageRegistry.load(registry_path)
-        self.assertEqual(loaded, package)
+        registry = ResolvedPartRegistry([package])
         self.assertIs(registry[package.id], registry[package.id])
-        self.assertEqual(wrapped_registry[package.id], package)
         with self.assertRaisesRegex(AttributeError, "immutable"):
-            registry._packages = {}  # type: ignore[assignment]
+            registry._parts = {}  # type: ignore[assignment]
 
     def test_typed_physical_parameter_measures_are_strict(self) -> None:
-        wheel = part_package("wheel-package", [])
+        wheel = resolved_part("wheel-package", [])
         geometry = wheel["bodies"][0]["solids"][0]["geometry"]  # type: ignore[index]
         geometry.update({"kind": "cylinder", "dimensions_m": [0.07, 0.07, 0.02]})
         wheel["parameter_bindings"] = [
@@ -295,11 +290,11 @@ class PackageParsingTests(unittest.TestCase):
                 },
             }
         ]
-        parsed_wheel = ComponentPackageSpec.from_dict(wheel)
+        parsed_wheel = ResolvedPartSpec.from_dict(wheel)
         binding = parsed_wheel.parameter_bindings[0]
         self.assertAlmostEqual(parsed_wheel.measure_parameter(binding), 0.035)
 
-        chassis = part_package(
+        chassis = resolved_part(
             "chassis-package",
             [connector("left", y=0.075), connector("right", y=-0.075)],
         )
@@ -315,7 +310,7 @@ class PackageParsingTests(unittest.TestCase):
                 },
             }
         ]
-        parsed_chassis = ComponentPackageSpec.from_dict(chassis)
+        parsed_chassis = ResolvedPartSpec.from_dict(chassis)
         self.assertAlmostEqual(
             parsed_chassis.measure_parameter(parsed_chassis.parameter_bindings[0]),
             0.15,
@@ -324,7 +319,7 @@ class PackageParsingTests(unittest.TestCase):
         invalid = copy.deepcopy(wheel)
         invalid["parameter_bindings"][0]["measure"]["kind"] = "python_expression"  # type: ignore[index]
         with self.assertRaisesRegex(PhysicalSpecError, "measure.kind"):
-            ComponentPackageSpec.from_dict(invalid)
+            ResolvedPartSpec.from_dict(invalid)
 
 
 class TransformTests(unittest.TestCase):
@@ -355,17 +350,26 @@ class TransformTests(unittest.TestCase):
 class PhysicalAssemblyTests(unittest.TestCase):
     def test_bundled_scanner_resolves_from_canonical_json(self) -> None:
         project = Path(__file__).resolve().parents[1]
-        registry = ComponentPackageRegistry.load(
-            project / "examples" / "scanner_robot" / "component_packages.json"
+        catalog_root = project / "model_catalog"
+        interfaces = load_interface_catalog(catalog_root)
+        models = ModelRegistry()
+        models.load_directory(catalog_root, interfaces=interfaces)
+        instantiations = PartInstantiationRegistry.load_catalog(
+            catalog_root, models=models
         )
         scanner = json.loads(
             (project / "examples" / "scanner_robot" / "contraption.json").read_text(
                 encoding="utf-8"
             )
         )
+        physical_source = dict(scanner)
+        physical_source["components"] = [
+            {"id": item["id"], "part": item["instantiation"]}
+            for item in scanner["components"]
+        ]
         assembly = resolve_physical_assembly(
-            scanner,
-            registry,
+            physical_source,
+            instantiations.resolved_parts,
             {
                 "left-wheel.angle": 0.0,
                 "right-wheel.angle": 0.0,
@@ -381,16 +385,16 @@ class PhysicalAssemblyTests(unittest.TestCase):
         self.assertEqual(validated_scene["assembly_sha256"], assembly.assembly_sha256)
 
     def test_fixed_attachment_places_child_from_connector_frames(self) -> None:
-        base = ComponentPackageSpec.from_dict(
-            part_package("base-package", [connector("mount", x=1.0)])
+        base = ResolvedPartSpec.from_dict(
+            resolved_part("base-package", [connector("mount", x=1.0)])
         )
-        arm = ComponentPackageSpec.from_dict(
-            part_package("arm-package", [connector("mount", x=-1.0)])
+        arm = ResolvedPartSpec.from_dict(
+            resolved_part("arm-package", [connector("mount", x=-1.0)])
         )
         spec = contraption(
             [
-                {"id": "base", "package": base.id, "parameters": {"mass_kg": 2.0}},
-                {"id": "arm", "package": arm.id},
+                {"id": "base", "part": base.id, "parameters": {"mass_kg": 2.0}},
+                {"id": "arm", "part": arm.id},
             ],
             [attachment("base-arm", "base.mount", "arm.mount")],
         )
@@ -414,14 +418,14 @@ class PhysicalAssemblyTests(unittest.TestCase):
             scene_component["id"] = "mutated"
 
     def test_revolute_configuration_changes_pose_not_assembly_hash(self) -> None:
-        base = ComponentPackageSpec.from_dict(
-            part_package(
+        base = ResolvedPartSpec.from_dict(
+            resolved_part(
                 "base-package",
                 [connector("pivot", interface="rotational-shaft")],
             )
         )
-        arm = ComponentPackageSpec.from_dict(
-            part_package(
+        arm = ResolvedPartSpec.from_dict(
+            resolved_part(
                 "arm-package",
                 [
                     connector(
@@ -434,7 +438,7 @@ class PhysicalAssemblyTests(unittest.TestCase):
             )
         )
         spec = contraption(
-            [{"id": "base", "package": base.id}, {"id": "arm", "package": arm.id}],
+            [{"id": "base", "part": base.id}, {"id": "arm", "part": arm.id}],
             [
                 attachment(
                     "shoulder",
@@ -473,14 +477,14 @@ class PhysicalAssemblyTests(unittest.TestCase):
             )
 
     def test_cycle_and_disconnected_part_fail_loudly(self) -> None:
-        package = ComponentPackageSpec.from_dict(
-            part_package(
+        package = ResolvedPartSpec.from_dict(
+            resolved_part(
                 "node-package",
                 [connector("left", x=-0.1), connector("right", x=0.1)],
             )
         )
         components = [
-            {"id": name, "package": package.id} for name in ("base", "middle", "end")
+            {"id": name, "part": package.id} for name in ("base", "middle", "end")
         ]
         cycle = contraption(
             components,
@@ -498,11 +502,11 @@ class PhysicalAssemblyTests(unittest.TestCase):
             resolve_physical_assembly(disconnected, [package])
 
     def test_incompatible_and_unbound_connectors_fail_loudly(self) -> None:
-        base = ComponentPackageSpec.from_dict(
-            part_package("base-package", [connector("mount")])
+        base = ResolvedPartSpec.from_dict(
+            resolved_part("base-package", [connector("mount")])
         )
-        electrical = ComponentPackageSpec.from_dict(
-            part_package(
+        electrical = ResolvedPartSpec.from_dict(
+            resolved_part(
                 "electrical-package",
                 [
                     connector(
@@ -514,33 +518,33 @@ class PhysicalAssemblyTests(unittest.TestCase):
             )
         )
         spec = contraption(
-            [{"id": "base", "package": base.id}, {"id": "motor", "package": electrical.id}],
+            [{"id": "base", "part": base.id}, {"id": "motor", "part": electrical.id}],
             [attachment("invalid", "base.mount", "motor.mount")],
         )
         with self.assertRaisesRegex(ConnectorCompatibilityError, r"incompatible.*domains"):
             resolve_physical_assembly(spec, [base, electrical])
 
-        bound_base = ComponentPackageSpec.from_dict(
-            part_package(
+        bound_base = ResolvedPartSpec.from_dict(
+            resolved_part(
                 "bound-base",
                 [connector("mount", model_port="shaft")],
             )
         )
-        bound_arm = ComponentPackageSpec.from_dict(
-            part_package(
+        bound_arm = ResolvedPartSpec.from_dict(
+            resolved_part(
                 "bound-arm",
                 [connector("mount", model_port="shaft")],
             )
         )
         spec = contraption(
-            [{"id": "base", "package": bound_base.id}, {"id": "arm", "package": bound_arm.id}],
+            [{"id": "base", "part": bound_base.id}, {"id": "arm", "part": bound_arm.id}],
             [attachment("invalid-binding", "base.mount", "arm.mount")],
         )
         with self.assertRaisesRegex(ConnectorCompatibilityError, "requires model_port:null"):
             resolve_physical_assembly(spec, [bound_base, bound_arm])
 
-        unbound_wire = ComponentPackageSpec.from_dict(
-            part_package(
+        unbound_wire = ResolvedPartSpec.from_dict(
+            resolved_part(
                 "wire-package",
                 [
                     connector(
@@ -557,7 +561,7 @@ class PhysicalAssemblyTests(unittest.TestCase):
             )
         )
         power_spec = contraption(
-            [{"id": "base", "package": unbound_wire.id}],
+            [{"id": "base", "part": unbound_wire.id}],
             [
                 {
                     "id": "power",
@@ -571,8 +575,8 @@ class PhysicalAssemblyTests(unittest.TestCase):
             resolve_physical_assembly(power_spec, [unbound_wire])
 
     def test_electrical_boundary_is_nonspatial_but_model_connected(self) -> None:
-        board = ComponentPackageSpec.from_dict(
-            part_package(
+        board = ResolvedPartSpec.from_dict(
+            resolved_part(
                 "board-package",
                 [
                     connector(
@@ -584,11 +588,11 @@ class PhysicalAssemblyTests(unittest.TestCase):
                 ],
             )
         )
-        boundary = ComponentPackageSpec.from_dict(boundary_package())
+        boundary = ResolvedPartSpec.from_dict(boundary_part())
         spec = contraption(
             [
-                {"id": "base", "package": board.id},
-                {"id": "reference", "package": boundary.id},
+                {"id": "base", "part": board.id},
+                {"id": "reference", "part": boundary.id},
             ],
             [
                 {
@@ -607,7 +611,7 @@ class PhysicalAssemblyTests(unittest.TestCase):
         )
 
     def test_geometry_bound_instance_override_disagreement_fails(self) -> None:
-        raw = part_package("wheel-package", [])
+        raw = resolved_part("wheel-package", [])
         geometry = raw["bodies"][0]["solids"][0]["geometry"]  # type: ignore[index]
         geometry.update({"kind": "cylinder", "dimensions_m": [0.07, 0.07, 0.02]})
         raw["parameter_bindings"] = [
@@ -623,19 +627,19 @@ class PhysicalAssemblyTests(unittest.TestCase):
                 },
             }
         ]
-        package = ComponentPackageSpec.from_dict(raw)
+        package = ResolvedPartSpec.from_dict(raw)
         spec = contraption(
-            [{"id": "base", "package": package.id, "parameters": {"radius": 0.04}}],
+            [{"id": "base", "part": package.id, "parameters": {"radius": 0.04}}],
             [],
         )
         with self.assertRaisesRegex(
-            PhysicalSpecError, r"radius.*disagrees with package physical measure"
+            PhysicalSpecError, r"radius.*disagrees with part physical measure"
         ):
             resolve_physical_assembly(spec, [package])
 
     def test_counter_rotating_virtual_hub_preserves_mechanical_power_frame(self) -> None:
-        base = ComponentPackageSpec.from_dict(
-            part_package(
+        base = ResolvedPartSpec.from_dict(
+            resolved_part(
                 "base-package",
                 [
                     connector(
@@ -653,7 +657,7 @@ class PhysicalAssemblyTests(unittest.TestCase):
                 ],
             )
         )
-        wheel_raw = part_package(
+        wheel_raw = resolved_part(
             "wheel-package",
             [
                     connector(
@@ -672,7 +676,7 @@ class PhysicalAssemblyTests(unittest.TestCase):
                 ),
             ],
         )
-        wheel = ComponentPackageSpec.from_dict(wheel_raw)
+        wheel = ResolvedPartSpec.from_dict(wheel_raw)
         joint = attachment(
             "wheel-joint",
             "base.shaft",
@@ -689,7 +693,7 @@ class PhysicalAssemblyTests(unittest.TestCase):
             "endpoints": ["base.drive", "wheel.translation"],
         }
         spec = contraption(
-            [{"id": "base", "package": base.id}, {"id": "wheel", "package": wheel.id}],
+            [{"id": "base", "part": base.id}, {"id": "wheel", "part": wheel.id}],
             [joint, power],
         )
         assembly = resolve_physical_assembly(
@@ -719,20 +723,20 @@ class PhysicalAssemblyTests(unittest.TestCase):
         ):
             resolve_physical_assembly(
                 spec,
-                [base, ComponentPackageSpec.from_dict(no_counter)],
+                [base, ResolvedPartSpec.from_dict(no_counter)],
                 {"wheel.angle": 0.7},
             )
 
     def test_runtime_boundary_validation_detects_pose_drift(self) -> None:
-        base = ComponentPackageSpec.from_dict(
-            part_package("base-package", [connector("mount", x=1.0)])
+        base = ResolvedPartSpec.from_dict(
+            resolved_part("base-package", [connector("mount", x=1.0)])
         )
-        arm = ComponentPackageSpec.from_dict(
-            part_package("arm-package", [connector("mount", x=-1.0)])
+        arm = ResolvedPartSpec.from_dict(
+            resolved_part("arm-package", [connector("mount", x=-1.0)])
         )
         assembly = resolve_physical_assembly(
             contraption(
-                [{"id": "base", "package": base.id}, {"id": "arm", "package": arm.id}],
+                [{"id": "base", "part": base.id}, {"id": "arm", "part": arm.id}],
                 [attachment("base-arm", "base.mount", "arm.mount")],
             ),
             [base, arm],
@@ -746,7 +750,7 @@ class PhysicalAssemblyTests(unittest.TestCase):
             validate_connector_coincidence(
                 assembly.components,
                 assembly.attachments,
-                assembly.packages,
+                assembly.parts,
                 drifted,
                 {},
             )
@@ -754,17 +758,17 @@ class PhysicalAssemblyTests(unittest.TestCase):
             validate_connector_coincidence(
                 assembly.components,
                 assembly.attachments,
-                assembly.packages,
+                assembly.parts,
                 {"base": assembly.component_pose("base")},
                 {},
             )
 
     def test_connection_metadata_cannot_hide_untyped_physical_semantics(self) -> None:
-        base = ComponentPackageSpec.from_dict(
-            part_package("base-package", [connector("mount")])
+        base = ResolvedPartSpec.from_dict(
+            resolved_part("base-package", [connector("mount")])
         )
-        arm = ComponentPackageSpec.from_dict(
-            part_package("arm-package", [connector("mount")])
+        arm = ResolvedPartSpec.from_dict(
+            resolved_part("arm-package", [connector("mount")])
         )
         connection = attachment("base-arm", "base.mount", "arm.mount")
         connection["metadata"] = {"fastener": "M3", "axis": "+z"}
@@ -772,17 +776,17 @@ class PhysicalAssemblyTests(unittest.TestCase):
             resolve_physical_assembly(
                 contraption(
                     [
-                        {"id": "base", "package": base.id},
-                        {"id": "arm", "package": arm.id},
+                        {"id": "base", "part": base.id},
+                        {"id": "arm", "part": arm.id},
                     ],
                     [connection],
                 ),
                 [base, arm],
             )
     def test_scenario_inputs_invalidate_hash_but_runtime_configuration_does_not(self) -> None:
-        package = ComponentPackageSpec.from_dict(part_package("base-package", []))
+        package = ResolvedPartSpec.from_dict(resolved_part("base-package", []))
         original = contraption(
-            [{"id": "base", "package": package.id, "parameters": {"mass_kg": 2.0}}],
+            [{"id": "base", "part": package.id, "parameters": {"mass_kg": 2.0}}],
             [],
         )
         first = resolve_physical_assembly(original, [package])
@@ -799,12 +803,12 @@ class PhysicalAssemblyTests(unittest.TestCase):
                 first.assembly_sha256,
             )
 
-        changed_geometry = ComponentPackageSpec.from_dict(
-            part_package("base-package", [], dimensions=(0.3, 0.1, 0.05))
+        changed_geometry = ResolvedPartSpec.from_dict(
+            resolved_part("base-package", [], dimensions=(0.3, 0.1, 0.05))
         )
-        changed_model_data = part_package("base-package", [])
+        changed_model_data = resolved_part("base-package", [])
         changed_model_data["model"]["sha256"] = "sha256:" + "1" * 64  # type: ignore[index]
-        changed_model = ComponentPackageSpec.from_dict(changed_model_data)
+        changed_model = ResolvedPartSpec.from_dict(changed_model_data)
         for changed_package in (changed_geometry, changed_model):
             self.assertNotEqual(
                 resolve_physical_assembly(original, [changed_package]).assembly_sha256,

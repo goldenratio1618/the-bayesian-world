@@ -131,7 +131,7 @@ python -m http.server 8000 --directory outputs/scanner_demo/viewer
 ```
 
 Open <http://127.0.0.1:8000>. The simulator and viewer resolve the same
-contraption/package/PMDL/controller closure and require the same assembly hash.
+contraption/catalog-instantiation/PMDL/controller closure and require the same assembly hash.
 The browser is display-only: it does not infer placement or execute a second
 model. The CLI reconstructs poses from the trajectory's exact per-sample states
 through that resolved assembly; detached scene JSON is not an admitted input.
@@ -164,7 +164,7 @@ it in a local `.env` file. The CLI searches the repository and then its parent
 directory, but requires `--env-file` if both locations contain a file:
 
 ```bash
-contraption agent-canary --kind classification --env-file ../.env
+contraption agent-canary --kind both --env-file ../.env
 contraption agent-run classification-all --env-file ../.env
 ```
 

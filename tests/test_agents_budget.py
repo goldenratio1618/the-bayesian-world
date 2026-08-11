@@ -11,7 +11,7 @@ import types
 import unittest
 from unittest import mock
 
-from contraption.agents import (
+from contraption.part_import.agents import (
     AgentLimits,
     CLASSIFICATION_SCHEMA,
     ClassificationAgent,
@@ -22,9 +22,10 @@ from contraption.agents import (
     run_modeling_proposal,
     validate_classification_proposal,
 )
-from contraption.budget import BudgetExceeded, BudgetLedger, TokenPricing, Usage
+from contraption.part_import.budget import BudgetExceeded, BudgetLedger, TokenPricing, Usage
+from contraption.catalog.interfaces import ModelInterfaceCatalog, interface_paths, load_interface_catalog
 from contraption.cli import _agent_key, _default_dotenv_path, _torch_diagnostics, build_parser
-from contraption.model_validation_tool import (
+from contraption.part_import.model_validation_tool import (
     assert_workspace_integrity,
     validate_candidate,
     validation_activity,
@@ -33,7 +34,8 @@ from contraption.model_validation_tool import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-TAXONOMY_PATH = PROJECT_ROOT / "data" / "taxonomy.json"
+CATALOG_ROOT = PROJECT_ROOT / "model_catalog"
+INTERFACE_DATA = load_interface_catalog(CATALOG_ROOT).to_dict()
 
 
 class _UsageDetails:
@@ -53,7 +55,7 @@ def _classification_value(**overrides) -> dict:
         "reuse_path": ["resistor", "fixed-resistor"],
         "new_nodes": [],
         "category": "resistor",
-        "subcategory": "fixed-resistor",
+        "device": "fixed-resistor",
         "rationale": "existing contract fits",
         "uncertainties": [],
     }
@@ -90,6 +92,28 @@ def _modeling_value(
     return {
         "summary": "modeled the authoritative target",
         "artifacts": [{"path": path, "content": content}],
+        "assumptions": [],
+        "evidence": ["fixture evidence"],
+    }
+
+
+def _canary_modeling_value() -> dict:
+    device = Path("electrical/resistors/fixed_resistors")
+    instance = device / "instantiations/generic-100ohm-resistor"
+    paths = (
+        device / "resistor.pmdl",
+        instance / "static.part",
+        instance / "v1.model",
+    )
+    return {
+        "summary": "modeled the authoritative target",
+        "artifacts": [
+            {
+                "path": path.as_posix(),
+                "content": (CATALOG_ROOT / path).read_text(encoding="utf-8"),
+            }
+            for path in paths
+        ],
         "assumptions": [],
         "evidence": ["fixture evidence"],
     }
@@ -151,11 +175,11 @@ def _real_modeling_inputs() -> ModelingInputs:
     return ModelingInputs(
         constraints=PROJECT_ROOT / "prompts" / "model_constraints.md",
         gold_templates=(
-            PROJECT_ROOT / "models" / "electrical" / "resistor.pmdl",
-            PROJECT_ROOT / "models" / "mechanical" / "rigid_body_planar.pmdl",
+            CATALOG_ROOT / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl",
+            CATALOG_ROOT / "mechanical" / "inert_objects" / "planar_rigid_bodies" / "rigid_body_planar.pmdl",
         ),
-        taxonomy=TAXONOMY_PATH,
-        direct_hierarchy=(PROJECT_ROOT / "models" / "electrical" / "dc_motor.pmdl",),
+        interfaces=interface_paths(CATALOG_ROOT),
+        direct_hierarchy=(CATALOG_ROOT / "electromechanical" / "motors" / "brushed_dc_motors" / "dc_motor.pmdl",),
         component_information=(
             PROJECT_ROOT
             / "examples"
@@ -185,7 +209,7 @@ class BudgetTests(unittest.TestCase):
             agent = ClassificationAgent(ledger)
             result, usage, charged = agent.classify(
                 {"name": "10 ohm resistor"},
-                json.loads(TAXONOMY_PATH.read_text(encoding="utf-8")),
+                INTERFACE_DATA,
                 client=_Client(),
             )
             self.assertEqual(result["category"], "resistor")
@@ -203,7 +227,7 @@ class BudgetTests(unittest.TestCase):
             )
             agent.classify(
                 {"name": "10 ohm resistor"},
-                json.loads(TAXONOMY_PATH.read_text(encoding="utf-8")),
+                INTERFACE_DATA,
                 client=client,
                 canary=True,
             )
@@ -211,13 +235,13 @@ class BudgetTests(unittest.TestCase):
 
     def test_classifier_prompt_states_machine_identifier_grammar(self):
         prompt = ClassificationAgent.system_prompt(
-            json.loads(TAXONOMY_PATH.read_text(encoding="utf-8"))
+            INTERFACE_DATA
         )
         self.assertIn("^[A-Za-z][A-Za-z0-9_.-]*$", prompt)
         self.assertIn("newly invented identifiers in lowercase kebab-case", prompt)
         self.assertIn("canonical_name is the separate human-readable display name", prompt)
         self.assertIn("must never be empty", prompt)
-        self.assertIn("domain ids never belong in category, subcategory, or reuse_path", prompt)
+        self.assertIn("domain ids never belong in category, device, or reuse_path", prompt)
         self.assertIn("Allowed existing root category ids are exactly", prompt)
         self.assertIn("Domain ids are exactly", prompt)
         self.assertIn('"voltage-source"', prompt)
@@ -241,6 +265,13 @@ class BudgetTests(unittest.TestCase):
             ModelingAgent._safe_relative("components/motor.pmdl"),
             Path("components") / "motor.pmdl",
         )
+
+    def test_modeling_prompt_makes_catalog_relative_paths_unambiguous(self):
+        prompt = ModelingAgent.prompt("target.json")
+        self.assertIn("candidate/<physical-domain>/<category>[/<device>]", prompt)
+        self.assertIn("never candidate/model_catalog/", prompt)
+        self.assertIn("omit both candidate/ and model_catalog/", prompt)
+        self.assertIn("static.part and .model files as exact record-shape examples", prompt)
 
     def test_doctor_reports_explicit_torch_cuda_details_and_errors(self):
         cuda = types.SimpleNamespace(
@@ -327,19 +358,20 @@ class BudgetTests(unittest.TestCase):
 class ClassificationSemanticTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.taxonomy = json.loads(TAXONOMY_PATH.read_text(encoding="utf-8"))
+        cls.interface_catalog = INTERFACE_DATA
 
-    def test_existing_and_genuinely_new_contiguous_paths_are_valid(self):
+    def test_existing_and_genuinely_new_device_paths_are_valid(self):
         self.assertEqual(
-            validate_classification_proposal(_classification_value(), self.taxonomy),
+            validate_classification_proposal(_classification_value(), self.interface_catalog),
             _classification_value(),
         )
         proposed = _classification_value(
             canonical_name="Thin-film fixed resistor",
-            subcategory="thin-film-resistor",
+            reuse_path=["resistor"],
+            device="thin-film-resistor",
             new_nodes=[
                 {
-                    "parent": "fixed-resistor",
+                    "parent": "resistor",
                     "label": "thin-film-resistor",
                     "contract_change": False,
                     "model_specificity_reason": "Adds thin-film temperature and noise parameters.",
@@ -347,29 +379,16 @@ class ClassificationSemanticTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            validate_classification_proposal(proposed, self.taxonomy), proposed
+            validate_classification_proposal(proposed, self.interface_catalog), proposed
         )
-        chained = _classification_value(
-            canonical_name="Precision thin-film fixed resistor",
-            subcategory="precision-thin-film-resistor",
-            new_nodes=[
-                {
-                    "parent": "fixed-resistor",
-                    "label": "thin-film-resistor",
-                    "contract_change": False,
-                    "model_specificity_reason": "Adds thin-film temperature and noise parameters.",
-                },
-                {
-                    "parent": "thin-film-resistor",
-                    "label": "precision-thin-film-resistor",
-                    "contract_change": False,
-                    "model_specificity_reason": "Adds precision-grade drift and tolerance parameters.",
-                },
-            ],
-        )
-        self.assertEqual(
-            validate_classification_proposal(chained, self.taxonomy), chained
-        )
+
+    def test_interface_catalog_rejects_semantically_parallel_categories(self):
+        duplicate = json.loads(json.dumps(self.interface_catalog))
+        clone = dict(duplicate["categories"][0])
+        clone.update({"id": "resistor-canary-import", "name": "Resistor"})
+        duplicate["categories"].append(clone)
+        with self.assertRaisesRegex(ValueError, "parallel semantic identities"):
+            ModelInterfaceCatalog.from_dict(duplicate)
 
     def test_semantic_mismatches_fail_deterministically(self):
         cases = {
@@ -377,25 +396,25 @@ class ClassificationSemanticTests(unittest.TestCase):
             "missing intersection physics": _classification_value(
                 domains=["electrical", "electromechanical"]
             ),
-            "noncontiguous ancestry": _classification_value(
-                reuse_path=["resistor", "camera-mass"]
-            ),
+            "noncontiguous ancestry": _classification_value(reuse_path=["fixed-resistor"]),
             "empty canonical": _classification_value(canonical_name="  "),
             "undeclared new terminal": _classification_value(
-                subcategory="thin-film-resistor"
+                device="thin-film-resistor"
             ),
             "colliding new node": _classification_value(
+                reuse_path=["resistor"],
                 new_nodes=[
                     {
-                        "parent": "fixed-resistor",
+                        "parent": "resistor",
                         "label": "fixed_resistor",
                         "contract_change": False,
                         "model_specificity_reason": "Attempts to duplicate an existing node.",
                     }
                 ],
-                subcategory="fixed_resistor",
+                device="fixed_resistor",
             ),
             "invalid proposed parent": _classification_value(
+                reuse_path=["resistor"],
                 new_nodes=[
                     {
                         "parent": "motor",
@@ -404,38 +423,39 @@ class ClassificationSemanticTests(unittest.TestCase):
                         "model_specificity_reason": "Adds thin-film temperature and noise parameters.",
                     }
                 ],
-                subcategory="thin-film-resistor",
+                device="thin-film-resistor",
             ),
-            "branched proposed nodes": _classification_value(
+            "multiple proposed devices": _classification_value(
+                reuse_path=["resistor"],
                 new_nodes=[
                     {
-                        "parent": "fixed-resistor",
+                        "parent": "resistor",
                         "label": "thin-film-resistor",
                         "contract_change": False,
                         "model_specificity_reason": "Adds thin-film temperature and noise parameters.",
                     },
                     {
-                        "parent": "fixed-resistor",
+                        "parent": "resistor",
                         "label": "carbon-film-resistor",
                         "contract_change": False,
                         "model_specificity_reason": "Adds carbon-film temperature and noise parameters.",
                     },
                 ],
-                subcategory="thin-film-resistor",
+                device="thin-film-resistor",
             ),
         }
         for label, proposal in cases.items():
             with self.subTest(label=label), self.assertRaises(ValueError):
-                validate_classification_proposal(proposal, self.taxonomy)
+                validate_classification_proposal(proposal, self.interface_catalog)
 
     def test_invalid_provider_output_is_charged_and_not_returned(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = BudgetLedger(Path(tmp) / "ledger.json", 100.0)
             agent = ClassificationAgent(ledger)
-            with self.assertRaisesRegex(ValueError, "unknown taxonomy domains"):
+            with self.assertRaisesRegex(ValueError, "unknown physical domains"):
                 agent.classify(
                     {"name": "bad"},
-                    self.taxonomy,
+                    self.interface_catalog,
                     client=_Client([_classification_value(domains=["unknown"])]),
                 )
             snapshot = ledger.snapshot()
@@ -448,8 +468,6 @@ class AgentWorkflowTests(unittest.TestCase):
     def test_classification_batch_persists_and_resumes_exact_inputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            taxonomy = root / "taxonomy.json"
-            taxonomy.write_bytes(TAXONOMY_PATH.read_bytes())
             components = []
             for name in ("a", "b"):
                 path = root / f"{name}.json"
@@ -462,12 +480,12 @@ class AgentWorkflowTests(unittest.TestCase):
             output = root / "proposals"
 
             first = run_classification_batch(
-                agent, components, taxonomy, output, client=client
+                agent, components, CATALOG_ROOT, output, client=client
             )
             self.assertEqual(client.responses.calls, 2)
             self.assertTrue(all(item["status"] == "completed" for item in first))
             second = run_classification_batch(
-                agent, components, taxonomy, output, client=client
+                agent, components, CATALOG_ROOT, output, client=client
             )
             self.assertEqual(client.responses.calls, 2)
             self.assertTrue(
@@ -478,7 +496,7 @@ class AgentWorkflowTests(unittest.TestCase):
                 json.dumps({"name": "b", "revision": 2}) + "\n", encoding="utf-8"
             )
             third = run_classification_batch(
-                agent, components, taxonomy, output, client=client
+                agent, components, CATALOG_ROOT, output, client=client
             )
             self.assertEqual(client.responses.calls, 3)
             self.assertEqual(
@@ -486,7 +504,7 @@ class AgentWorkflowTests(unittest.TestCase):
                 ["skipped_exact_input", "completed"],
             )
             forced = run_classification_batch(
-                agent, components, taxonomy, output, force=True, client=client
+                agent, components, CATALOG_ROOT, output, force=True, client=client
             )
             self.assertEqual(client.responses.calls, 5)
             self.assertTrue(all(item["status"] == "completed" for item in forced))
@@ -501,8 +519,6 @@ class AgentWorkflowTests(unittest.TestCase):
     def test_classification_batch_stops_at_first_invalid_result(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            taxonomy = root / "taxonomy.json"
-            taxonomy.write_bytes(TAXONOMY_PATH.read_bytes())
             components = []
             for name in ("a", "b", "c"):
                 path = root / f"{name}.json"
@@ -514,12 +530,12 @@ class AgentWorkflowTests(unittest.TestCase):
             output = root / "proposals"
             with self.assertRaisesRegex(
                 RuntimeError,
-                "classification target 'b'.*unknown taxonomy domains",
+                "classification target 'b'.*unknown physical domains",
             ):
                 run_classification_batch(
                     ClassificationAgent(BudgetLedger(root / "ledger.json", 100.0)),
                     components,
-                    taxonomy,
+                    CATALOG_ROOT,
                     output,
                     client=client,
                 )
@@ -543,28 +559,11 @@ class AgentWorkflowTests(unittest.TestCase):
                 max_input_tokens=2_000,
                 api_key=secret,
             )
-            inputs = ModelingInputs(
-                constraints=PROJECT_ROOT / "prompts" / "model_constraints.md",
-                gold_templates=(
-                    PROJECT_ROOT / "models" / "electrical" / "resistor.pmdl",
-                    PROJECT_ROOT / "models" / "mechanical" / "rigid_body_planar.pmdl",
-                ),
-                taxonomy=TAXONOMY_PATH,
-                direct_hierarchy=(
-                    PROJECT_ROOT / "models" / "electrical" / "dc_motor.pmdl",
-                ),
-                component_information=(
-                    PROJECT_ROOT
-                    / "examples"
-                    / "scanner_robot"
-                    / "component_inputs"
-                    / "romi_drive.json"
-                ),
-            )
+            inputs = _real_modeling_inputs()
             value = _modeling_value(
-                path="components/romi_drive.pmdl",
+                path="electrical/resistors/fixed_resistors/resistor.pmdl",
                 content=(
-                    PROJECT_ROOT / "models" / "electrical" / "resistor.pmdl"
+                    CATALOG_ROOT / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl"
                 ).read_text(encoding="utf-8"),
             )
             process = subprocess.CompletedProcess(
@@ -575,7 +574,7 @@ class AgentWorkflowTests(unittest.TestCase):
             )
 
             with mock.patch(
-                "contraption.agents.subprocess.run", return_value=process
+                "contraption.part_import.agents.subprocess.run", return_value=process
             ) as run_mock:
                 first = run_modeling_proposal(
                     agent, inputs, "romi_drive", output
@@ -585,33 +584,42 @@ class AgentWorkflowTests(unittest.TestCase):
                 )
                 staged_model = (
                     Path(first["staging_artifacts"])
-                    / "components"
-                    / "romi_drive.pmdl"
+                    / "electrical"
+                    / "resistors"
+                    / "fixed_resistors"
+                    / "resistor.pmdl"
                 )
-                staged_model.write_bytes(
-                    (PROJECT_ROOT / "models" / "electrical" / "capacitor.pmdl").read_bytes()
+                (staged_model.parent / "notes.md").write_text(
+                    "validated but different recovered proposal\n", encoding="utf-8"
                 )
                 with self.assertRaisesRegex(
                     FileExistsError, "differ from recovered output"
                 ):
                     run_modeling_proposal(agent, inputs, "romi_drive", output)
 
-            self.assertEqual(run_mock.call_count, 1)
-            command = run_mock.call_args.args[0]
+            self.assertEqual(run_mock.call_count, 2)
+            login_call, execution_call = run_mock.call_args_list
+            self.assertEqual(
+                login_call.args[0], ["codex-fixture", "login", "--with-api-key"]
+            )
+            self.assertEqual(login_call.kwargs["input"], secret)
+            command = execution_call.args[0]
             self.assertEqual(command[command.index("--sandbox") + 1], "workspace-write")
-            self.assertIn("python -I -m contraption.model_validation_tool", command[-1])
-            child_env = run_mock.call_args.kwargs["env"]
+            self.assertIn("python -I -m contraption.part_import.model_validation_tool", command[-1])
+            child_env = execution_call.kwargs["env"]
             self.assertEqual(
                 Path(child_env["PATH"].split(os.pathsep)[0]),
                 Path(sys.executable).absolute().parent,
             )
             self.assertEqual(child_env["PYTHONSAFEPATH"], "1")
+            self.assertNotIn("OPENAI_API_KEY", child_env)
+            self.assertFalse(Path(child_env["CODEX_HOME"]).exists())
             self.assertEqual(first["status"], "completed")
             self.assertEqual(second["status"], "skipped_exact_input")
             self.assertEqual(first["validation_activity"]["logged_calls"], 0)
             self.assertFalse(first["promoted"])
             artifacts = Path(first["staging_artifacts"])
-            self.assertTrue((artifacts / "components" / "romi_drive.pmdl").is_file())
+            self.assertTrue((artifacts / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl").is_file())
             receipt = json.loads(
                 (output / "romi_drive.json").read_text(encoding="utf-8")
             )
@@ -627,6 +635,43 @@ class AgentWorkflowTests(unittest.TestCase):
                 ),
             )
 
+    def test_modeling_api_key_login_is_ephemeral_and_pre_dispatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            secret = "temporary-login-secret"
+            ledger = BudgetLedger(root / "ledger.json", 1.0)
+            agent = ModelingAgent(
+                ledger,
+                root / "staging",
+                codex_binary="codex-fixture",
+                rollout_token_limit=1_000,
+                max_input_tokens=2_000,
+                api_key=secret,
+            )
+            login_failure = subprocess.CompletedProcess(
+                args=["codex-fixture", "login", "--with-api-key"],
+                returncode=1,
+                stdout="",
+                stderr=f"login rejected {secret}",
+            )
+
+            with mock.patch(
+                "contraption.part_import.agents.subprocess.run",
+                return_value=login_failure,
+            ) as run_mock:
+                with self.assertRaisesRegex(RuntimeError, "API-key login failed") as caught:
+                    agent.run(_real_modeling_inputs())
+
+            self.assertNotIn(secret, str(caught.exception))
+            self.assertEqual(run_mock.call_count, 1)
+            call = run_mock.call_args
+            self.assertEqual(call.kwargs["input"], secret)
+            self.assertNotIn("OPENAI_API_KEY", call.kwargs["env"])
+            self.assertFalse(Path(call.kwargs["env"]["CODEX_HOME"]).exists())
+            snapshot = ledger.snapshot()
+            self.assertEqual(snapshot["spent_usd"], 0.0)
+            self.assertEqual(snapshot["events"][-1]["status"], "cancelled_before_dispatch")
+
 
 class ModelingValidationToolTests(unittest.TestCase):
     def test_drafts_validate_iteratively_with_detailed_feedback_and_call_counts(self):
@@ -639,6 +684,15 @@ class ModelingValidationToolTests(unittest.TestCase):
             self.assertTrue((workspace.parent / "inputs").is_dir())
             integrity = assert_workspace_integrity(workspace)
             self.assertGreaterEqual(len(integrity["checked"]), 8)
+            instructions = (workspace / "AGENTS.md").read_text(encoding="utf-8")
+            self.assertIn(
+                "model_catalog/electrical/resistors/fixed_resistors/resistor.pmdl",
+                instructions,
+            )
+            manifest = json.loads(
+                (workspace / "INPUT_MANIFEST.json").read_text(encoding="utf-8")
+            )
+            self.assertTrue(all(item["source_label"] for item in manifest))
 
             candidate = workspace / "candidate" / "romi_drive.pmdl"
             candidate.write_text("{}\n", encoding="utf-8")
@@ -649,7 +703,7 @@ class ModelingValidationToolTests(unittest.TestCase):
             self.assertIn("candidate/romi_drive.pmdl", invalid["issues"][0]["path"])
 
             candidate.write_bytes(
-                (PROJECT_ROOT / "models" / "electrical" / "resistor.pmdl").read_bytes()
+                (CATALOG_ROOT / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl").read_bytes()
             )
             valid = validate_candidate("candidate/romi_drive.pmdl", workspace=workspace)
             self.assertTrue(valid["valid"])
@@ -667,7 +721,7 @@ class ModelingValidationToolTests(unittest.TestCase):
             workspace = agent.prepare_workspace(_real_modeling_inputs(), "validator-run")
             outside = workspace / "outside.pmdl"
             outside.write_bytes(
-                (PROJECT_ROOT / "models" / "electrical" / "resistor.pmdl").read_bytes()
+                (CATALOG_ROOT / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl").read_bytes()
             )
 
             escaped = validate_candidate("outside.pmdl", workspace=workspace)
@@ -683,7 +737,7 @@ class ModelingValidationToolTests(unittest.TestCase):
             protected.write_text("tampered\n", encoding="utf-8")
             candidate = workspace / "candidate" / "safe.pmdl"
             candidate.write_bytes(
-                (PROJECT_ROOT / "models" / "electrical" / "resistor.pmdl").read_bytes()
+                (CATALOG_ROOT / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl").read_bytes()
             )
             tampered = validate_candidate("candidate/safe.pmdl", workspace=workspace)
             self.assertFalse(tampered["valid"])
@@ -712,7 +766,7 @@ class ModelingValidationToolTests(unittest.TestCase):
                     stderr="",
                 )
 
-            with mock.patch("contraption.agents.subprocess.run", side_effect=tampering_run):
+            with mock.patch("contraption.part_import.agents.subprocess.run", side_effect=tampering_run):
                 with self.assertRaisesRegex(ValueError, "input integrity failed"):
                     agent.run(_real_modeling_inputs(), canary=True)
             self.assertEqual(ledger.snapshot()["events"][-1]["status"], "failed_after_dispatch")
@@ -723,17 +777,17 @@ class ModelingRecoveryTests(unittest.TestCase):
     def test_promotion_uses_validated_atomic_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            proposed = root / "proposed" / "nested"
+            proposed = root / "proposed" / "electrical" / "resistors" / "fixed_resistors"
             proposed.mkdir(parents=True)
-            source = proposed / "component.pmdl"
+            source = proposed / "resistor.pmdl"
             source.write_bytes(
-                (PROJECT_ROOT / "models" / "electrical" / "resistor.pmdl").read_bytes()
+                (CATALOG_ROOT / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl").read_bytes()
             )
             registry = root / "registry"
 
-            written = ModelingAgent.promote(proposed.parent, registry)
+            written = ModelingAgent.promote(root / "proposed", registry)
 
-            target = registry / "nested" / "component.pmdl"
+            target = registry / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl"
             self.assertEqual(written, [target])
             self.assertEqual(target.read_bytes(), source.read_bytes())
             self.assertFalse(any(registry.rglob("*.tmp")))
@@ -742,10 +796,10 @@ class ModelingRecoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             proposed = root / "proposed"
-            proposed.mkdir()
-            model = proposed / "component.pmdl"
+            model = proposed / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl"
+            model.parent.mkdir(parents=True)
             model.write_bytes(
-                (PROJECT_ROOT / "models" / "electrical" / "resistor.pmdl").read_bytes()
+                (CATALOG_ROOT / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl").read_bytes()
             )
             ModelingAgent.validate_artifacts(proposed)
             model.write_text('{"format":"pmdl-1","tampered":true}\n', encoding="utf-8")
@@ -753,21 +807,39 @@ class ModelingRecoveryTests(unittest.TestCase):
             registry = root / "registry"
             with self.assertRaises(ValueError):
                 ModelingAgent.promote(proposed, registry)
-            self.assertFalse((registry / "component.pmdl").exists())
+            self.assertFalse(
+                (registry / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl").exists()
+            )
 
-    def test_canary_contract_requires_one_pmdl(self):
-        with self.assertRaisesRegex(ValueError, "exactly one"):
+    def test_canary_contract_requires_static_part_and_model_instance(self):
+        with self.assertRaisesRegex(ValueError, "static.part"):
             ModelingAgent._validate_canary_value(
                 {
                     **_modeling_value(),
                     "artifacts": [
-                        {"path": "one.pmdl", "content": "{}"},
-                        {"path": "two.pmdl", "content": "{}"},
+                        {"path": "electrical/resistors/fixed_resistors/resistor.pmdl", "content": "{}"},
                     ],
                 }
             )
-        with self.assertRaisesRegex(ValueError, "must be a .pmdl"):
+        with self.assertRaisesRegex(ValueError, "static.part"):
             ModelingAgent._validate_canary_value(_modeling_value())
+
+    def test_instantiation_bundle_must_use_a_declared_contract_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            candidate = Path(tmp) / "candidate"
+            wrong_prefix = Path("electrical/resistor/fixed-resistor")
+            for artifact in _canary_modeling_value()["artifacts"]:
+                source_path = Path(artifact["path"])
+                if "instantiations" not in source_path.parts:
+                    continue
+                suffix = Path(
+                    *source_path.parts[source_path.parts.index("instantiations") :]
+                )
+                target = candidate / wrong_prefix / suffix
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(artifact["content"], encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "interface.pmdl"):
+                ModelingAgent.validate_artifacts(candidate)
 
     def test_recovers_completed_structured_event_in_existing_workspace(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -853,12 +925,7 @@ class ModelingRecoveryTests(unittest.TestCase):
             root = Path(tmp)
             staging = root / "staging"
             workspace = _prepared_workspace(staging, "modeling-run")
-            value = _modeling_value(
-                path="components/authoritative-target.pmdl",
-                content=(
-                    PROJECT_ROOT / "models" / "electrical" / "resistor.pmdl"
-                ).read_text(encoding="utf-8"),
-            )
+            value = _canary_modeling_value()
             stdout = _event_stream(value, include_usage=True)
             process = subprocess.CompletedProcess(
                 args=["codex"], returncode=73, stdout=stdout, stderr="rollout exhausted"
@@ -876,7 +943,7 @@ class ModelingRecoveryTests(unittest.TestCase):
             inputs = ModelingInputs(
                 constraints=Path("constraints.md"),
                 gold_templates=(Path("gold.pmdl"),),
-                taxonomy=Path("taxonomy.json"),
+                interfaces=(Path("interface.pmdl"),),
                 direct_hierarchy=(),
                 component_information=Path("authoritative-target.json"),
             )
@@ -887,13 +954,21 @@ class ModelingRecoveryTests(unittest.TestCase):
             with mock.patch.object(
                 agent, "prepare_workspace", return_value=workspace
             ), mock.patch(
-                "contraption.agents.subprocess.run", return_value=process
+                "contraption.part_import.agents.subprocess.run", return_value=process
             ) as run_mock:
                 artifacts, recovered, charged = agent.run(inputs, canary=True)
 
             self.assertEqual(recovered, value)
             self.assertTrue(
-                (artifacts / "components" / "authoritative-target.pmdl").is_file()
+                (
+                    artifacts
+                    / "electrical"
+                    / "resistors"
+                    / "fixed_resistors"
+                    / "instantiations"
+                    / "generic-100ohm-resistor"
+                    / "v1.model"
+                ).is_file()
             )
             self.assertAlmostEqual(charged, expected_charge)
             event = ledger.snapshot()["events"][-1]
@@ -901,7 +976,67 @@ class ModelingRecoveryTests(unittest.TestCase):
             self.assertIsNone(event["usage"])
             command = run_mock.call_args.args[0]
             self.assertIn("authoritative-target.json", command[-1])
-            self.assertIn("exactly one minimal valid .pmdl artifact for that target only", command[-1])
+            self.assertIn("exactly one minimal complete catalog import bundle", command[-1])
+
+    def test_nonzero_run_recovers_a_host_valid_candidate_without_final_message(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            staging = root / "staging"
+            workspace = _prepared_workspace(staging, "modeling-candidate-run")
+            value = _canary_modeling_value()
+            for artifact in value["artifacts"]:
+                target = workspace / "candidate" / artifact["path"]
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(artifact["content"], encoding="utf-8")
+            process = subprocess.CompletedProcess(
+                args=["codex"],
+                returncode=73,
+                stdout=_event_stream(),
+                stderr="rollout exhausted after bundle generation",
+            )
+            ledger = BudgetLedger(root / "ledger.json", limit_usd=1.0)
+            agent = ModelingAgent(
+                ledger,
+                staging,
+                codex_binary="codex-fixture",
+                rollout_token_limit=1_000,
+                max_input_tokens=2_000,
+            )
+            inputs = ModelingInputs(
+                constraints=Path("constraints.md"),
+                gold_templates=(Path("gold.pmdl"),),
+                interfaces=(Path("interface.pmdl"),),
+                direct_hierarchy=(),
+                component_information=Path("authoritative-target.json"),
+            )
+
+            with mock.patch.object(
+                agent, "prepare_workspace", return_value=workspace
+            ), mock.patch(
+                "contraption.part_import.agents.subprocess.run", return_value=process
+            ):
+                artifacts, recovered, _charged = agent.run(inputs, canary=True)
+
+            self.assertIn("Recovered complete candidate bundle", recovered["summary"])
+            self.assertEqual(
+                {item["path"] for item in recovered["artifacts"]},
+                {item["path"] for item in value["artifacts"]},
+            )
+            self.assertTrue(
+                (
+                    artifacts
+                    / "electrical"
+                    / "resistors"
+                    / "fixed_resistors"
+                    / "instantiations"
+                    / "generic-100ohm-resistor"
+                    / "v1.model"
+                ).is_file()
+            )
+            self.assertEqual(
+                ledger.snapshot()["events"][-1]["status"],
+                "recovered_after_nonzero_exit",
+            )
 
 
 if __name__ == "__main__":

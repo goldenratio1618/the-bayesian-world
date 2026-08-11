@@ -10,24 +10,27 @@ import unittest
 
 import numpy as np
 
-from contraption.dsl import (
+from contraption.physics.dsl import (
     DSLParseError, ExpressionTypeError, ModelRegistry, evaluate_expression,
     load_model, parse_expression, parse_model,
 )
-from contraption.specs import (
-    ComponentInstanceSpec, ConnectionSpec, ContraptionSpec, ControlBindingSpec,
-    GeometrySpec, ModelSpec, PortRef, SpecError, json_schema_for,
+from contraption.physics.specs import (
+    ComponentReferenceSpec, ConnectionSpec, ContraptionSpec, ControlBindingSpec,
+    ModelSpec, PortRef, SpecError, json_schema_for,
 )
-from contraption.taxonomy import Taxonomy, load_default_taxonomy
-from contraption.units import UnitError, parse_unit, require_compatible
-from contraption.validation import (
-    model_symbol_table, validate_contraption, validate_contraption_structure,
+from contraption.catalog.instantiations import PartInstantiationRegistry
+from contraption.catalog.interfaces import ModelInterfaceCatalog, load_interface_catalog
+from contraption.physics.units import UnitError, parse_unit, require_compatible
+from contraption.physics.validation import (
+    model_symbol_table, validate_contraption_structure,
     validate_model,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MODELS = ROOT / "models"
+MODELS = ROOT / "model_catalog"
+RESISTOR = MODELS / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl"
+CAPACITOR = MODELS / "electrical" / "capacitors" / "ceramic_capacitors" / "capacitor.pmdl"
 
 
 class UnitTests(unittest.TestCase):
@@ -48,7 +51,7 @@ class UnitTests(unittest.TestCase):
 
 class ExpressionTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.resistor = load_model(MODELS / "electrical" / "resistor.pmdl")
+        self.resistor = load_model(RESISTOR)
         self.symbols = model_symbol_table(self.resistor)
 
     def test_allowed_expression_evaluates(self) -> None:
@@ -83,7 +86,7 @@ class ExpressionTests(unittest.TestCase):
             parse_expression("tanh(0.1, 0.2)")
 
     def test_derivative_has_state_unit_per_second(self) -> None:
-        capacitor = load_model(MODELS / "electrical" / "capacitor.pmdl")
+        capacitor = load_model(CAPACITOR)
         result = parse_expression("der(charge)").infer_type(model_symbol_table(capacitor))
         self.assertEqual(result.dimension, parse_unit("A").dimension)
 
@@ -108,8 +111,10 @@ class ExpressionTests(unittest.TestCase):
 class ModelContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.taxonomy = load_default_taxonomy()
-        cls.paths = sorted(MODELS.rglob("*.pmdl"))
+        cls.interfaces = load_interface_catalog(MODELS)
+        cls.paths = sorted(
+            path for path in MODELS.rglob("*.pmdl") if path.name != "interface.pmdl"
+        )
 
     def test_every_gold_model_is_strict_and_valid(self) -> None:
         gold_paths = [
@@ -119,7 +124,7 @@ class ModelContractTests(unittest.TestCase):
         for path in gold_paths:
             with self.subTest(path=path):
                 model = load_model(path)
-                report = validate_model(model, self.taxonomy)
+                report = validate_model(model, self.interfaces)
                 self.assertTrue(report.valid, "\n".join(str(issue) for issue in report.issues))
                 self.assertEqual(model.metadata["descriptor_form"], "F(t,z,zdot,theta,u)=0")
                 self.assertTrue(model.metadata["gold"])
@@ -135,28 +140,28 @@ class ModelContractTests(unittest.TestCase):
                 self.assertTrue(report.valid, "\n".join(str(issue) for issue in report.issues))
                 self.assertEqual(model.metadata["descriptor_form"], "F(t,z,zdot,theta,u)=0")
 
-    def test_scanner_hbridge_has_truthful_electrical_taxonomy(self) -> None:
-        model = load_model(MODELS / "scanner" / "dual_hbridge.pmdl")
+    def test_hbridge_has_truthful_electrical_interface(self) -> None:
+        model = load_model(MODELS / "electrical" / "power_converters" / "dual_hbridges" / "dual_hbridge.pmdl")
         self.assertEqual(model.domains, ("electrical",))
-        report = validate_model(model, self.taxonomy)
+        report = validate_model(model, self.interfaces)
         self.assertTrue(report.valid, "\n".join(str(issue) for issue in report.issues))
 
     def test_serialization_is_deterministic_and_round_trips(self) -> None:
-        model = load_model(MODELS / "electrical" / "capacitor.pmdl")
+        model = load_model(CAPACITOR)
         canonical = model.to_json()
         self.assertEqual(canonical, model.to_json())
         self.assertEqual(ModelSpec.from_json(canonical), model)
         self.assertEqual(json.dumps(json.loads(canonical), sort_keys=True, separators=(",", ":")), canonical)
 
     def test_records_are_frozen_and_mappings_are_immutable(self) -> None:
-        model = load_model(MODELS / "electrical" / "resistor.pmdl")
+        model = load_model(RESISTOR)
         with self.assertRaises(FrozenInstanceError):
             model.parameters[0].default = 7.0  # type: ignore[misc]
         with self.assertRaises(TypeError):
             model.metadata["new"] = True  # type: ignore[index]
 
     def test_unknown_keys_are_rejected_at_every_level(self) -> None:
-        source = json.loads((MODELS / "electrical" / "resistor.pmdl").read_text(encoding="utf-8"))
+        source = json.loads(RESISTOR.read_text(encoding="utf-8"))
         source["physics_code"] = "print('unsafe')"
         with self.assertRaises(DSLParseError):
             parse_model(source)
@@ -166,7 +171,7 @@ class ModelContractTests(unittest.TestCase):
             parse_model(source)
 
     def test_universal_residual_evaluation(self) -> None:
-        model = load_model(MODELS / "electrical" / "resistor.pmdl")
+        model = load_model(RESISTOR)
         residual = model.evaluate_residual(
             0.0, [], [], {"resistance": 100.0},
             {"v_p": 5.0, "v_n": 0.0, "i_p": 0.05, "i_n": -0.05},
@@ -174,31 +179,26 @@ class ModelContractTests(unittest.TestCase):
         np.testing.assert_allclose(residual, np.zeros(2), atol=1e-14)
 
     def test_nonsmooth_residual_is_rejected(self) -> None:
-        source = json.loads((MODELS / "electrical" / "resistor.pmdl").read_text(encoding="utf-8"))
+        source = json.loads(RESISTOR.read_text(encoding="utf-8"))
         source["relations"][0]["expression"] = "v_p - v_n - resistance * abs(i_p)"
-        report = validate_model(parse_model(source), self.taxonomy)
+        report = validate_model(parse_model(source), self.interfaces)
         self.assertFalse(report.valid)
         self.assertIn("differentiability.nonsmooth", {issue.code for issue in report.errors})
 
     def test_registry_rejects_duplicate_ids(self) -> None:
-        model = load_model(MODELS / "electrical" / "resistor.pmdl")
+        model = load_model(RESISTOR)
         registry = ModelRegistry([model])
         with self.assertRaises(SpecError):
             registry.register(model)
 
 
 class ContraptionContractTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.registry = ModelRegistry()
-        cls.registry.load_directory(MODELS)
-
     def _spec(self) -> ContraptionSpec:
         return ContraptionSpec(
-            format="contraption-1", id="bench-circuit", name="Bench circuit", version="1.0.0",
+            format="contraption-3", id="bench-circuit", name="Bench circuit", version="1.0.0",
             components=(
-                ComponentInstanceSpec(id="source", model="electrical.voltage_source.ideal", geometry=GeometrySpec("box", (0.01, 0.01, 0.01))),
-                ComponentInstanceSpec(id="load", model="electrical.resistor.ideal", geometry=GeometrySpec("box", (0.01, 0.01, 0.01)), parameters={"resistance": 100.0}),
+                ComponentReferenceSpec(id="source", instantiation="bench.source.v1"),
+                ComponentReferenceSpec(id="load", instantiation="generic-100ohm-resistor.v1"),
             ),
             connections=(
                 ConnectionSpec(id="positive-net", kind="power", endpoints=(PortRef("source", "p"), PortRef("load", "p")), domain="electrical"),
@@ -210,45 +210,26 @@ class ContraptionContractTests(unittest.TestCase):
 
     def test_contraption_round_trip_and_validation(self) -> None:
         spec = self._spec()
-        report = validate_contraption(spec, self.registry)
+        report = validate_contraption_structure(spec)
         self.assertTrue(report.valid, report.issues)
         self.assertEqual(ContraptionSpec.from_json(spec.to_json()), spec)
 
-    def test_bad_port_and_parameter_are_rejected(self) -> None:
+    def test_component_parameters_and_models_are_rejected(self) -> None:
         data = self._spec().to_dict()
-        data["components"][1]["parameters"]["not_a_parameter"] = 1.0
-        data["connections"][0]["endpoints"][1]["port"] = "missing"
-        report = validate_contraption(ContraptionSpec.from_dict(data), self.registry)
-        self.assertFalse(report.valid)
-        codes = {issue.code for issue in report.errors}
-        self.assertIn("component.parameter_unknown", codes)
-        self.assertIn("reference.port", codes)
+        data["components"][1]["parameters"] = {"resistance": 10.0}
+        with self.assertRaises(SpecError):
+            ContraptionSpec.from_dict(data)
+        data = self._spec().to_dict()
+        data["components"][1]["model"] = "electrical.resistor.ideal"
+        with self.assertRaises(SpecError):
+            ContraptionSpec.from_dict(data)
 
-    def test_full_validation_requires_registry(self) -> None:
-        report = validate_contraption(self._spec())
+    def test_structural_validation_rejects_unknown_component(self) -> None:
+        data = self._spec().to_dict()
+        data["connections"][0]["endpoints"][1]["component"] = "missing"
+        report = validate_contraption_structure(ContraptionSpec.from_dict(data))
         self.assertFalse(report.valid)
-        self.assertIn("registry.required", {issue.code for issue in report.errors})
-        self.assertTrue(validate_contraption_structure(self._spec()).valid)
-
-    def test_attachment_rejects_electrical_port_on_motor_shaft(self) -> None:
-        spec = ContraptionSpec(
-            format="contraption-1", id="bad-attachment", name="Bad attachment", version="1.0.0",
-            components=(
-                ComponentInstanceSpec(id="resistor", model="electrical.resistor.ideal", geometry=GeometrySpec("box", (0.01, 0.01, 0.01))),
-                ComponentInstanceSpec(id="motor", model="electromechanical.dc_motor.ideal", geometry=GeometrySpec("box", (0.01, 0.01, 0.01))),
-            ),
-            connections=(
-                ConnectionSpec(
-                    id="electrical-to-shaft", kind="attachment", domain="rigid_mechanical",
-                    endpoints=(PortRef("resistor", "p"), PortRef("motor", "shaft")),
-                ),
-            ),
-        )
-        report = validate_contraption(spec, self.registry)
-        self.assertFalse(report.valid)
-        codes = {issue.code for issue in report.errors}
-        self.assertIn("connection.attachment_domain", codes)
-        self.assertIn("connection.attachment_units", codes)
+        self.assertIn("reference.component", {issue.code for issue in report.errors})
 
     def test_unknown_contraption_key_is_rejected(self) -> None:
         data = self._spec().to_dict()
@@ -257,46 +238,44 @@ class ContraptionContractTests(unittest.TestCase):
             ContraptionSpec.from_dict(data)
 
 
-class TaxonomyTests(unittest.TestCase):
-    def test_taxonomy_round_trip_and_hierarchy(self) -> None:
-        taxonomy = load_default_taxonomy()
-        self.assertEqual(Taxonomy.from_json(taxonomy.to_json()), taxonomy)
-        self.assertEqual(taxonomy.ancestry("camera-mass"), ("inert-object", "planar-rigid-body", "camera-mass"))
-        self.assertEqual(taxonomy.category_for("brushed-dc-motor").id, "motor")
+class CatalogContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.interfaces = load_interface_catalog(MODELS)
+        cls.models = ModelRegistry()
+        cls.models.load_directory(MODELS, interfaces=cls.interfaces)
 
-    def test_instantiation_requires_explicit_geometry(self) -> None:
-        taxonomy = load_default_taxonomy()
-        with self.assertRaises(TypeError):
-            taxonomy.instantiate(id="camera-serial-001", name="Camera 001", taxonomy_node="camera-mass", model="mechanical.camera_mass.planar")
-        with self.assertRaises(SpecError):
-            GeometrySpec.from_dict(None)
-        instance = taxonomy.instantiate(
-            id="camera-serial-001",
-            name="Camera 001",
-            taxonomy_node="camera-mass",
-            model="mechanical.camera_mass.planar",
-            geometry=GeometrySpec(
-                "box",
-                (0.01, 0.01, 0.01),
-                metadata={"provenance": "estimated"},
-            ),
+    def test_interface_round_trip_and_hierarchy(self) -> None:
+        self.assertEqual(
+            ModelInterfaceCatalog.from_json(self.interfaces.to_json()).to_dict(),
+            self.interfaces.to_dict(),
         )
-        self.assertEqual(instance.condition, "unverified")
-        self.assertEqual(instance.geometry.kind, "box")
-        self.assertEqual(instance.geometry.dimensions, (0.01, 0.01, 0.01))
+        self.assertEqual(self.interfaces.ancestry("camera-mass"), ("inert-object", "camera-mass"))
+        self.assertEqual(self.interfaces.category_for("brushed-dc-motor").id, "motor")
 
-    def test_subcategory_requires_physical_specificity(self) -> None:
-        data = load_default_taxonomy().to_dict()
-        data["subcategories"][0]["model_specificity"] = "synonym"
+    def test_instantiations_have_static_parts_and_initialized_models(self) -> None:
+        registry = PartInstantiationRegistry.load_catalog(MODELS, models=self.models)
+        self.assertIn("generic-100ohm-resistor.v1", registry)
+        self.assertIn("C1210C476K8RAC.v1", registry)
+        self.assertIn("scanner.position_servo.v2", registry)
+        self.assertEqual(registry["generic-100ohm-resistor.v1"].parameters["resistance"]["value"], 100.0)
+
+    def test_interface_requires_physical_specificity(self) -> None:
+        data = self.interfaces.to_dict()
+        data["devices"][0]["model_specificity"] = "synonym"
         with self.assertRaises(SpecError):
-            Taxonomy.from_dict(data)
+            ModelInterfaceCatalog.from_dict(data)
 
     def test_machine_readable_schemas_are_strict(self) -> None:
-        for record in (ModelSpec, ContraptionSpec, Taxonomy):
+        for record in (ModelSpec, ContraptionSpec):
             schema = json_schema_for(record)
             root = schema["$defs"][record.__name__]
             self.assertFalse(root["additionalProperties"])
             self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")
+        self.assertEqual(
+            json_schema_for(ContraptionSpec)["$defs"]["ContraptionSpec"]["properties"]["format"],
+            {"const": "contraption-3"},
+        )
 
 
 if __name__ == "__main__":

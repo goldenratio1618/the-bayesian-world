@@ -1,0 +1,33 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "differential-drive-chassis",
+  "name": "Differential-drive chassis",
+  "version": "1.0.0",
+  "parent": "chassis",
+  "model_specificity": "Planar chassis dynamics are driven through independently modeled left and right longitudinal hub ports.",
+  "changes_contract": true,
+  "required_power_ports": [
+    {
+      "name": "left_drive",
+      "domain": "mechanical",
+      "effort_unit": "N",
+      "flow_unit": "m/s"
+    },
+    {
+      "name": "right_drive",
+      "domain": "mechanical",
+      "effort_unit": "N",
+      "flow_unit": "m/s"
+    }
+  ],
+  "required_signal_ports": [],
+  "models": [
+    "mechanical.differential_drive_chassis.planar"
+  ],
+  "constraints": [
+    "Wheel base and planar root frame are explicit."
+  ],
+  "description": ""
+}

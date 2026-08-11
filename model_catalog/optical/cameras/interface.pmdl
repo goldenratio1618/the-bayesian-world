@@ -1,0 +1,21 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "camera",
+  "name": "Camera",
+  "version": "1.0.0",
+  "domains": [
+    "optical",
+    "electromechanical",
+    "electrical",
+    "mechanical"
+  ],
+  "required_power_ports": [],
+  "required_signal_ports": [],
+  "ideal_models": [],
+  "constraints": [
+    "Optical, electrical, and mechanical assumptions are explicit."
+  ],
+  "description": "Powered optical imaging device."
+}

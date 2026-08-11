@@ -1,0 +1,163 @@
+{
+  "format": "static-part-1",
+  "id": "scanner.camera",
+  "name": "Scanner camera payload",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "camera",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "camera_module",
+          "geometry": {
+            "kind": "box",
+            "dimensions_m": [
+              0.025,
+              0.024,
+              0.0124
+            ]
+          },
+          "local_pose": {
+            "translation_m": [
+              0.0125,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "catalog",
+            "source": "Raspberry Pi Camera Module 3 envelope",
+            "reference": "Camera Module 3 Wide"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "mount",
+      "model_port": "joint",
+      "body": "camera",
+      "domain": "mechanical",
+      "interface": "rotational-shaft",
+      "joint_coordinate_state": "angle",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          0.7071067811865476,
+          -0.7071067811865475,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "derived",
+        "source": "camera bracket pivot with explicit PMDL angle-state binding; connector local +z is camera-body +y, parallel to both tangential servo shafts"
+      }
+    },
+    {
+      "id": "optical_axis",
+      "model_port": null,
+      "body": "camera",
+      "domain": "optical",
+      "interface": "camera-view-axis",
+      "local_pose": {
+        "translation_m": [
+          0.025,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          0.7071067811865476,
+          0,
+          0.7071067811865475,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "derived",
+        "source": "camera viewing frame at the declared front face; connector local +z is camera-body +x, orthogonal to the camera-body +y tilt axis"
+      }
+    },
+    {
+      "id": "supply_p",
+      "model_port": "supply_p",
+      "body": "camera",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          0.0125,
+          0.008,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "flex cable electrical abstraction"
+      }
+    },
+    {
+      "id": "supply_n",
+      "model_port": "supply_n",
+      "body": "camera",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          0.0125,
+          -0.008,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "flex cable electrical abstraction"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "catalog",
+    "source": "vendor envelope with estimated mount and electrical abstractions",
+    "reference": "Raspberry Pi Camera Module 3 Wide"
+  },
+  "purchasing": {},
+  "metadata": {}
+}

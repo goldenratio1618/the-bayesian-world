@@ -1,0 +1,27 @@
+{
+  "format": "model-instance-1",
+  "id": "scanner.position_servo.v2",
+  "variant": "v2",
+  "part": "scanner.position_servo",
+  "version": "1.0.0",
+  "model": {
+    "id": "electromechanical.position_servo.proportional",
+    "version": "1.0.0",
+    "sha256": "sha256:04a5c2a1933a0b37d4e6de7fbccf5e38bce49116d8c6969a76bdbb200d9d7051"
+  },
+  "parameters": {
+    "stiffness": 0.8,
+    "damping": 0.06,
+    "efficiency": 0.65,
+    "torque_per_amp": 0.3
+  },
+  "parameter_uncertainty": {},
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1.0,
+    "notes": "Catalog baseline model."
+  },
+  "metadata": {
+    "source_component": "tilt-servo"
+  }
+}

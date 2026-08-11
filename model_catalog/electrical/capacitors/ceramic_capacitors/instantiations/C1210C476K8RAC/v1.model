@@ -1,0 +1,31 @@
+{
+  "format": "model-instance-1",
+  "id": "C1210C476K8RAC.v1",
+  "variant": "v1",
+  "part": "C1210C476K8RAC",
+  "version": "1.0.0",
+  "model": {
+    "id": "electrical.capacitor.ideal",
+    "version": "1.0.0",
+    "sha256": "sha256:611af2c6e3cffc7e2cf7468aae1ab22b59922035fbfbf13e4515681ea6ef8279"
+  },
+  "parameters": {
+    "capacitance": 4.7e-05
+  },
+  "parameter_uncertainty": {
+    "capacitance": {
+      "distribution": "normal",
+      "parameters": {
+        "std": 4.7e-06
+      }
+    }
+  },
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1.0,
+    "notes": "Ideal lumped-capacitance hypothesis."
+  },
+  "metadata": {
+    "dielectric": "X7R"
+  }
+}

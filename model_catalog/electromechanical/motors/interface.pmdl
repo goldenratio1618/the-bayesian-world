@@ -1,0 +1,43 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "motor",
+  "name": "Motor",
+  "version": "1.0.0",
+  "domains": [
+    "electromechanical",
+    "electrical",
+    "mechanical"
+  ],
+  "required_power_ports": [
+    {
+      "name": "p",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "n",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "shaft",
+      "domain": "mechanical",
+      "effort_unit": "N*m",
+      "flow_unit": "rad/s"
+    }
+  ],
+  "required_signal_ports": [],
+  "ideal_models": [
+    "electromechanical.dc_motor.ideal"
+  ],
+  "constraints": [
+    "At least two electrical terminals",
+    "The mechanical port is named shaft",
+    "Electrical plus mechanical power conservation"
+  ],
+  "description": "Energy conversion between electrical terminals and a mechanical shaft."
+}

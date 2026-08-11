@@ -1,0 +1,18 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "joint",
+  "name": "Mechanical joint",
+  "version": "1.0.0",
+  "domains": [
+    "mechanical"
+  ],
+  "required_power_ports": [],
+  "required_signal_ports": [],
+  "ideal_models": [],
+  "constraints": [
+    "Joint subtype must make its allowed degrees of freedom explicit"
+  ],
+  "description": "Kinematic and power-conserving connection between rigid bodies."
+}

@@ -1,0 +1,162 @@
+{
+  "format": "static-part-1",
+  "id": "generic-camera-module",
+  "name": "Generic apartment scanner camera module",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "body",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "envelope",
+          "geometry": {
+            "kind": "box",
+            "dimensions_m": [
+              0.06,
+              0.025,
+              0.025
+            ]
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "estimated",
+            "source": "Migrated taxonomy estimate"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "force_x",
+      "model_port": "force_x",
+      "body": "body",
+      "domain": "mechanical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          -0.03,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "generic catalog connector frame"
+      }
+    },
+    {
+      "id": "force_y",
+      "model_port": "force_y",
+      "body": "body",
+      "domain": "mechanical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          0.03,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "generic catalog connector frame"
+      }
+    },
+    {
+      "id": "rotation",
+      "model_port": "rotation",
+      "body": "body",
+      "domain": "mechanical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          0.03,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "generic catalog connector frame"
+      }
+    },
+    {
+      "id": "yaw_measurement",
+      "model_port": "yaw_measurement",
+      "body": "body",
+      "domain": "signal",
+      "interface": "catalog-generic-signal",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "generic catalog connector frame"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "estimated",
+    "source": "Migrated taxonomy estimate"
+  },
+  "purchasing": {},
+  "metadata": {
+    "optical_model": "not_implemented"
+  }
+}

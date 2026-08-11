@@ -1,0 +1,194 @@
+{
+  "format": "pmdl-1",
+  "id": "mechanical.wheel_contact.ideal",
+  "name": "Compliant longitudinal wheel contact",
+  "version": "1.0.0",
+  "domains": [
+    "mechanical"
+  ],
+  "description": "Acausal axle/contact conversion with first-order longitudinal slip relaxation.",
+  "power_ports": [
+    {
+      "name": "axle",
+      "domain": "mechanical",
+      "effort": "torque_axle",
+      "flow": "omega_axle",
+      "effort_unit": "N*m",
+      "flow_unit": "rad/s",
+      "orientation": "into_component",
+      "frame": "axle",
+      "reference": "positive drive rotation"
+    },
+    {
+      "name": "contact",
+      "domain": "mechanical",
+      "effort": "force_contact",
+      "flow": "velocity_contact",
+      "effort_unit": "N",
+      "flow_unit": "m/s",
+      "orientation": "into_component",
+      "frame": "contact",
+      "reference": "positive forward travel"
+    }
+  ],
+  "states": [
+    {
+      "name": "slip_velocity",
+      "unit": "m/s",
+      "initial": 0.0,
+      "derivative": "slip_velocity_dot",
+      "description": "Relaxed longitudinal slip speed."
+    }
+  ],
+  "parameters": [
+    {
+      "name": "radius",
+      "unit": "m",
+      "default": 0.05,
+      "bounds": {
+        "lower": 1e-06,
+        "upper": 10.0
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.002
+        }
+      },
+      "learnable": true
+    },
+    {
+      "name": "contact_compliance",
+      "unit": "m/(s*N)",
+      "default": 0.0001,
+      "bounds": {
+        "lower": 1e-12,
+        "upper": 100.0
+      },
+      "uncertainty": {
+        "distribution": "lognormal",
+        "parameters": {
+          "std": 0.25
+        }
+      },
+      "learnable": true
+    },
+    {
+      "name": "relaxation_time",
+      "unit": "s",
+      "default": 0.02,
+      "bounds": {
+        "lower": 1e-06,
+        "upper": 10.0
+      },
+      "uncertainty": {
+        "distribution": "lognormal",
+        "parameters": {
+          "std": 0.2
+        }
+      },
+      "learnable": true
+    }
+  ],
+  "relations": [
+    {
+      "name": "rolling_kinematics",
+      "expression": "radius * omega_axle - velocity_contact - slip_velocity"
+    },
+    {
+      "name": "slip_relaxation",
+      "expression": "relaxation_time * slip_velocity_dot + slip_velocity - contact_compliance * force_contact"
+    },
+    {
+      "name": "torque_force_balance",
+      "expression": "torque_axle + radius * force_contact"
+    }
+  ],
+  "dissipation": [
+    {
+      "name": "contact_loss",
+      "expression": "contact_compliance * force_contact ** 2",
+      "unit": "W",
+      "nonnegative": true,
+      "description": "Energy lost in the compliant longitudinal contact approximation."
+    }
+  ],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [],
+    "required": [
+      "slip_velocity"
+    ]
+  },
+  "validity": {
+    "ranges": {
+      "slip_velocity": {
+        "lower": -5.0,
+        "upper": 5.0
+      },
+      "force_contact": {
+        "lower": -1000.0,
+        "upper": 1000.0
+      }
+    },
+    "assumptions": [
+      "Planar longitudinal contact",
+      "Wheel remains in contact",
+      "No lateral slip",
+      "Linear compliant force law"
+    ],
+    "max_timestep": 0.001
+  },
+  "fidelity_levels": [
+    {
+      "name": "compliant",
+      "description": "Differentiable first-order slip model.",
+      "active_relations": [
+        "rolling_kinematics",
+        "slip_relaxation",
+        "torque_force_balance"
+      ],
+      "parameter_overrides": {},
+      "approximation_error": "No lateral, vertical, or saturation dynamics",
+      "relative_cost": 1.0
+    }
+  ],
+  "properties": [
+    {
+      "name": "positive_radius",
+      "kind": "parameter_bounds",
+      "expression": "radius > 0 * radius",
+      "expected": true,
+      "samples": 32,
+      "tolerance": 0.0
+    },
+    {
+      "name": "nonnegative_contact_loss",
+      "kind": "nonnegative_dissipation",
+      "expression": "contact_compliance * force_contact ** 2 >= 0 * (contact_compliance * force_contact ** 2)",
+      "expected": true,
+      "samples": 64,
+      "tolerance": 1e-12
+    }
+  ],
+  "trust": {
+    "structural": "tested",
+    "physical": "reviewed",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": [
+      {
+        "kind": "engineering-approximation",
+        "reference": "Linear tire relaxation model",
+        "summary": "Smooth low-slip approximation suitable for system design."
+      }
+    ]
+  },
+  "metadata": {
+    "gold": true,
+    "causality": "acausal",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0",
+    "contact_axes": "longitudinal_only"
+  },
+  "implements": "driven-wheel"
+}

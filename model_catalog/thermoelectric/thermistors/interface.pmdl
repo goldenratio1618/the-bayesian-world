@@ -1,0 +1,33 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "thermistor",
+  "name": "Thermistor",
+  "version": "1.0.0",
+  "domains": [
+    "thermoelectric",
+    "electrical",
+    "thermal"
+  ],
+  "required_power_ports": [
+    {
+      "name": "p",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "n",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    }
+  ],
+  "required_signal_ports": [],
+  "ideal_models": [],
+  "constraints": [
+    "Must implement electrical and thermal physics before simulation"
+  ],
+  "description": "Temperature-dependent resistor reserved for a future thermal solver."
+}

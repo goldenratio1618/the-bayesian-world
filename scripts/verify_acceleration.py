@@ -52,7 +52,7 @@ def nvidia_smi_report() -> dict[str, Any]:
 def verify_numpy() -> dict[str, Any]:
     import numpy as np
 
-    from contraption.simulator import RCCircuit, simulate
+    from contraption.physics.simulator import RCCircuit, simulate
 
     result = simulate(
         RCCircuit(resistance=2.0, capacitance=0.5),
@@ -90,7 +90,7 @@ def verify_torch(expectation: str, samples: int, steps: int) -> dict[str, Any]:
         )
     device = "cuda" if expectation == "cuda" or (expectation == "auto" and cuda_available) else "cpu"
 
-    from contraption.simulator import RCCircuit, simulate
+    from contraption.physics.simulator import RCCircuit, simulate
 
     resistance = torch.tensor(2.0, dtype=torch.float64, device=device, requires_grad=True)
     model = RCCircuit(resistance=resistance, capacitance=0.5)

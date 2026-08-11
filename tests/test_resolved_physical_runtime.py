@@ -10,14 +10,18 @@ import unittest
 
 import numpy as np
 
-from contraption.controls import load_control_program
-from contraption.dsl import load_model
-from contraption.physical import ComponentPackageRegistry
-from contraption.resolved import ResolutionError, resolve_assembly
-from contraption.scanner import ScannerAssemblyController, ScannerRuntimeError
-from contraption.simulator import SimulationResult, simulate
-from contraption.specs import FrozenDict, ModelSpec
-from contraption.uq import summarize_samples
+from contraption.physics.controls import load_control_program
+from contraption.catalog.instantiations import (
+    PartInstantiationRegistry,
+    StaticPartSpec,
+)
+from contraption.catalog.interfaces import load_interface_catalog
+from contraption.physics.dsl import ModelRegistry
+from contraption.physics.resolved import ResolutionError, resolve_assembly
+from contraption.applications.scanner import ScannerAssemblyController, ScannerRuntimeError
+from contraption.physics.simulator import SimulationResult, simulate
+from contraption.physics.specs import FrozenDict, ModelSpec
+from contraption.physics.uq import summarize_samples
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,15 +34,13 @@ def model_digest(model: ModelSpec) -> str:
 
 def scanner_inputs():
     specification = json.loads((EXAMPLE / "contraption.json").read_text())
-    packages = ComponentPackageRegistry.load(EXAMPLE / "component_packages.json")
-    models = {
-        model.id: model
-        for model in (
-            load_model(path) for path in sorted((ROOT / "models" / "scanner").glob("*.pmdl"))
-        )
-    }
+    catalog_root = ROOT / "model_catalog"
+    interfaces = load_interface_catalog(catalog_root)
+    models = ModelRegistry()
+    models.load_directory(catalog_root, interfaces=interfaces)
+    instantiations = PartInstantiationRegistry.load_catalog(catalog_root, models=models)
     program = load_control_program(EXAMPLE / "controls" / "scanner.control.json")
-    return specification, packages, models, {program.name: program}
+    return specification, instantiations, models, {program.name: program}
 
 
 def synthetic_result(assembly) -> SimulationResult:
@@ -76,10 +78,10 @@ class ResolvedPhysicalRuntimeTests(unittest.TestCase):
             inputs[0], inputs[1], inputs[2], control_programs=inputs[3]
         )
 
-    def test_package_measures_root_states_and_controller_are_one_closure(self) -> None:
+    def test_part_measures_root_states_and_controller_are_one_closure(self) -> None:
         assembly = self.assembly
-        wheel = assembly.packages["scanner.wheel"]
-        chassis = assembly.packages["scanner.romi_chassis"]
+        wheel = assembly.parts["scanner.wheel.v1"]
+        chassis = assembly.parts["scanner.romi_chassis.v1"]
         self.assertAlmostEqual(
             wheel.measure_parameter(wheel.parameter_binding_map["radius"]), 0.035
         )
@@ -302,7 +304,7 @@ class ResolvedPhysicalRuntimeTests(unittest.TestCase):
         ):
             assembly.validate_simulation_result(holonomic_mismatch)
 
-        wheel = assembly.physical.packages["scanner.wheel"]
+        wheel = assembly.physical.parts["scanner.wheel.v1"]
         uncountered = replace(
             wheel,
             connectors=tuple(
@@ -312,11 +314,11 @@ class ResolvedPhysicalRuntimeTests(unittest.TestCase):
                 for connector in wheel.connectors
             ),
         )
-        packages = dict(assembly.physical.packages)
-        packages[wheel.id] = uncountered
+        parts = dict(assembly.physical.parts)
+        parts[wheel.id] = uncountered
         bad_physical = replace(
             assembly.physical,
-            packages=FrozenDict(packages),
+            parts=FrozenDict(parts),
         )
         bad_assembly = replace(assembly, physical=bad_physical)
         with self.assertRaisesRegex(
@@ -370,16 +372,26 @@ class ResolvedPhysicalRuntimeTests(unittest.TestCase):
                 missing_output, packages, models, control_programs=programs
             )
 
-        wrong_radius = copy.deepcopy(specification)
-        next(
-            component
-            for component in wrong_radius["components"]
-            if component["id"] == "left-wheel"
-        )["parameters"]["radius"] = 0.04
+        changed_values = []
+        for item in packages.values():
+            if item.id == "scanner.wheel.v1":
+                changed_parameters = dict(item.model_instance.parameters)
+                changed_parameters["radius"] = 0.04
+                item = replace(
+                    item,
+                    model_instance=replace(
+                        item.model_instance,
+                        parameters=FrozenDict(changed_parameters),
+                    ),
+                )
+            changed_values.append(item)
+        wrong_radius = PartInstantiationRegistry(changed_values)
         with self.assertRaisesRegex(
-            ResolutionError, r"radius.*disagrees with package physical measure"
+            ResolutionError, r"radius.*disagrees with part physical measure"
         ):
-            resolve_assembly(wrong_radius, packages, models, control_programs=programs)
+            resolve_assembly(
+                specification, wrong_radius, models, control_programs=programs
+            )
 
         missing_joint_state = copy.deepcopy(specification)
         arm_joint = next(
@@ -429,17 +441,19 @@ class ResolvedPhysicalRuntimeTests(unittest.TestCase):
         ):
             ScannerAssemblyController(missing_gate_assembly)
 
-        package_data = json.loads((EXAMPLE / "component_packages.json").read_text())
-        chassis_package = next(
-            package
-            for package in package_data["packages"]
-            if package["id"] == "scanner.romi_chassis"
+        chassis = packages["scanner.romi_chassis.v1"]
+        static_data = chassis.static.to_dict()
+        static_data["bodies"][0]["solids"][0]["geometry"]["dimensions_m"][0] = 0.17
+        changed_chassis = replace(
+            chassis, static=StaticPartSpec.from_dict(static_data)
         )
-        chassis_package["bodies"][0]["solids"][0]["geometry"]["dimensions_m"][0] = 0.17
-        changed_packages = ComponentPackageRegistry.from_dict(package_data)
+        changed_parts = PartInstantiationRegistry(
+            changed_chassis if item.id == chassis.id else item
+            for item in packages.values()
+        )
         changed_assembly = resolve_assembly(
             specification,
-            changed_packages,
+            changed_parts,
             models,
             control_programs=programs,
         )
@@ -450,7 +464,16 @@ class ResolvedPhysicalRuntimeTests(unittest.TestCase):
 
     def test_geometry_bound_pmdl_uncertainty_is_refused(self) -> None:
         specification, _packages, models, programs = scanner_inputs()
-        raw_model = json.loads((ROOT / "models" / "scanner" / "rolling_wheel.pmdl").read_text())
+        raw_model = json.loads(
+            (
+                ROOT
+                / "model_catalog"
+                / "mechanical"
+                / "wheels"
+                / "rolling_drive_wheels"
+                / "rolling_wheel.pmdl"
+            ).read_text()
+        )
         next(
             parameter
             for parameter in raw_model["parameters"]
@@ -463,20 +486,27 @@ class ResolvedPhysicalRuntimeTests(unittest.TestCase):
         changed_models = dict(models)
         changed_models[changed_model.id] = changed_model
 
-        registry_data = json.loads((EXAMPLE / "component_packages.json").read_text())
-        wheel_package = next(
-            package
-            for package in registry_data["packages"]
-            if package["id"] == "scanner.wheel"
+        wheel = _packages["scanner.wheel.v1"]
+        changed_wheel = replace(
+            wheel,
+            model_instance=replace(
+                wheel.model_instance,
+                model=replace(
+                    wheel.model_instance.model,
+                    sha256=model_digest(changed_model),
+                ),
+            ),
         )
-        wheel_package["model"]["sha256"] = model_digest(changed_model)
-        changed_packages = ComponentPackageRegistry.from_dict(registry_data)
+        changed_parts = PartInstantiationRegistry(
+            changed_wheel if item.id == wheel.id else item
+            for item in _packages.values()
+        )
         with self.assertRaisesRegex(
             ResolutionError, "may not declare independent PMDL uncertainty"
         ):
             resolve_assembly(
                 specification,
-                changed_packages,
+                changed_parts,
                 changed_models,
                 control_programs=programs,
             )

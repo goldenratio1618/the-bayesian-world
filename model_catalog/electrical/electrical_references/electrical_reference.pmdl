@@ -1,0 +1,59 @@
+{
+  "format": "pmdl-1",
+  "id": "electrical.reference.zero",
+  "name": "Electrical zero-potential boundary",
+  "version": "1.0.0",
+  "domains": [
+    "electrical"
+  ],
+  "description": "An explicit nonphysical boundary that fixes the electrical gauge.",
+  "power_ports": [
+    {
+      "name": "ground",
+      "domain": "electrical",
+      "effort": "ground_voltage",
+      "flow": "ground_current",
+      "effort_unit": "V",
+      "flow_unit": "A",
+      "orientation": "into_component",
+      "frame": "boundary",
+      "reference": "zero potential"
+    }
+  ],
+  "relations": [
+    {
+      "name": "zero_potential",
+      "expression": "ground_voltage"
+    }
+  ],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [],
+    "required": []
+  },
+  "validity": {
+    "ranges": {},
+    "assumptions": [
+      "This is a reference boundary, not a manufactured physical component"
+    ],
+    "max_timestep": 0.05
+  },
+  "trust": {
+    "structural": "tested",
+    "physical": "reviewed",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": []
+  },
+  "metadata": {
+    "gold": false,
+    "boundary": true,
+    "causality": "acausal",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0",
+    "online_admission": {
+      "admitted": true,
+      "kind": "linear"
+    }
+  },
+  "implements": "electrical-reference"
+}

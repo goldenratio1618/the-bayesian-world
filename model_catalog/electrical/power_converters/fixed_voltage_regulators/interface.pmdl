@@ -1,0 +1,45 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "fixed-voltage-regulator",
+  "name": "Fixed voltage regulator",
+  "version": "1.0.0",
+  "parent": "power-converter",
+  "model_specificity": "Regulates an input rail to one fixed output potential using an explicit efficiency approximation.",
+  "changes_contract": true,
+  "required_power_ports": [
+    {
+      "name": "vin_p",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "vin_n",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "out_p",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "out_n",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    }
+  ],
+  "required_signal_ports": [],
+  "models": [
+    "electrical.voltage_regulator.fixed"
+  ],
+  "constraints": [
+    "Input and output returns are explicit."
+  ],
+  "description": ""
+}

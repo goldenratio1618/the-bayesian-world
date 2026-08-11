@@ -1,0 +1,26 @@
+{
+  "format": "model-instance-1",
+  "id": "scanner.gearmotor.v1",
+  "variant": "v1",
+  "part": "scanner.gearmotor",
+  "version": "1.0.0",
+  "model": {
+    "id": "electromechanical.scanner_gearmotor.lumped",
+    "version": "1.0.0",
+    "sha256": "sha256:3e08919808b73716f21de1dc741b37eb8242fe93e750202b4b1547fcd15adb43"
+  },
+  "parameters": {
+    "resistance": 3.6,
+    "effective_inductance": 0.08,
+    "electromechanical_constant": 0.3
+  },
+  "parameter_uncertainty": {},
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1.0,
+    "notes": "Catalog baseline model."
+  },
+  "metadata": {
+    "source_component": "left-motor"
+  }
+}

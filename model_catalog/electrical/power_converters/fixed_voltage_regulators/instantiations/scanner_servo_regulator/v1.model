@@ -1,0 +1,25 @@
+{
+  "format": "model-instance-1",
+  "id": "scanner.servo_regulator.v1",
+  "variant": "v1",
+  "part": "scanner.servo_regulator",
+  "version": "1.0.0",
+  "model": {
+    "id": "electrical.voltage_regulator.fixed",
+    "version": "1.0.0",
+    "sha256": "sha256:8cd8f4fec176a6dbf83588af4067a47e35d20c13195168e48d8f2711412b8b88"
+  },
+  "parameters": {
+    "output_voltage": 6.0,
+    "efficiency": 0.88
+  },
+  "parameter_uncertainty": {},
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1.0,
+    "notes": "Catalog baseline model."
+  },
+  "metadata": {
+    "source_component": "servo-regulator"
+  }
+}

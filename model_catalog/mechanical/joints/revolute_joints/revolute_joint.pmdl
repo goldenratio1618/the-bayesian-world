@@ -1,0 +1,211 @@
+{
+  "format": "pmdl-1",
+  "id": "mechanical.revolute_joint.compliant",
+  "name": "Compliant revolute joint",
+  "version": "1.0.0",
+  "domains": [
+    "mechanical"
+  ],
+  "description": "One-degree-of-freedom rotational joint with optional stiffness and viscous damping.",
+  "power_ports": [
+    {
+      "name": "a",
+      "domain": "mechanical",
+      "effort": "torque_a",
+      "flow": "omega_a",
+      "effort_unit": "N*m",
+      "flow_unit": "rad/s",
+      "orientation": "into_component",
+      "frame": "joint_a",
+      "reference": "right-hand positive about joint axis"
+    },
+    {
+      "name": "b",
+      "domain": "mechanical",
+      "effort": "torque_b",
+      "flow": "omega_b",
+      "effort_unit": "N*m",
+      "flow_unit": "rad/s",
+      "orientation": "into_component",
+      "frame": "joint_b",
+      "reference": "same physical positive axis as port a"
+    }
+  ],
+  "signal_ports": [
+    {
+      "name": "angle_measurement",
+      "direction": "output",
+      "unit": "rad",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Measured relative angle a minus b."
+    }
+  ],
+  "states": [
+    {
+      "name": "relative_angle",
+      "unit": "rad",
+      "initial": 0.0,
+      "derivative": "relative_angle_dot"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "rest_angle",
+      "unit": "rad",
+      "default": 0.0,
+      "bounds": {
+        "lower": -6.283185307179586,
+        "upper": 6.283185307179586
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.01
+        }
+      },
+      "learnable": true
+    },
+    {
+      "name": "stiffness",
+      "unit": "N*m/rad",
+      "default": 1.0,
+      "bounds": {
+        "lower": 1e-09,
+        "upper": 1000000000.0
+      },
+      "uncertainty": {
+        "distribution": "lognormal",
+        "parameters": {
+          "std": 0.2
+        }
+      },
+      "learnable": true
+    },
+    {
+      "name": "damping",
+      "unit": "N*m*s/rad",
+      "default": 0.1,
+      "bounds": {
+        "lower": 0.0,
+        "upper": 1000000000.0
+      },
+      "uncertainty": {
+        "distribution": "lognormal",
+        "parameters": {
+          "std": 0.2
+        }
+      },
+      "learnable": true
+    }
+  ],
+  "relations": [
+    {
+      "name": "relative_kinematics",
+      "expression": "relative_angle_dot - (omega_a - omega_b)"
+    },
+    {
+      "name": "action_reaction",
+      "expression": "torque_a + torque_b"
+    },
+    {
+      "name": "constitutive_torque",
+      "expression": "torque_a - stiffness * (relative_angle - rest_angle) - damping * (omega_a - omega_b)"
+    },
+    {
+      "name": "angle_output",
+      "expression": "angle_measurement - relative_angle"
+    }
+  ],
+  "stored_energy": [
+    {
+      "name": "torsional_energy",
+      "expression": "0.5 * stiffness * (relative_angle - rest_angle) ** 2",
+      "unit": "J",
+      "nonnegative": true
+    }
+  ],
+  "dissipation": [
+    {
+      "name": "viscous_loss",
+      "expression": "damping * (omega_a - omega_b) ** 2",
+      "unit": "W",
+      "nonnegative": true
+    }
+  ],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [],
+    "required": [
+      "relative_angle"
+    ]
+  },
+  "validity": {
+    "ranges": {
+      "relative_angle": {
+        "lower": -6.283185307179586,
+        "upper": 6.283185307179586
+      }
+    },
+    "assumptions": [
+      "Single fixed joint axis",
+      "Rigid attached bodies",
+      "Linear torsional spring and damper",
+      "No backlash or hard stops"
+    ],
+    "max_timestep": 0.001
+  },
+  "fidelity_levels": [
+    {
+      "name": "compliant",
+      "description": "Linear spring-damper joint.",
+      "active_relations": [
+        "relative_kinematics",
+        "action_reaction",
+        "constitutive_torque",
+        "angle_output"
+      ],
+      "parameter_overrides": {},
+      "approximation_error": "Backlash, friction, and joint limits omitted",
+      "relative_cost": 1.0
+    }
+  ],
+  "properties": [
+    {
+      "name": "action_reaction_torque",
+      "kind": "conservation",
+      "expression": "torque_a + torque_b == 0 * torque_a",
+      "expected": true,
+      "samples": 32,
+      "tolerance": 1e-12
+    },
+    {
+      "name": "nonnegative_viscous_loss",
+      "kind": "nonnegative_dissipation",
+      "expression": "damping * (omega_a - omega_b) ** 2 >= 0 * (damping * (omega_a - omega_b) ** 2)",
+      "expected": true,
+      "samples": 64,
+      "tolerance": 1e-12
+    }
+  ],
+  "trust": {
+    "structural": "tested",
+    "physical": "reviewed",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": [
+      {
+        "kind": "textbook",
+        "reference": "Linear torsional spring-damper",
+        "summary": "Standard compliant-joint approximation."
+      }
+    ]
+  },
+  "metadata": {
+    "gold": true,
+    "causality": "acausal",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0",
+    "degrees_of_freedom": 1
+  },
+  "implements": "revolute-joint"
+}

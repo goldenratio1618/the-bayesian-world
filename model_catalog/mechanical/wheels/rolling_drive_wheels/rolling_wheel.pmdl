@@ -1,0 +1,148 @@
+{
+  "format": "pmdl-1",
+  "id": "mechanical.scanner_wheel.rolling",
+  "name": "Scanner wheel ideal rolling conversion",
+  "version": "1.0.0",
+  "domains": [
+    "mechanical"
+  ],
+  "description": "A power-conserving reduced axle-to-hub translation model with uncertain effective rolling on a rough floor.",
+  "power_ports": [
+    {
+      "name": "axle",
+      "domain": "mechanical",
+      "effort": "torque_axle",
+      "flow": "omega_axle",
+      "effort_unit": "N*m",
+      "flow_unit": "rad/s",
+      "orientation": "into_component",
+      "frame": "hub",
+      "reference": "positive drive rotation"
+    },
+    {
+      "name": "translation",
+      "domain": "mechanical",
+      "effort": "force_translation",
+      "flow": "velocity_translation",
+      "effort_unit": "N",
+      "flow_unit": "m/s",
+      "orientation": "into_component",
+      "frame": "hub_translation",
+      "reference": "rolling-reduced positive hub translation; no-slip floor interaction remains a model assumption"
+    }
+  ],
+  "states": [
+    {
+      "name": "angle",
+      "unit": "rad",
+      "initial": 0.0,
+      "derivative": "angle_dot",
+      "description": "Wheel rotation used by both dynamics and physical pose reconstruction."
+    }
+  ],
+  "signal_ports": [
+    {
+      "name": "angular_velocity_measurement",
+      "direction": "output",
+      "unit": "rad/s",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Ideal axle-rate observation available to the encoder package."
+    }
+  ],
+  "parameters": [
+    {
+      "name": "radius",
+      "unit": "m",
+      "default": 0.035,
+      "bounds": {
+        "lower": 0.001,
+        "upper": 1.0
+      },
+      "uncertainty": {},
+      "learnable": true,
+      "description": "Geometry-bound physical wheel radius; it may not vary independently of the package solid."
+    },
+    {
+      "name": "rolling_ratio",
+      "unit": "1",
+      "default": 0.9,
+      "bounds": {
+        "lower": 0.5,
+        "upper": 1.0
+      },
+      "uncertainty": {
+        "distribution": "uniform",
+        "parameters": {
+          "lower": 0.75,
+          "upper": 1.0
+        }
+      },
+      "learnable": true,
+      "description": "Bounded effective rough-floor rolling/traction ratio; one is ideal rolling and lower values represent reduced hub travel per axle rotation."
+    }
+  ],
+  "relations": [
+    {
+      "name": "angle_kinematics",
+      "expression": "angle_dot - omega_axle"
+    },
+    {
+      "name": "rolling_kinematics",
+      "expression": "radius * rolling_ratio * omega_axle - velocity_translation"
+    },
+    {
+      "name": "torque_force_balance",
+      "expression": "torque_axle + radius * rolling_ratio * force_translation"
+    },
+    {
+      "name": "angular_velocity_output",
+      "expression": "angular_velocity_measurement - omega_axle"
+    }
+  ],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [],
+    "required": [
+      "angle"
+    ]
+  },
+  "validity": {
+    "ranges": {
+      "force_translation": {
+        "lower": -100.0,
+        "upper": 100.0
+      },
+      "rolling_ratio": {
+        "lower": 0.5,
+        "upper": 1.0
+      }
+    },
+    "assumptions": [
+      "Continuous floor contact",
+      "Longitudinal rough-floor losses are reduced to a sample-constant effective rolling_ratio",
+      "The same effective ratio maps velocity and force so the ideal reduced port conserves power",
+      "No lateral slip or wheel lift",
+      "Rigid wheel"
+    ],
+    "max_timestep": 0.05
+  },
+  "trust": {
+    "structural": "tested",
+    "physical": "reviewed",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": []
+  },
+  "metadata": {
+    "gold": false,
+    "scanner_component": true,
+    "causality": "acausal",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0",
+    "online_admission": {
+      "admitted": true,
+      "kind": "linear"
+    }
+  },
+  "implements": "rolling-drive-wheel"
+}

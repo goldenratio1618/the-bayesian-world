@@ -1,0 +1,174 @@
+{
+  "format": "pmdl-1",
+  "id": "electromechanical.camera_payload.rotational",
+  "name": "Powered camera rotational payload",
+  "version": "1.0.0",
+  "domains": [
+    "optical",
+    "electromechanical",
+    "electrical",
+    "mechanical"
+  ],
+  "description": "A camera represented as an electrical load and a single-axis rigid payload.",
+  "power_ports": [
+    {
+      "name": "supply_p",
+      "domain": "electrical",
+      "effort": "v_supply_p",
+      "flow": "i_supply_p",
+      "effort_unit": "V",
+      "flow_unit": "A",
+      "orientation": "into_component",
+      "frame": "supply_p",
+      "reference": "camera supply positive"
+    },
+    {
+      "name": "supply_n",
+      "domain": "electrical",
+      "effort": "v_supply_n",
+      "flow": "i_supply_n",
+      "effort_unit": "V",
+      "flow_unit": "A",
+      "orientation": "into_component",
+      "frame": "supply_n",
+      "reference": "camera supply return"
+    },
+    {
+      "name": "joint",
+      "domain": "mechanical",
+      "effort": "torque_joint",
+      "flow": "omega_joint",
+      "effort_unit": "N*m",
+      "flow_unit": "rad/s",
+      "orientation": "into_component",
+      "frame": "mount",
+      "reference": "positive camera tilt"
+    }
+  ],
+  "states": [
+    {
+      "name": "angle",
+      "unit": "rad",
+      "initial": 0.0,
+      "derivative": "angle_dot"
+    },
+    {
+      "name": "angular_velocity",
+      "unit": "rad/s",
+      "initial": 0.0,
+      "derivative": "angular_velocity_dot"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "inertia",
+      "unit": "kg*m^2",
+      "default": 8e-05,
+      "bounds": {
+        "lower": 1e-09,
+        "upper": 1.0
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 2e-05
+        }
+      },
+      "learnable": true
+    },
+    {
+      "name": "bearing_damping",
+      "unit": "N*m*s/rad",
+      "default": 0.01,
+      "bounds": {
+        "lower": 0.0,
+        "upper": 1.0
+      },
+      "uncertainty": {},
+      "learnable": true
+    },
+    {
+      "name": "current_draw",
+      "unit": "A",
+      "default": 0.15,
+      "bounds": {
+        "lower": 0.0,
+        "upper": 2.0
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.03
+        }
+      },
+      "learnable": true
+    }
+  ],
+  "relations": [
+    {
+      "name": "angle_kinematics",
+      "expression": "angle_dot - angular_velocity"
+    },
+    {
+      "name": "tilt_dynamics",
+      "expression": "inertia * angular_velocity_dot - torque_joint + bearing_damping * angular_velocity"
+    },
+    {
+      "name": "joint_velocity",
+      "expression": "omega_joint - angular_velocity"
+    },
+    {
+      "name": "supply_current",
+      "expression": "i_supply_p - current_draw"
+    },
+    {
+      "name": "supply_return",
+      "expression": "i_supply_p + i_supply_n"
+    }
+  ],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [],
+    "required": [
+      "angle",
+      "angular_velocity"
+    ]
+  },
+  "validity": {
+    "ranges": {
+      "angle": {
+        "lower": -1.2,
+        "upper": 1.2
+      },
+      "angular_velocity": {
+        "lower": -8.0,
+        "upper": 8.0
+      }
+    },
+    "assumptions": [
+      "Optical image formation is outside this model",
+      "Camera power draw is constant over the short mission",
+      "Single-axis rigid mounting"
+    ],
+    "max_timestep": 0.05
+  },
+  "trust": {
+    "structural": "tested",
+    "physical": "reviewed",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": []
+  },
+  "metadata": {
+    "gold": false,
+    "scanner_component": true,
+    "causality": "acausal",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0",
+    "online_admission": {
+      "admitted": true,
+      "kind": "linearizable"
+    },
+    "optics_simulated": false
+  },
+  "implements": "powered-rotational-camera"
+}

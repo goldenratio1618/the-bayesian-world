@@ -1,0 +1,18 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "chassis",
+  "name": "Chassis",
+  "version": "1.0.0",
+  "domains": [
+    "mechanical"
+  ],
+  "required_power_ports": [],
+  "required_signal_ports": [],
+  "ideal_models": [],
+  "constraints": [
+    "Mass, inertia, and attachment frames are explicit."
+  ],
+  "description": "Load-bearing mobile mechanical frame."
+}

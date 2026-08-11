@@ -1,0 +1,25 @@
+{
+  "format": "model-instance-1",
+  "id": "scanner.nimh_battery.v1",
+  "variant": "v1",
+  "part": "scanner.nimh_battery",
+  "version": "1.0.0",
+  "model": {
+    "id": "electrical.nimh_battery_pack.lumped",
+    "version": "1.0.0",
+    "sha256": "sha256:77fc6f88341742bdeebf848a43e009bf88ff75b61c88352c08309d37ae166700"
+  },
+  "parameters": {
+    "open_circuit_voltage": 7.2,
+    "internal_resistance": 0.12
+  },
+  "parameter_uncertainty": {},
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1.0,
+    "notes": "Catalog baseline model."
+  },
+  "metadata": {
+    "source_component": "battery-pack"
+  }
+}

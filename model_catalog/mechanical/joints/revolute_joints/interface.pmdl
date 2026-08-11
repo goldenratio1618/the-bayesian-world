@@ -1,0 +1,39 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "revolute-joint",
+  "name": "Revolute joint",
+  "version": "1.0.0",
+  "parent": "joint",
+  "model_specificity": "Permits exactly one relative rotational degree of freedom with optional torsional stiffness and damping.",
+  "changes_contract": true,
+  "required_power_ports": [
+    {
+      "name": "a",
+      "domain": "mechanical",
+      "effort_unit": "N*m",
+      "flow_unit": "rad/s"
+    },
+    {
+      "name": "b",
+      "domain": "mechanical",
+      "effort_unit": "N*m",
+      "flow_unit": "rad/s"
+    }
+  ],
+  "required_signal_ports": [
+    {
+      "name": "angle_measurement",
+      "direction": "output",
+      "unit": "rad"
+    }
+  ],
+  "models": [
+    "mechanical.revolute_joint.compliant"
+  ],
+  "constraints": [
+    "Port torques obey action-reaction"
+  ],
+  "description": ""
+}

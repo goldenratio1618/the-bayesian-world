@@ -1,0 +1,33 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "voltage-source",
+  "name": "Voltage source",
+  "version": "1.0.0",
+  "domains": [
+    "electrical"
+  ],
+  "required_power_ports": [
+    {
+      "name": "p",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "n",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    }
+  ],
+  "required_signal_ports": [],
+  "ideal_models": [
+    "electrical.voltage_source.ideal"
+  ],
+  "constraints": [
+    "Explicitly declare supplied power"
+  ],
+  "description": "Two-terminal component imposing an electrical potential difference."
+}

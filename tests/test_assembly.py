@@ -3,23 +3,63 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
 
 import numpy as np
 
-from contraption.assembly import (
+from contraption.physics.assembly import (
     AssemblyBalanceError,
     AssemblyError,
     NetworkInvariantError,
     UnsupportedAssemblySemanticsError,
-    assemble_contraption,
+    assemble_contraption as _assemble_contraption,
 )
-from contraption.backend import NumpyBackend
-from contraption.dsl import load_model, parse_model
-from contraption.simulator import simulate
+from contraption.physics.backend import NumpyBackend
+from contraption.physics.dsl import load_model, parse_model
+from contraption.physics.specs import ControlBindingSpec, PortRef
+from contraption.physics.simulator import simulate
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def assemble_contraption(specification, *args, **kwargs):
+    if isinstance(specification, dict):
+        components = tuple(
+            SimpleNamespace(
+                id=item["id"],
+                model_id=item.get("model_id", item.get("model")),
+                parameters=item.get("parameters", {}),
+            )
+            for item in specification["components"]
+        )
+        connections = tuple(
+            SimpleNamespace(
+                id=item["id"],
+                kind=item["kind"],
+                domain=item.get("domain"),
+                endpoints=tuple(PortRef.from_dict(value) for value in item["endpoints"]),
+                metadata=item.get("metadata", {}),
+            )
+            for item in specification.get("connections", [])
+        )
+        controls = tuple(
+            ControlBindingSpec.from_dict(item) for item in specification.get("controls", [])
+        )
+        source = dict(specification)
+        specification = SimpleNamespace(
+            id=source["id"],
+            name=source["name"],
+            version=source["version"],
+            components=components,
+            connections=connections,
+            controls=controls,
+            environment=source.get("environment", {}),
+            metadata=source.get("metadata", {}),
+            to_dict=lambda: source,
+        )
+    return _assemble_contraption(specification, *args, **kwargs)
 
 
 def _estimated_box() -> dict[str, object]:
@@ -41,7 +81,7 @@ def _ground_model(*, constrained: bool = True):
             "name": "Test electrical reference",
             "version": "1.0.0",
             "domains": ["electrical"],
-            "category": "reference-boundary",
+            "implements": "reference-boundary",
             "power_ports": [
                 {
                     "name": "ground",
@@ -62,8 +102,8 @@ def _ground_model(*, constrained: bool = True):
 
 def _circuit_models(*, constrained_ground: bool = True):
     models = [
-        load_model(ROOT / "models" / "electrical" / "voltage_source.pmdl"),
-        load_model(ROOT / "models" / "electrical" / "resistor.pmdl"),
+        load_model(ROOT / "model_catalog" / "electrical" / "voltage_sources" / "voltage_source.pmdl"),
+        load_model(ROOT / "model_catalog" / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl"),
         _ground_model(constrained=constrained_ground),
     ]
     return {model.id: model for model in models}
@@ -88,26 +128,23 @@ def _circuit_spec(*, include_return: bool = True):
             }
         )
     return {
-        "format": "contraption-1",
+        "format": "resolved-assembly-test-1",
         "id": "test.resistor-circuit",
         "name": "PMDL assembled resistor circuit",
         "version": "1.0.0",
         "components": [
             {
                 "id": "source",
-                "model": "electrical.voltage_source.ideal",
-                "geometry": _estimated_box(),
+                "model_id": "electrical.voltage_source.ideal",
             },
             {
                 "id": "load",
-                "model": "electrical.resistor.ideal",
+                "model_id": "electrical.resistor.ideal",
                 "parameters": {"resistance": 100.0},
-                "geometry": _estimated_box(),
             },
             {
                 "id": "ground",
-                "model": "electrical.reference.test",
-                "geometry": _estimated_box(),
+                "model_id": "electrical.reference.test",
             },
         ],
         "connections": connections,
@@ -148,7 +185,7 @@ def _dynamic_signal_models():
             "name": "Signal producer",
             "version": "1.0.0",
             "domains": ["control"],
-            "category": "signal-source",
+            "implements": "signal-source",
             "signal_ports": [
                 {"name": "y", "direction": "output", "unit": "A"}
             ],
@@ -169,7 +206,7 @@ def _dynamic_signal_models():
             "name": "Signal consumer",
             "version": "1.0.0",
             "domains": ["control"],
-            "category": "signal-sink",
+            "implements": "signal-sink",
             "signal_ports": [
                 {"name": "u", "direction": "input", "unit": "mA"}
             ],
@@ -198,7 +235,7 @@ def _trivial_model(model_id: str):
             "name": model_id,
             "version": "1.0.0",
             "domains": ["mechanical"],
-            "category": "rigid-part",
+            "implements": "rigid-part",
             "states": [
                 {"name": "q", "unit": "1", "initial": 0.0, "derivative": "q_dot"}
             ],
@@ -216,7 +253,7 @@ def _mechanical_pair_models():
             "name": "Torque source",
             "version": "1.0.0",
             "domains": ["mechanical"],
-            "category": "torque-source",
+            "implements": "torque-source",
             "power_ports": [
                 {
                     "name": "shaft",
@@ -244,7 +281,7 @@ def _mechanical_pair_models():
             "name": "Rotational viscous load",
             "version": "1.0.0",
             "domains": ["mechanical"],
-            "category": "rotational-load",
+            "implements": "rotational-load",
             "power_ports": [
                 {
                     "name": "shaft",
@@ -353,7 +390,7 @@ class PMDLAssemblyTests(unittest.TestCase):
                 "name": "Percent command sink",
                 "version": "1.0.0",
                 "domains": ["control"],
-                "category": "command-sink",
+                "implements": "command-sink",
                 "signal_ports": [
                     {"name": "command", "direction": "input", "unit": "1"}
                 ],
@@ -361,12 +398,12 @@ class PMDLAssemblyTests(unittest.TestCase):
             }
         )
         spec = {
-            "format": "contraption-1",
+            "format": "resolved-assembly-test-1",
             "id": "test.percent-control",
             "name": "Unit-scaled control",
             "version": "1.0.0",
             "components": [
-                {"id": "sink", "model": model.id, "geometry": _estimated_box()}
+                {"id": "sink", "model_id": model.id, "geometry": _estimated_box()}
             ],
             "controls": [
                 {
@@ -393,7 +430,7 @@ class PMDLAssemblyTests(unittest.TestCase):
                 "name": "Bounded command sink",
                 "version": "1.0.0",
                 "domains": ["control"],
-                "category": "command-sink",
+                "implements": "command-sink",
                 "signal_ports": [
                     {"name": "command", "direction": "input", "unit": "V"}
                 ],
@@ -408,12 +445,12 @@ class PMDLAssemblyTests(unittest.TestCase):
             "slew_per_second": 2.0,
         }
         spec = {
-            "format": "contraption-1",
+            "format": "resolved-assembly-test-1",
             "id": "test.bounded-control",
             "name": "Bounded control",
             "version": "1.0.0",
             "components": [
-                {"id": "sink", "model": model.id, "geometry": _estimated_box()}
+                {"id": "sink", "model_id": model.id, "geometry": _estimated_box()}
             ],
             "controls": [
                 {
@@ -518,19 +555,19 @@ class PMDLAssemblyTests(unittest.TestCase):
     def test_signal_net_is_directed_and_converts_compatible_units(self) -> None:
         producer, consumer = _dynamic_signal_models()
         spec = {
-            "format": "contraption-1",
+            "format": "resolved-assembly-test-1",
             "id": "test.signal-network",
             "name": "Directed signal network",
             "version": "1.0.0",
             "components": [
                 {
                     "id": "producer",
-                    "model": producer.id,
+                    "model_id": producer.id,
                     "geometry": _estimated_box(),
                 },
                 {
                     "id": "consumer",
-                    "model": consumer.id,
+                    "model_id": consumer.id,
                     "geometry": _estimated_box(),
                 },
             ],
@@ -568,19 +605,19 @@ class PMDLAssemblyTests(unittest.TestCase):
     def test_mechanical_net_shares_velocity_and_conserves_torque(self) -> None:
         source, load = _mechanical_pair_models()
         spec = {
-            "format": "contraption-1",
+            "format": "resolved-assembly-test-1",
             "id": "test.mechanical-network",
             "name": "Mechanical power network",
             "version": "1.0.0",
             "components": [
                 {
                     "id": "source",
-                    "model": source.id,
+                    "model_id": source.id,
                     "geometry": _estimated_box(),
                 },
                 {
                     "id": "load",
-                    "model": load.id,
+                    "model_id": load.id,
                     "geometry": _estimated_box(),
                 },
             ],
@@ -616,19 +653,19 @@ class PMDLAssemblyTests(unittest.TestCase):
         left = _trivial_model("mechanical.left.test")
         right = _trivial_model("mechanical.right.test")
         spec = {
-            "format": "contraption-1",
+            "format": "resolved-assembly-test-1",
             "id": "test.kinematic-attachment",
             "name": "Kinematic-only attachment",
             "version": "1.0.0",
             "components": [
                 {
                     "id": "left",
-                    "model": left.id,
+                    "model_id": left.id,
                     "geometry": _estimated_box(),
                 },
                 {
                     "id": "right",
-                    "model": right.id,
+                    "model_id": right.id,
                     "geometry": _estimated_box(),
                 },
             ],
@@ -660,12 +697,12 @@ class PMDLAssemblyTests(unittest.TestCase):
             "components": [
                 {
                     "id": "left",
-                    "model": mechanical.id,
+                    "model_id": mechanical.id,
                     "geometry": _estimated_box(),
                 },
                 {
                     "id": "right",
-                    "model": right.id,
+                    "model_id": right.id,
                     "geometry": _estimated_box(),
                 },
             ],

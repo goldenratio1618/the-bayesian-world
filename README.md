@@ -8,16 +8,23 @@ the strategic authority. The scanner robot here is an intentional pre-product
 lab device for exercising the harness and eventually acquiring 3D structure;
 it is not the first product-level market prototype.
 
-## One canonical assembly
+## Catalog and canonical assembly
 
-A contraption is a `contraption-2` document whose component instances refer to
-versioned component packages. Each package owns:
+`model_catalog/` is organized strictly as physical domain, category, and
+optional device layers. Every layer declares an abstract `interface.pmdl`
+contract in place; there is no separate JSON taxonomy. Concrete PMDL classes
+live at the category or device layer and declare which contract they implement.
 
-- an exact-content-hash reference to its PMDL model;
-- physical bodies, solids, and provenance;
-- connector frames and their PMDL port bindings; and
-- explicit geometry/kinematic bindings to PMDL parameters and state where
-  applicable.
+Physical part instantiations live below the relevant layer in
+`instantiations/<part-id>/`. `static.part` owns model-invariant geometry,
+connectors, provenance, purchasing information, and metadata. Each `vN.model`
+selects an exact-hash PMDL class and initializes all parameters, uncertainty,
+condition, and relative compute cost. Multiple competing model instances may
+describe the same physical part.
+
+A contraption is a `contraption-3` document whose components contain only an id
+and a model-instantiation id. It owns connectivity, controls, the physical root,
+environment, and metadata; it cannot override part parameters or geometry.
 
 Resolution verifies that complete closure and emits one assembly SHA-256. The
 PMDL simulator, physical pose solver, display-only visualizer, build planner,
@@ -25,7 +32,7 @@ and C99 compiler all consume that resolved assembly. There is no independent
 scanner aggregate model, visualization layout, simulation-coverage sidecar, or
 authored online matrix file.
 
-Every `contraption-2` assembly must declare a strict, hash-bound
+Every `contraption-3` assembly must declare a strict, hash-bound
 `metadata.dynamics_completeness` status. Known omitted interactions are named as
 open gates; validation rejects a missing or contradictory record. Simulation
 reports, acceptance metrics, build planning, and C99 artifacts all carry the
@@ -136,15 +143,17 @@ promote their own results:
 
 ```bash
 contraption budget
-contraption agent-canary --kind classification --env-file ../.env
+contraption agent-canary --kind both --env-file ../.env
 contraption agent-run classification-all --env-file ../.env
 contraption agent-run modeling-one --target romi_drive --env-file ../.env
 ```
 
-The modeling agent writes inert staged candidates and may call the dedicated
-validator repeatedly for detailed parser, symbol, unit, balance, and property
-feedback. Protected inputs are hash-checked before and after a run. PMDL math
-uses a portable allow-list, including dimensionless `tanh`; arbitrary Python
+The modeling agent writes complete inert catalog bundles: any required
+interfaces, `static.part`, and at least `v1.model`. It reuses an exact existing
+PMDL class/hash when its physics fits, and adds a concrete PMDL only when needed. It may
+call the dedicated bundle validator repeatedly for path, interface, PMDL,
+parameter, physical, and property feedback. Protected inputs are hash-checked
+before and after a run. PMDL math uses a portable allow-list; arbitrary Python
 imports are not executed. The parent `../.env`, agent receipts, staging data,
 and budget ledger are machine-local and gitignored.
 

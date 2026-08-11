@@ -1,0 +1,22 @@
+{
+  "format": "model-instance-1",
+  "id": "scanner.electrical_reference.v1",
+  "variant": "v1",
+  "part": "scanner.electrical_reference",
+  "version": "1.0.0",
+  "model": {
+    "id": "electrical.reference.zero",
+    "version": "1.0.0",
+    "sha256": "sha256:97bf71af6350228da7f6c946a7515c1d175fc69726ff24c426c3c1198ebf757d"
+  },
+  "parameters": {},
+  "parameter_uncertainty": {},
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1.0,
+    "notes": "Catalog baseline model."
+  },
+  "metadata": {
+    "source_component": "electrical-reference"
+  }
+}

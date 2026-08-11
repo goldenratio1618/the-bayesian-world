@@ -1,0 +1,214 @@
+{
+  "format": "pmdl-1",
+  "id": "mechanical.differential_drive_chassis.planar",
+  "name": "Planar differential-drive scanner chassis",
+  "version": "1.0.0",
+  "domains": [
+    "mechanical"
+  ],
+  "description": "A bare rigid planar Romi chassis whose two longitudinal contact ports determine translation and yaw. Attached payload mass, inertia, and reaction loads are outside this component-local model and are guarded by the assembly dynamics-completeness record.",
+  "power_ports": [
+    {
+      "name": "left_drive",
+      "domain": "mechanical",
+      "effort": "force_left",
+      "flow": "velocity_left",
+      "effort_unit": "N",
+      "flow_unit": "m/s",
+      "orientation": "into_component",
+      "frame": "left_hub",
+      "reference": "rolling-reduced positive left hub translation"
+    },
+    {
+      "name": "right_drive",
+      "domain": "mechanical",
+      "effort": "force_right",
+      "flow": "velocity_right",
+      "effort_unit": "N",
+      "flow_unit": "m/s",
+      "orientation": "into_component",
+      "frame": "right_hub",
+      "reference": "rolling-reduced positive right hub translation"
+    }
+  ],
+  "states": [
+    {
+      "name": "position_x",
+      "unit": "m",
+      "initial": 0.85,
+      "derivative": "position_x_dot"
+    },
+    {
+      "name": "position_y",
+      "unit": "m",
+      "initial": 0.0,
+      "derivative": "position_y_dot"
+    },
+    {
+      "name": "yaw",
+      "unit": "rad",
+      "initial": 1.5707963267948966,
+      "derivative": "yaw_dot"
+    },
+    {
+      "name": "forward_speed",
+      "unit": "m/s",
+      "initial": 0.0,
+      "derivative": "forward_speed_dot"
+    },
+    {
+      "name": "yaw_rate",
+      "unit": "rad/s",
+      "initial": 0.0,
+      "derivative": "yaw_rate_dot"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "mass",
+      "unit": "kg",
+      "default": 0.16,
+      "bounds": {
+        "lower": 0.05,
+        "upper": 20.0
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.01
+        }
+      },
+      "learnable": true,
+      "description": "Published bare-chassis mass without batteries; it does not include attached scanner payloads."
+    },
+    {
+      "name": "yaw_inertia",
+      "unit": "kg*m^2",
+      "default": 0.0006502666666666667,
+      "bounds": {
+        "lower": 1e-06,
+        "upper": 10.0
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.0001
+        }
+      },
+      "learnable": true,
+      "description": "Bare-chassis center-z estimate from a uniform 0.163 m by 0.149 m box and 0.16 kg published mass; derivation is hash-bound in contraption metadata."
+    },
+    {
+      "name": "wheel_base",
+      "unit": "m",
+      "default": 0.15,
+      "bounds": {
+        "lower": 0.01,
+        "upper": 2.0
+      },
+      "uncertainty": {},
+      "learnable": true
+    },
+    {
+      "name": "linear_drag",
+      "unit": "N*s/m",
+      "default": 1.2,
+      "bounds": {
+        "lower": 0.0,
+        "upper": 100.0
+      },
+      "uncertainty": {},
+      "learnable": true
+    },
+    {
+      "name": "angular_drag",
+      "unit": "N*m*s/rad",
+      "default": 0.06,
+      "bounds": {
+        "lower": 0.0,
+        "upper": 100.0
+      },
+      "uncertainty": {},
+      "learnable": true
+    }
+  ],
+  "relations": [
+    {
+      "name": "x_kinematics",
+      "expression": "position_x_dot - forward_speed * cos(yaw)"
+    },
+    {
+      "name": "y_kinematics",
+      "expression": "position_y_dot - forward_speed * sin(yaw)"
+    },
+    {
+      "name": "yaw_kinematics",
+      "expression": "yaw_dot - yaw_rate"
+    },
+    {
+      "name": "forward_dynamics",
+      "expression": "mass * forward_speed_dot - force_left - force_right + linear_drag * forward_speed"
+    },
+    {
+      "name": "yaw_dynamics",
+      "expression": "yaw_inertia * yaw_rate_dot - 0.5 * wheel_base * (force_right - force_left) + angular_drag * yaw_rate"
+    },
+    {
+      "name": "left_drive_velocity",
+      "expression": "velocity_left - forward_speed + 0.5 * wheel_base * yaw_rate"
+    },
+    {
+      "name": "right_drive_velocity",
+      "expression": "velocity_right - forward_speed - 0.5 * wheel_base * yaw_rate"
+    }
+  ],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [],
+    "required": [
+      "position_x",
+      "position_y",
+      "yaw",
+      "forward_speed",
+      "yaw_rate"
+    ]
+  },
+  "validity": {
+    "ranges": {
+      "forward_speed": {
+        "lower": -1.0,
+        "upper": 1.0
+      },
+      "yaw_rate": {
+        "lower": -5.0,
+        "upper": 5.0
+      }
+    },
+    "assumptions": [
+      "Planar rigid body",
+      "Mass and yaw inertia cover only the bare chassis",
+      "Fixed payload mass/inertia, moving arm/camera inertial coupling, and servo case-reaction loads are omitted and must remain open acceptance/build gates",
+      "Wheel forces act at symmetric lateral offsets",
+      "No lateral dynamics or wheel lift"
+    ],
+    "max_timestep": 0.05
+  },
+  "trust": {
+    "structural": "tested",
+    "physical": "reviewed",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": []
+  },
+  "metadata": {
+    "gold": false,
+    "scanner_component": true,
+    "causality": "acausal",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0",
+    "online_admission": {
+      "admitted": true,
+      "kind": "linearizable"
+    }
+  },
+  "implements": "differential-drive-chassis"
+}

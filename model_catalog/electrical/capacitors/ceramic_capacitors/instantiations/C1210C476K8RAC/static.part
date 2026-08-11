@@ -1,0 +1,120 @@
+{
+  "format": "static-part-1",
+  "id": "C1210C476K8RAC",
+  "name": "KEMET 47 uF ceramic capacitor",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "body",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "envelope",
+          "geometry": {
+            "kind": "box",
+            "dimensions_m": [
+              0.0032,
+              0.0025,
+              0.0025
+            ]
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "catalog",
+            "source": "KEMET C1210C476K8RAC nominal 1210 package and ordering code",
+            "reference": "C1210C476K8RAC"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "p",
+      "model_port": "p",
+      "body": "body",
+      "domain": "electrical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          -0.0016,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "generic catalog connector frame"
+      }
+    },
+    {
+      "id": "n",
+      "model_port": "n",
+      "body": "body",
+      "domain": "electrical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          0.0016,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "generic catalog connector frame"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "catalog",
+    "source": "KEMET C1210C476K8RAC nominal 1210 package and ordering code",
+    "reference": "C1210C476K8RAC"
+  },
+  "purchasing": {
+    "manufacturer": "KEMET",
+    "manufacturer_part_number": "C1210C476K8RAC"
+  },
+  "metadata": {
+    "dielectric": "X7R",
+    "package": "1210"
+  }
+}

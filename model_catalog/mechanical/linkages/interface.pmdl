@@ -1,0 +1,18 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "linkage",
+  "name": "Mechanical linkage",
+  "version": "1.0.0",
+  "domains": [
+    "mechanical"
+  ],
+  "required_power_ports": [],
+  "required_signal_ports": [],
+  "ideal_models": [],
+  "constraints": [
+    "Joint axes and inertial approximation are explicit."
+  ],
+  "description": "Rigid or compliant mechanical linkage."
+}

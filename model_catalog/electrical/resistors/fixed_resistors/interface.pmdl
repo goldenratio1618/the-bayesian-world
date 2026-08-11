@@ -1,0 +1,20 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "fixed-resistor",
+  "name": "Fixed resistor",
+  "version": "1.0.0",
+  "parent": "resistor",
+  "model_specificity": "Resistance is a fixed uncertain parameter rather than an externally controlled quantity.",
+  "changes_contract": false,
+  "required_power_ports": [],
+  "required_signal_ports": [],
+  "models": [
+    "electrical.resistor.ideal"
+  ],
+  "constraints": [
+    "No control signal changes nominal resistance"
+  ],
+  "description": ""
+}

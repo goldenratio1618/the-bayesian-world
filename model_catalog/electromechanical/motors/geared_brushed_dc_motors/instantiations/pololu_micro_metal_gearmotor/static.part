@@ -1,0 +1,163 @@
+{
+  "format": "static-part-1",
+  "id": "scanner.gearmotor",
+  "name": "Pololu micro metal gearmotor",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "case",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "motor_case",
+          "geometry": {
+            "kind": "box",
+            "dimensions_m": [
+              0.037,
+              0.02,
+              0.027
+            ]
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "catalog",
+            "source": "Pololu gearmotor envelope",
+            "reference": "Pololu 1520"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "case_mount",
+      "model_port": null,
+      "body": "case",
+      "domain": "mechanical",
+      "interface": "scanner-fixed-mount",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "case center mounting approximation"
+      }
+    },
+    {
+      "id": "shaft",
+      "model_port": "shaft",
+      "body": "case",
+      "domain": "mechanical",
+      "interface": "rotational-shaft",
+      "joint_coordinate_state": null,
+      "local_pose": {
+        "translation_m": [
+          0,
+          0.0185,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          0.7071067811865476,
+          0.7071067811865475,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "shaft center from catalog envelope; this reduced motor has no independent integrated shaft-angle state"
+      }
+    },
+    {
+      "id": "p",
+      "model_port": "p",
+      "body": "case",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          -0.0185,
+          0.006,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "terminal location approximation"
+      }
+    },
+    {
+      "id": "n",
+      "model_port": "n",
+      "body": "case",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          -0.0185,
+          -0.006,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "terminal location approximation"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "catalog",
+    "source": "Pololu product envelope with estimated ports",
+    "reference": "Pololu 1520"
+  },
+  "purchasing": {},
+  "metadata": {}
+}

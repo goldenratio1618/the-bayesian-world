@@ -1,0 +1,20 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "encoder",
+  "name": "Encoder",
+  "version": "1.0.0",
+  "domains": [
+    "electromechanical",
+    "electrical",
+    "mechanical"
+  ],
+  "required_power_ports": [],
+  "required_signal_ports": [],
+  "ideal_models": [],
+  "constraints": [
+    "Measured mechanical quantity and electrical supply are explicit."
+  ],
+  "description": "Electromechanical position or rate sensor."
+}

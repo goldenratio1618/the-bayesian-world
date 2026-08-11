@@ -1,0 +1,39 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "powered-rotational-camera",
+  "name": "Powered rotational camera",
+  "version": "1.0.0",
+  "parent": "camera",
+  "model_specificity": "An optical camera payload includes electrical draw and rotational mount dynamics in one coupled model.",
+  "changes_contract": true,
+  "required_power_ports": [
+    {
+      "name": "supply_p",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "supply_n",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "joint",
+      "domain": "mechanical",
+      "effort_unit": "N*m",
+      "flow_unit": "rad/s"
+    }
+  ],
+  "required_signal_ports": [],
+  "models": [
+    "electromechanical.camera_payload.rotational"
+  ],
+  "constraints": [
+    "Image formation fidelity and mechanical pointing convention are declared."
+  ],
+  "description": ""
+}

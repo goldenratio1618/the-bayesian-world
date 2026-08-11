@@ -1,0 +1,54 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "dual-shaft-encoder",
+  "name": "Dual shaft encoder",
+  "version": "1.0.0",
+  "parent": "encoder",
+  "model_specificity": "Two independent rotational rate channels are observed and emitted as paired electrical measurements.",
+  "changes_contract": true,
+  "required_power_ports": [
+    {
+      "name": "supply_p",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "supply_n",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    }
+  ],
+  "required_signal_ports": [
+    {
+      "name": "left_rate",
+      "direction": "input",
+      "unit": "rad/s"
+    },
+    {
+      "name": "right_rate",
+      "direction": "input",
+      "unit": "rad/s"
+    },
+    {
+      "name": "left_measurement",
+      "direction": "output",
+      "unit": "rad/s"
+    },
+    {
+      "name": "right_measurement",
+      "direction": "output",
+      "unit": "rad/s"
+    }
+  ],
+  "models": [
+    "electromechanical.encoder_pair.ideal"
+  ],
+  "constraints": [
+    "Left and right channels are explicitly identified."
+  ],
+  "description": ""
+}

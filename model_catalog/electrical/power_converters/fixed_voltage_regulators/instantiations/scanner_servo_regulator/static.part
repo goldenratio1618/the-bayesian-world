@@ -1,0 +1,186 @@
+{
+  "format": "static-part-1",
+  "id": "scanner.servo_regulator",
+  "name": "Scanner servo regulator",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "board",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "regulator_board",
+          "geometry": {
+            "kind": "box",
+            "dimensions_m": [
+              0.023,
+              0.023,
+              0.01
+            ]
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "catalog",
+            "source": "regulator nominal envelope",
+            "reference": "Pololu 4981"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "mount",
+      "model_port": null,
+      "body": "board",
+      "domain": "mechanical",
+      "interface": "scanner-fixed-mount",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          -0.005
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "board lower face"
+      }
+    },
+    {
+      "id": "vin_p",
+      "model_port": "vin_p",
+      "body": "board",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          -0.0115,
+          0.006,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "terminal approximation"
+      }
+    },
+    {
+      "id": "vin_n",
+      "model_port": "vin_n",
+      "body": "board",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          -0.0115,
+          -0.006,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "terminal approximation"
+      }
+    },
+    {
+      "id": "out_p",
+      "model_port": "out_p",
+      "body": "board",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          0.0115,
+          0.006,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "terminal approximation"
+      }
+    },
+    {
+      "id": "out_n",
+      "model_port": "out_n",
+      "body": "board",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          0.0115,
+          -0.006,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "terminal approximation"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "catalog",
+    "source": "Pololu nominal envelope with estimated terminal locations",
+    "reference": "Pololu 4981"
+  },
+  "purchasing": {},
+  "metadata": {}
+}

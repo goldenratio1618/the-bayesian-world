@@ -1,0 +1,26 @@
+{
+  "format": "model-instance-1",
+  "id": "scanner.arm_linkage.v1",
+  "variant": "v1",
+  "part": "scanner.arm_linkage",
+  "version": "1.0.0",
+  "model": {
+    "id": "mechanical.rotational_link.rigid",
+    "version": "1.0.0",
+    "sha256": "sha256:5852a7e18ed784e93912b64a4377ef902b6da6b288864e9a1f72a5411467b44d"
+  },
+  "parameters": {
+    "inertia": 0.002,
+    "damping": 0.04,
+    "gravity_torque": 0.12
+  },
+  "parameter_uncertainty": {},
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1.0,
+    "notes": "Catalog baseline model."
+  },
+  "metadata": {
+    "source_component": "arm-linkage"
+  }
+}

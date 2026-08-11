@@ -2,22 +2,22 @@
 
 ## Trust boundary
 
-Agent output is a proposal in `staging/`, not part of the component registry.
-The classifier can propose taxonomy placement; the modeler can propose `.pmdl`,
-JSON, and Markdown artifacts. Neither can emit executable host code. Safe paths,
-JSON shape, DSL grammar, symbol references, units, equation balance, physical
-properties, bounds, initialization, and composition are checked before a human
-or automation explicitly calls `promote`.
+Agent output is a proposal in `staging/`, not part of `model_catalog/`. The
+classifier proposes a physical domain, category, and device placement. The
+modeler proposes catalog-relative `.pmdl`, `.part`, `.model`, JSON, and Markdown
+artifacts. Neither can emit executable host code. Safe paths, interface
+contracts, DSL grammar, symbol references, units, equation balance, physical
+properties, complete initialization, and composition are checked before a
+human or automation explicitly calls `promote`.
 
 Classification has an additional deterministic semantic gate. Every proposed
-domain must exist. `reuse_path` must be the exact, contiguous ancestry from an
-existing category through its deepest reused subcategory. Unknown identifiers
-are forbidden in that path and may appear only in `new_nodes`, which must be a
-collision-free, parent-valid acyclic extension of the reused path. `category`
-must name the root and `subcategory` a selected terminal existing or proposed
-node. Empty canonical/category/subcategory values and proposals whose category
-physics is missing from `domains` are rejected after dispatch and charged from
-reported usage, but are never persisted as completed proposals.
+domain must exist and correspond to physics. `reuse_path` must be the exact
+category/device ancestry already declared by colocated `interface.pmdl` files.
+Unknown identifiers may appear only as one collision-free proposed device below
+an existing or proposed category. Empty canonical/category/device values,
+project names masquerading as domains, and placements whose required physics
+is absent from `domains` are rejected after dispatch and never persisted as
+completed proposals.
 
 Promotion does not trust an earlier validation result. It revalidates the live
 staging tree, rejects symlinks and special files, copies into a private
@@ -55,12 +55,13 @@ Change these explicitly when using another tier, region, model, or price date.
 
 ## Required modeling workspace
 
-Every run copies, then instructs the model to read fully:
+Every run copies, preserves the catalog-relative source label, then instructs
+the model to read fully:
 
 1. `prompts/model_constraints.md`;
-2. one electrical and one rigid-mechanical gold hierarchy;
-3. the complete current taxonomy;
-4. only the direct ancestor/current-instance hierarchy relevant to the item;
+2. representative concrete PMDL, `static.part`, and `vN.model` gold records;
+3. all current domain/category/device `interface.pmdl` contracts;
+4. only the direct ancestor and concrete-model hierarchy relevant to the item;
 5. the full component information record.
 
 The numbered canonical copies and a SHA-256 context manifest live beside the
@@ -69,18 +70,23 @@ writable `workspace/`, not inside it. The agent receives their complete text in
 the protected input/control hashes before dispatch, immediately after Codex
 exits, and on error paths.
 
-The modeler is instructed to validate each PMDL draft iteratively with:
+The modeler is instructed to validate the complete catalog bundle iteratively
+with:
 
 ```console
-python -I -m contraption.model_validation_tool candidate/<name>.pmdl
+python -I -m contraption.part_import.model_validation_tool --bundle candidate
 ```
 
-That dedicated command rejects absolute paths, traversal, symlinks, non-PMDL
-files, and anything outside `candidate/`. It checks protected hashes before and
-after parsing, then returns sorted issue codes, schema paths, and messages from
-the safe PMDL parser and deterministic validator. It never imports or executes
-generated host code. Isolated Python mode plus a trusted-interpreter-first
-`PATH` prevents workspace modules from shadowing the installed validator.
+That dedicated command rejects absolute paths, traversal, symlinks, unsupported
+files, and anything outside `candidate/`. It overlays the proposed files on the
+current catalog and validates the full domain/category/device interface tree,
+every concrete PMDL contract, every `static.part`, and every `vN.model` hash and
+parameter set. Each instantiation must sit below a declared category/device
+interface and its referenced PMDL must implement that exact contract. It checks
+protected hashes before and after parsing and never
+imports or executes generated host code. Isolated Python mode plus a
+trusted-interpreter-first `PATH` prevents workspace modules from shadowing the
+installed validator.
 Calls are recorded in `validation-calls.jsonl`; after the
 agent exits, the host writes `validation-activity.json` with successful/failed
 counts and flags more than five calls as a prompt/support-material smell. This
@@ -92,10 +98,13 @@ safe materialization, and full artifact validation still run independently.
 Only `OPENAI_API_KEY` is read from `.env`; unrelated dotenv values are ignored.
 Without `--env-file`, the CLI accepts exactly one `.env` found in the repository
 or its parent directory. If both exist, it stops and requires an explicit path
-instead of silently selecting credentials. The secret is passed through the
-child environment and never written to an agent workspace or ledger. Existing
-Codex CLI authentication can be used for the modeling run when the environment
-does not provide a key.
+instead of silently selecting credentials. Classification passes the key
+directly to the SDK. Modeling admits it through `codex login --with-api-key`
+inside a short-lived `CODEX_HOME`, removes the key from the rollout environment,
+and destroys that temporary authentication directory after the subprocess
+exits. The secret is never written to an agent workspace, durable staging tree,
+or ledger. Existing Codex CLI authentication can be used when no key is
+provided.
 
 ## Guarded full runs
 

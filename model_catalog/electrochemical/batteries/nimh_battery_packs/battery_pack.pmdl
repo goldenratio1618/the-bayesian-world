@@ -1,0 +1,115 @@
+{
+  "format": "pmdl-1",
+  "id": "electrical.nimh_battery_pack.lumped",
+  "name": "NiMH battery pack, lumped terminal model",
+  "version": "1.0.0",
+  "domains": [
+    "electrochemical",
+    "electrical"
+  ],
+  "description": "A finite-resistance two-terminal source used by the scanner prototype.",
+  "power_ports": [
+    {
+      "name": "positive",
+      "domain": "electrical",
+      "effort": "v_positive",
+      "flow": "i_positive",
+      "effort_unit": "V",
+      "flow_unit": "A",
+      "orientation": "into_component",
+      "frame": "positive",
+      "reference": "positive pack terminal"
+    },
+    {
+      "name": "negative",
+      "domain": "electrical",
+      "effort": "v_negative",
+      "flow": "i_negative",
+      "effort_unit": "V",
+      "flow_unit": "A",
+      "orientation": "into_component",
+      "frame": "negative",
+      "reference": "negative pack terminal"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "open_circuit_voltage",
+      "unit": "V",
+      "default": 7.2,
+      "bounds": {
+        "lower": 0.1,
+        "upper": 20.0
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.35
+        }
+      },
+      "learnable": true
+    },
+    {
+      "name": "internal_resistance",
+      "unit": "ohm",
+      "default": 0.12,
+      "bounds": {
+        "lower": 1e-06,
+        "upper": 10.0
+      },
+      "uncertainty": {
+        "distribution": "lognormal",
+        "parameters": {
+          "std": 0.03
+        }
+      },
+      "learnable": true
+    }
+  ],
+  "relations": [
+    {
+      "name": "terminal_voltage",
+      "expression": "v_positive - v_negative - open_circuit_voltage + internal_resistance * i_positive"
+    },
+    {
+      "name": "charge_conservation",
+      "expression": "i_positive + i_negative"
+    }
+  ],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [],
+    "required": []
+  },
+  "validity": {
+    "ranges": {
+      "i_positive": {
+        "lower": -20.0,
+        "upper": 20.0
+      }
+    },
+    "assumptions": [
+      "State of charge is constant over the short scanner demonstration",
+      "Temperature dependence and cell imbalance are omitted"
+    ],
+    "max_timestep": 0.05
+  },
+  "trust": {
+    "structural": "tested",
+    "physical": "reviewed",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": []
+  },
+  "metadata": {
+    "gold": false,
+    "scanner_component": true,
+    "causality": "acausal",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0",
+    "online_admission": {
+      "admitted": true,
+      "kind": "linear"
+    }
+  },
+  "implements": "nimh-battery-pack"
+}

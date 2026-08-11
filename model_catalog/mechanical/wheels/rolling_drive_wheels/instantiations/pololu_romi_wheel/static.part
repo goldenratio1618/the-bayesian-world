@@ -1,0 +1,154 @@
+{
+  "format": "static-part-1",
+  "id": "scanner.wheel",
+  "name": "Pololu Romi wheel",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "wheel",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "tire",
+          "geometry": {
+            "kind": "cylinder",
+            "dimensions_m": [
+              0.07,
+              0.07,
+              0.008
+            ]
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              0.7071067811865476,
+              0.7071067811865475,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "catalog",
+            "source": "Romi wheel nominal dimensions",
+            "reference": "Pololu Romi wheel"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "hub",
+      "model_port": "axle",
+      "body": "wheel",
+      "domain": "mechanical",
+      "interface": "rotational-shaft",
+      "joint_coordinate_state": "angle",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          0.7071067811865476,
+          0.7071067811865475,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "wheel-axis center with explicit PMDL angle-state binding"
+      }
+    },
+    {
+      "id": "translation",
+      "model_port": "translation",
+      "body": "wheel",
+      "domain": "mechanical",
+      "interface": "hub-translation",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          0.7071067811865476,
+          0.7071067811865475,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "derived",
+        "source": "non-material rolling-reduced translation frame at wheel hub; local +z follows axle orientation"
+      },
+      "kinematics": {
+        "kind": "counter_rotation",
+        "state": "angle"
+      }
+    },
+    {
+      "id": "angular_velocity_measurement",
+      "model_port": "angular_velocity_measurement",
+      "body": "wheel",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "derived",
+        "source": "ideal wheel-rate observation"
+      }
+    }
+  ],
+  "parameter_bindings": [
+    {
+      "model_parameter": "radius",
+      "unit": "m",
+      "absolute_tolerance": 1e-12,
+      "measure": {
+        "kind": "solid_radius",
+        "body": "wheel",
+        "solid": "tire",
+        "axis": "x"
+      }
+    }
+  ],
+  "provenance": {
+    "kind": "catalog",
+    "source": "Pololu nominal dimensions plus derived contact point"
+  },
+  "purchasing": {},
+  "metadata": {}
+}

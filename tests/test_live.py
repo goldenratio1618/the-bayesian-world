@@ -9,13 +9,13 @@ from unittest import mock
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from contraption.controls import SignalSpec
-from contraption.live import (
+from contraption.physics.controls import SignalSpec
+from contraption.visualization.server import (
     LiveRequestError,
     LiveScannerApplication,
     make_live_handler,
 )
-from contraption.resolved import ResolvedAssembly
+from contraption.physics.resolved import ResolvedAssembly
 
 
 ASSEMBLY_HASH = "sha256:" + "a" * 64
@@ -41,7 +41,7 @@ def _scene() -> dict:
         "components": [
             {
                 "id": "part",
-                "package": "fixture.part",
+                "part": "fixture.part",
                 "model": "fixture_model",
                 "physical_role": "part",
                 "bodies": [
@@ -123,7 +123,7 @@ def _assembly() -> ResolvedAssembly:
     )
     values = {
         "specification": SimpleNamespace(controller=controller_reference),
-        "packages": None,
+        "parts": None,
         "component_models": None,
         "connector_bindings": None,
         "controller": controller,
@@ -150,7 +150,7 @@ class LiveScannerApplicationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.simulate = _SimulationStub()
         self.scene_patch = mock.patch(
-            "contraption.live.scanner_physical_scene",
+            "contraption.visualization.server.scanner_physical_scene",
             side_effect=lambda _assembly, _result: _scene(),
         )
         self.scene_patch.start()
@@ -200,7 +200,7 @@ class LiveScannerApplicationTests(unittest.TestCase):
     def test_viewer_is_generated_from_the_assembly_and_actual_result(self) -> None:
         artifact = SimpleNamespace(files={"index.html": "canonical viewer"})
         with mock.patch(
-            "contraption.live.generate_viewer", return_value=artifact
+            "contraption.visualization.server.generate_viewer", return_value=artifact
         ) as generate:
             files = self.application.viewer_files()
         self.assertEqual(files, artifact.files)

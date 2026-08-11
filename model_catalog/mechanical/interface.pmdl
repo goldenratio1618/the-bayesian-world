@@ -1,0 +1,15 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "domain",
+  "abstract": true,
+  "id": "mechanical",
+  "name": "Rigid-body mechanical",
+  "version": "1.0.0",
+  "requires_physics": [
+    "mechanical"
+  ],
+  "allowed_port_domains": [
+    "mechanical"
+  ],
+  "description": "Planar rigid-body translation and rotation."
+}

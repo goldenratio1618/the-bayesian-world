@@ -1,0 +1,211 @@
+{
+  "format": "static-part-1",
+  "id": "scanner.position_servo",
+  "name": "Generic position servo",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "case",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "servo_case",
+          "geometry": {
+            "kind": "box",
+            "dimensions_m": [
+              0.041,
+              0.02,
+              0.038
+            ]
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "catalog",
+            "source": "micro servo nominal envelope",
+            "reference": "Pololu 3550 kit servo"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "case_mount",
+      "model_port": null,
+      "body": "case",
+      "domain": "mechanical",
+      "interface": "scanner-fixed-mount",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "case center mounting approximation"
+      }
+    },
+    {
+      "id": "shaft",
+      "model_port": "shaft",
+      "body": "case",
+      "domain": "mechanical",
+      "interface": "rotational-shaft",
+      "joint_coordinate_state": "angle",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0.019
+        ],
+        "rotation_quaternion_wxyz": [
+          0.7071067811865476,
+          -0.7071067811865475,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "servo horn center with explicit PMDL angle-state binding"
+      }
+    },
+    {
+      "id": "supply_p",
+      "model_port": "supply_p",
+      "body": "case",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          -0.0205,
+          0.004,
+          -0.01
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "servo lead origin"
+      }
+    },
+    {
+      "id": "supply_n",
+      "model_port": "supply_n",
+      "body": "case",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          -0.0205,
+          -0.004,
+          -0.01
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "servo lead origin"
+      }
+    },
+    {
+      "id": "position_command",
+      "model_port": "position_command",
+      "body": "case",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [
+          -0.0205,
+          0,
+          -0.01
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "servo lead origin"
+      }
+    },
+    {
+      "id": "position_measurement",
+      "model_port": "position_measurement",
+      "body": "case",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [
+          -0.0205,
+          0.008,
+          -0.01
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "feedback lead origin"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "catalog",
+    "source": "kit envelope with estimated connector frames",
+    "reference": "Pololu 3550"
+  },
+  "purchasing": {},
+  "metadata": {}
+}

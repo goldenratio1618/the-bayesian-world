@@ -31,12 +31,21 @@ balance, conservation, bounds, initialization, composition, property-test, or
 path-safety failure. It cannot modify the simulator or any host-language code.
 
 The only top-level model keys are `format`, `id`, `name`, `version`, `domains`,
-`category`, `description`, `power_ports`, `signal_ports`, `states`, `algebraics`,
+`implements`, `description`, `power_ports`, `signal_ports`, `states`, `algebraics`,
 `parameters`, `relations`, `stored_energy`, `dissipation`, `sources`, `modes`,
 `initialization`, `validity`, `fidelity_levels`, `properties`, `trust`, and
 `metadata`. Never invent keys such as `jacobians` or `geometry`; express extra
 descriptive detail under `metadata` only when it is data rather than executable
 behavior.
+
+Every concrete PMDL must live at its category or device layer in
+`model_catalog/<physical-domain>/<category>[/<device>]/` and its `implements`
+value must name that directory's abstract `interface.pmdl` contract. Imported
+parts live below an adjacent `instantiations/<part-id>/` directory. Each such
+directory contains exactly one `static.part` for model-invariant physical data
+and one or more `vN.model` files selecting an exact PMDL id/version/hash and
+initializing every parameter. A complete import is validated as one bundle;
+contraptions reference the model-instance id and never repeat its parameters.
 
 ## Exact nested record names
 

@@ -1,0 +1,26 @@
+{
+  "format": "model-instance-1",
+  "id": "scanner.camera.v1",
+  "variant": "v1",
+  "part": "scanner.camera",
+  "version": "1.0.0",
+  "model": {
+    "id": "electromechanical.camera_payload.rotational",
+    "version": "1.0.0",
+    "sha256": "sha256:bc9fa47dd4ea936ba49bd3758ac782cd0b6f301d6561309030a610b11910d6e5"
+  },
+  "parameters": {
+    "inertia": 8e-05,
+    "bearing_damping": 0.01,
+    "current_draw": 0.15
+  },
+  "parameter_uncertainty": {},
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1.0,
+    "notes": "Catalog baseline model."
+  },
+  "metadata": {
+    "source_component": "camera"
+  }
+}

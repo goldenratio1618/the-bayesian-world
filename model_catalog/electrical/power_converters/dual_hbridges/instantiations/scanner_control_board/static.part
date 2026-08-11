@@ -1,0 +1,426 @@
+{
+  "format": "static-part-1",
+  "id": "scanner.control_board",
+  "name": "Scanner dual H-bridge control board",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "board",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "pcb",
+          "geometry": {
+            "kind": "box",
+            "dimensions_m": [
+              0.112,
+              0.084,
+              0.01
+            ]
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "catalog",
+            "source": "Romi control board nominal envelope",
+            "reference": "Pololu 3544"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "mount",
+      "model_port": null,
+      "body": "board",
+      "domain": "mechanical",
+      "interface": "scanner-fixed-mount",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          -0.005
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "board lower face"
+      }
+    },
+    {
+      "id": "supply_p",
+      "model_port": "supply_p",
+      "body": "board",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          -0.056,
+          0.03,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "terminal-block approximation"
+      }
+    },
+    {
+      "id": "supply_n",
+      "model_port": "supply_n",
+      "body": "board",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          -0.056,
+          0.02,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "terminal-block approximation"
+      }
+    },
+    {
+      "id": "left_p",
+      "model_port": "left_p",
+      "body": "board",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0.042,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "motor header approximation"
+      }
+    },
+    {
+      "id": "left_n",
+      "model_port": "left_n",
+      "body": "board",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          0.012,
+          0.042,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "motor header approximation"
+      }
+    },
+    {
+      "id": "right_p",
+      "model_port": "right_p",
+      "body": "board",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          0,
+          -0.042,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "motor header approximation"
+      }
+    },
+    {
+      "id": "right_n",
+      "model_port": "right_n",
+      "body": "board",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          0.012,
+          -0.042,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "motor header approximation"
+      }
+    },
+    {
+      "id": "logic_p",
+      "model_port": "logic_p",
+      "body": "board",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          0.056,
+          0.01,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "logic header approximation"
+      }
+    },
+    {
+      "id": "logic_n",
+      "model_port": "logic_n",
+      "body": "board",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          0.056,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "logic header approximation"
+      }
+    },
+    {
+      "id": "left_command",
+      "model_port": "left_command",
+      "body": "board",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [
+          -0.02,
+          0.042,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "on-board control signal"
+      }
+    },
+    {
+      "id": "right_command",
+      "model_port": "right_command",
+      "body": "board",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [
+          -0.02,
+          -0.042,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "on-board control signal"
+      }
+    },
+    {
+      "id": "left_encoder",
+      "model_port": "left_encoder",
+      "body": "board",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [
+          0.03,
+          0.042,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "encoder header approximation"
+      }
+    },
+    {
+      "id": "right_encoder",
+      "model_port": "right_encoder",
+      "body": "board",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [
+          0.03,
+          -0.042,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "encoder header approximation"
+      }
+    },
+    {
+      "id": "lift_position",
+      "model_port": "lift_position",
+      "body": "board",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [
+          0.056,
+          -0.02,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "analog header approximation"
+      }
+    },
+    {
+      "id": "tilt_position",
+      "model_port": "tilt_position",
+      "body": "board",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [
+          0.056,
+          -0.03,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "analog header approximation"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "catalog",
+    "source": "Pololu board envelope and estimated header locations",
+    "reference": "Pololu 3544"
+  },
+  "purchasing": {},
+  "metadata": {}
+}

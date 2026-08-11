@@ -1,0 +1,138 @@
+{
+  "format": "static-part-1",
+  "id": "scanner.compute",
+  "name": "Scanner compute load",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "board",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "compute_board",
+          "geometry": {
+            "kind": "box",
+            "dimensions_m": [
+              0.065,
+              0.03,
+              0.005
+            ]
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "catalog",
+            "source": "Raspberry Pi Zero 2 W nominal envelope",
+            "reference": "Raspberry Pi Zero 2 W"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "mount",
+      "model_port": null,
+      "body": "board",
+      "domain": "mechanical",
+      "interface": "scanner-fixed-mount",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          -0.0025
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "board lower face"
+      }
+    },
+    {
+      "id": "p",
+      "model_port": "p",
+      "body": "board",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          -0.0325,
+          0.006,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "power header abstraction"
+      }
+    },
+    {
+      "id": "n",
+      "model_port": "n",
+      "body": "board",
+      "domain": "electrical",
+      "interface": "wire-terminal",
+      "local_pose": {
+        "translation_m": [
+          -0.0325,
+          -0.006,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "power header abstraction"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "catalog",
+    "source": "vendor envelope with equivalent power terminals",
+    "reference": "Raspberry Pi Zero 2 W"
+  },
+  "purchasing": {},
+  "metadata": {}
+}

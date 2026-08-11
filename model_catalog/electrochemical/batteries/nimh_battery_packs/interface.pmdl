@@ -1,0 +1,33 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "nimh-battery-pack",
+  "name": "NiMH battery pack",
+  "version": "1.0.0",
+  "parent": "battery",
+  "model_specificity": "A series nickel-metal-hydride cell pack is represented by terminal voltage and internal resistance.",
+  "changes_contract": true,
+  "required_power_ports": [
+    {
+      "name": "positive",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "negative",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    }
+  ],
+  "required_signal_ports": [],
+  "models": [
+    "electrical.nimh_battery_pack.lumped"
+  ],
+  "constraints": [
+    "Cell count and chemistry are recorded in static metadata."
+  ],
+  "description": ""
+}

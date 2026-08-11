@@ -12,21 +12,21 @@ from unittest import mock
 
 import numpy as np
 
-from contraption.build import BuildInstructionError, generate_build_instructions
+from contraption.manufacturing.build import BuildInstructionError, generate_build_instructions
 from contraption.cli import (
     _trajectory_payload,
     _trajectory_result,
     build_parser,
     command_compile,
 )
-from contraption.controls import ControlProgram
-from contraption.dsl import ModelRegistry
-from contraption.physical import ComponentPackageRegistry
-from contraption.physical import resolve_physical_assembly
-from contraption.resolved import resolve_assembly
-from contraption.scanner import simulate_scanner_robot
-from contraption.specs import FrozenDict
-from contraption.visualization import (
+from contraption.physics.physical import (
+    ResolvedPartRegistry,
+    ResolvedPartSpec,
+    resolve_physical_assembly as _resolve_physical_assembly,
+)
+from contraption.applications.scanner import load_scanner_assembly, simulate_scanner_robot
+from contraption.physics.specs import FrozenDict
+from contraption.visualization.viewer import (
     VisualizationError,
     generate_viewer,
     validate_physical_scene,
@@ -36,34 +36,17 @@ from contraption.visualization import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def resolve_physical_assembly(contraption, parts):
+    values = parts.values() if isinstance(parts, dict) else parts
+    registry = ResolvedPartRegistry(
+        value if isinstance(value, ResolvedPartSpec) else ResolvedPartSpec.from_dict(value)
+        for value in values
+    )
+    return _resolve_physical_assembly(contraption, registry)
+
+
 def scanner_assembly():
-    registry = ModelRegistry()
-    registry.load_directory(ROOT / "models", validate=False)
-    packages = ComponentPackageRegistry.load(
-        ROOT / "examples" / "scanner_robot" / "component_packages.json"
-    )
-    specification = json.loads(
-        (ROOT / "examples" / "scanner_robot" / "contraption.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    controller = ControlProgram.from_dict(
-        json.loads(
-            (
-                ROOT
-                / "examples"
-                / "scanner_robot"
-                / "controls"
-                / "scanner.control.json"
-            ).read_text(encoding="utf-8")
-        )
-    )
-    return resolve_assembly(
-        specification,
-        packages,
-        registry,
-        control_programs={controller.name: controller},
-    )
+    return load_scanner_assembly(ROOT)
 
 
 class BuildInstructionTests(unittest.TestCase):
@@ -120,7 +103,7 @@ class BuildInstructionTests(unittest.TestCase):
                 for item in self.assembly.specification.components
                 if item.id == component_id
             )
-            expected = self.assembly.packages[component.package].connector_map[
+            expected = self.assembly.parts[component.part].connector_map[
                 port_id
             ].provenance.to_dict()
             self.assertEqual(battery_bus.connector_provenance[endpoint], expected)
@@ -196,7 +179,7 @@ class VisualizationTests(unittest.TestCase):
         }
         provenance = {
             "kind": "estimated",
-            "source": "unit-test component package",
+            "source": "unit-test static part",
             "reference": None,
         }
         initial_poses = {
@@ -224,7 +207,7 @@ class VisualizationTests(unittest.TestCase):
             "components": [
                 {
                     "id": "chassis",
-                    "package": "scanner.chassis.v1",
+                    "part": "scanner.chassis.v1",
                     "model": "rigid_chassis",
                     "physical_role": "part",
                     "bodies": [
@@ -276,7 +259,7 @@ class VisualizationTests(unittest.TestCase):
                 },
                 {
                     "id": "camera",
-                    "package": "scanner.camera.v1",
+                    "part": "scanner.camera.v1",
                     "model": "depth_camera",
                     "physical_role": "part",
                     "bodies": [
@@ -312,7 +295,7 @@ class VisualizationTests(unittest.TestCase):
                 },
                 {
                     "id": "mission",
-                    "package": "scanner.mission-boundary.v1",
+                    "part": "scanner.mission-boundary.v1",
                     "model": "mission_boundary",
                     "physical_role": "boundary",
                     "bodies": [],
@@ -642,7 +625,7 @@ class VisualizationTests(unittest.TestCase):
         }
         provenance = {"kind": "estimated", "source": "resolver-viewer integration test"}
         package = {
-            "format": "component-package-1",
+            "format": "resolved-part-1",
             "id": "single.part",
             "version": "1.0.0",
             "physical_role": "part",
@@ -674,7 +657,7 @@ class VisualizationTests(unittest.TestCase):
             "id": "single",
             "name": "Single part",
             "version": "1.0.0",
-            "components": [{"id": "base", "package": "single.part"}],
+            "components": [{"id": "base", "part": "single.part"}],
             "connections": [],
             "controls": [],
             "environment": {},

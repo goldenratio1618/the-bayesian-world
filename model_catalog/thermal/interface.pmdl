@@ -1,0 +1,15 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "domain",
+  "abstract": true,
+  "id": "thermal",
+  "name": "Thermal",
+  "version": "1.0.0",
+  "requires_physics": [
+    "thermal"
+  ],
+  "allowed_port_domains": [
+    "thermal"
+  ],
+  "description": "Reserved taxonomy domain; Phase 1 does not provide a thermal solver."
+}

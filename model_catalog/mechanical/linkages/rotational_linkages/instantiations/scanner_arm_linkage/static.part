@@ -1,0 +1,113 @@
+{
+  "format": "static-part-1",
+  "id": "scanner.arm_linkage",
+  "name": "Scanner arm linkage",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "link",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "linkage",
+          "geometry": {
+            "kind": "box",
+            "dimensions_m": [
+              0.18,
+              0.03,
+              0.02
+            ]
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "estimated",
+            "source": "Romi arm kit envelope"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "base",
+      "model_port": "joint",
+      "body": "link",
+      "domain": "mechanical",
+      "interface": "rotational-shaft",
+      "joint_coordinate_state": "angle",
+      "local_pose": {
+        "translation_m": [
+          -0.09,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          0.7071067811865476,
+          -0.7071067811865475,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "linkage base pivot with explicit PMDL angle-state binding"
+      }
+    },
+    {
+      "id": "tilt_servo_mount",
+      "model_port": null,
+      "body": "link",
+      "domain": "mechanical",
+      "interface": "scanner-fixed-mount",
+      "local_pose": {
+        "translation_m": [
+          0.09,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          0.7071067811865476,
+          0,
+          -0.7071067811865475,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "derived",
+        "source": "linkage tip frame keeps the camera tilt shaft parallel to the tangential lift shaft, so both joints share one radial/elevation plane through the object center"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "estimated",
+    "source": "prototype arm kit dimensions; connector frames require measurement"
+  },
+  "purchasing": {},
+  "metadata": {}
+}

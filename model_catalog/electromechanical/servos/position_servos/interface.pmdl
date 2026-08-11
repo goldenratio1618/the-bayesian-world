@@ -1,0 +1,50 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "position-servo",
+  "name": "Position servo",
+  "version": "1.0.0",
+  "parent": "servo",
+  "model_specificity": "A commanded shaft position is tracked with proportional stiffness, damping, and declared supply losses.",
+  "changes_contract": true,
+  "required_power_ports": [
+    {
+      "name": "supply_p",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "supply_n",
+      "domain": "electrical",
+      "effort_unit": "V",
+      "flow_unit": "A"
+    },
+    {
+      "name": "shaft",
+      "domain": "mechanical",
+      "effort_unit": "N*m",
+      "flow_unit": "rad/s"
+    }
+  ],
+  "required_signal_ports": [
+    {
+      "name": "position_command",
+      "direction": "input",
+      "unit": "rad"
+    },
+    {
+      "name": "position_measurement",
+      "direction": "output",
+      "unit": "rad"
+    }
+  ],
+  "models": [
+    "electromechanical.position_servo.proportional"
+  ],
+  "constraints": [
+    "Command and measurement signals use the same angular convention."
+  ],
+  "description": ""
+}

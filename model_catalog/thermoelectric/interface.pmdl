@@ -1,0 +1,17 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "domain",
+  "abstract": true,
+  "id": "thermoelectric",
+  "name": "Thermoelectric",
+  "version": "1.0.0",
+  "requires_physics": [
+    "electrical",
+    "thermal"
+  ],
+  "allowed_port_domains": [
+    "electrical",
+    "thermal"
+  ],
+  "description": "Reserved intersection for components such as thermistors and Peltier devices."
+}

@@ -4,7 +4,7 @@
 
 The [consumer engineering plan](04_implementation_plan_v2_consumer.md) is the
 high-level design authority. This implementation covers a technical subset of
-its typed IR, component-package, simulation, validation, compiler, agent, and
+its typed IR, model-catalog, simulation, validation, compiler, agent, and
 artifact layers. It does not claim to complete the card-workstation pilot,
 physical qualification sequence, five-graph evidence library, or microfactory
 operating model.
@@ -16,11 +16,18 @@ simulation is E0/E1 engineering evidence only and does not qualify a part.
 
 ## Canonical representation contract
 
-The source of truth is a strict `contraption-2` assembly plus its referenced
-component-package registry and exact-hash PMDL registry. Component instances do
-not carry independent models or visualization geometry. A component package
-defines its model hash, bodies/solids, connector frames, connector-to-model-port
-bindings, geometry-parameter bindings, and provenance.
+The source of truth is a strict `contraption-3` assembly plus `model_catalog/`
+and its exact-hash controller. Components contain only an id and a model
+instantiation reference. Each catalog instantiation combines `static.part`
+(bodies, connectors, geometry bindings, and provenance) with a `vN.model`
+(exact PMDL identity, initialized parameters, uncertainty, condition, and
+compute cost).
+
+Catalog top-level directories are physical domains. Categories and optional
+device types form the next two layers, and every layer owns an abstract
+`interface.pmdl` contract. Concrete models may live only at category or device
+layers and must implement the colocated contract. There is no parallel taxonomy
+or project-specific scanner domain.
 
 `resolve_assembly` validates and compiles that closure into:
 
@@ -28,7 +35,7 @@ bindings, geometry-parameter bindings, and provenance.
 2. a physical attachment/joint graph and resolved body/connector poses; and
 3. one assembly SHA-256 shared by every downstream artifact.
 
-Every `contraption-2` source must also carry a strict, hash-bound
+Every `contraption-3` source must also carry a strict, hash-bound
 `metadata.dynamics_completeness` record. A `complete` record may have no open
 gates; an `incomplete` record must identify each known missing interaction as an
 open gate. Validation rejects an absent, malformed, or self-contradictory
@@ -63,8 +70,9 @@ not part of this architecture.
   analysis, descriptor residuals, energy/dissipation declarations, validity
   envelopes, evidence, and property-test records. The portable math allow-list
   includes common dimensionless functions such as `tanh`.
-- Strict component-package schemas for physical bodies, explicit connector
-  locations, provenance, model-port mappings, and state/parameter geometry
+- Strict `interface.pmdl`, `static.part`, and `vN.model` schemas for model
+  contracts, physical bodies, connector locations, provenance, model-port
+  mappings, complete parameter initialization, and state/parameter geometry
   bindings.
 - Fail-closed assembly of electrical, mechanical, signal, control, and explicit
   kinematic-only connections, with equation counts and structural-rank checks.
@@ -92,7 +100,7 @@ thermal, or optical physics.
 The scanner's hash-bound dynamics record is deliberately `incomplete`. Its
 chassis model uses the published **bare-chassis** mass of 0.160 kg (without
 batteries) and derives yaw inertia from that mass and the canonical estimated
-box envelope in the chassis component package. Fixed battery, electronics,
+box envelope in the chassis `static.part`. Fixed battery, electronics,
 motor-case, servo-case, and compute-payload mass/inertia are not folded into a
 hidden whole-robot parameter. Moving arm/camera inertia is only a
 component-local approximation; downstream-body inertial derivation and servo
@@ -108,7 +116,7 @@ not labeled or treated as full-body collision evidence.
 
 The scanner component PMDL files are prototype models, not experimentally
 qualified gold models. Estimated geometry and connector locations are explicit
-in their package provenance and must be replaced or verified with CAD, catalog,
+in their static-part provenance and must be replaced or verified with CAD, catalog,
 measurement, or scan evidence before construction. The build planner therefore
 correctly reports the current design as not build-ready.
 
@@ -171,7 +179,7 @@ contraption build --output outputs/scanner_demo/build
 
 ## Verification ladder
 
-1. Parse the contraption, package registry, and exact-hash PMDL closure.
+1. Parse the contraption, model-instantiation registry, and exact-hash PMDL closure.
 2. Verify complete connector/model-port and geometry/state/parameter bindings.
 3. Reject incompatible domains, interfaces, units, underconstrained attachment
    trees, stale content hashes, or structurally singular networks.

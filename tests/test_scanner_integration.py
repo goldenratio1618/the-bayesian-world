@@ -7,20 +7,20 @@ import unittest
 
 import numpy as np
 
-import contraption.scanner as scanner_runtime_module
-from contraption.backend import NumpyBackend, TorchBackend
-from contraption.resolved import ResolvedAssembly
-from contraption.scanner import (
+import contraption.applications.scanner as scanner_runtime_module
+from contraption.physics.backend import NumpyBackend, TorchBackend
+from contraption.physics.resolved import ResolvedAssembly
+from contraption.applications.scanner import (
     ScannerAssemblyController,
     ScannerMission,
     ScannerRuntimeError,
     load_scanner_assembly,
     scanner_metrics,
-    scanner_physical_scene,
     simulate_scanner_robot,
 )
-from contraption.simulator import simulate
-from contraption.visualization import validate_physical_scene
+from contraption.physics.simulator import simulate
+from contraption.visualization.scanner_scene import scanner_physical_scene
+from contraption.visualization.viewer import validate_physical_scene
 
 
 ROOT = Path(__file__).resolve().parents[1]

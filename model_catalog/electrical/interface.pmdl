@@ -1,0 +1,15 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "domain",
+  "abstract": true,
+  "id": "electrical",
+  "name": "Electrical",
+  "version": "1.0.0",
+  "requires_physics": [
+    "electrical"
+  ],
+  "allowed_port_domains": [
+    "electrical"
+  ],
+  "description": "Lumped electrical networks with voltage effort and current flow."
+}

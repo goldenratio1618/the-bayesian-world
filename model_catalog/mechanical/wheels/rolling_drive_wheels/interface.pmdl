@@ -1,0 +1,39 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "rolling-drive-wheel",
+  "name": "Rolling drive wheel",
+  "version": "1.0.0",
+  "parent": "wheel",
+  "model_specificity": "Couples axle rotation to a hub-translation port and emits a directly observable angular rate.",
+  "changes_contract": true,
+  "required_power_ports": [
+    {
+      "name": "axle",
+      "domain": "mechanical",
+      "effort_unit": "N*m",
+      "flow_unit": "rad/s"
+    },
+    {
+      "name": "translation",
+      "domain": "mechanical",
+      "effort_unit": "N",
+      "flow_unit": "m/s"
+    }
+  ],
+  "required_signal_ports": [
+    {
+      "name": "angular_velocity_measurement",
+      "direction": "output",
+      "unit": "rad/s"
+    }
+  ],
+  "models": [
+    "mechanical.scanner_wheel.rolling"
+  ],
+  "constraints": [
+    "Rolling ratio states the effective slip approximation."
+  ],
+  "description": ""
+}

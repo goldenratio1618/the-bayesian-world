@@ -1,0 +1,92 @@
+{
+  "format": "pmdl-1",
+  "id": "electrical.resistive_load.constant",
+  "name": "Constant equivalent electrical load",
+  "version": "1.0.0",
+  "domains": [
+    "electrical"
+  ],
+  "description": "A two-terminal equivalent resistance used for short-duration power loading.",
+  "power_ports": [
+    {
+      "name": "p",
+      "domain": "electrical",
+      "effort": "v_p",
+      "flow": "i_p",
+      "effort_unit": "V",
+      "flow_unit": "A",
+      "orientation": "into_component",
+      "frame": "power_p",
+      "reference": "positive supply"
+    },
+    {
+      "name": "n",
+      "domain": "electrical",
+      "effort": "v_n",
+      "flow": "i_n",
+      "effort_unit": "V",
+      "flow_unit": "A",
+      "orientation": "into_component",
+      "frame": "power_n",
+      "reference": "supply return"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "resistance",
+      "unit": "ohm",
+      "default": 6.25,
+      "bounds": {
+        "lower": 0.01,
+        "upper": 1000000.0
+      },
+      "uncertainty": {
+        "distribution": "lognormal",
+        "parameters": {
+          "std": 1.0
+        }
+      },
+      "learnable": true
+    }
+  ],
+  "relations": [
+    {
+      "name": "ohms_law",
+      "expression": "v_p - v_n - resistance * i_p"
+    },
+    {
+      "name": "return_current",
+      "expression": "i_p + i_n"
+    }
+  ],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [],
+    "required": []
+  },
+  "validity": {
+    "ranges": {},
+    "assumptions": [
+      "Load is represented by its operating-point resistance"
+    ],
+    "max_timestep": 0.05
+  },
+  "trust": {
+    "structural": "tested",
+    "physical": "reviewed",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": []
+  },
+  "metadata": {
+    "gold": false,
+    "scanner_component": true,
+    "causality": "acausal",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0",
+    "online_admission": {
+      "admitted": true,
+      "kind": "linear"
+    }
+  },
+  "implements": "fixed-resistor"
+}

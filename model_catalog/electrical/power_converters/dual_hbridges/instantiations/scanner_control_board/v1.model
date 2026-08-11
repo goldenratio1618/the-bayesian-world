@@ -1,0 +1,24 @@
+{
+  "format": "model-instance-1",
+  "id": "scanner.control_board.v1",
+  "variant": "v1",
+  "part": "scanner.control_board",
+  "version": "1.0.0",
+  "model": {
+    "id": "electrical.dual_hbridge.ideal",
+    "version": "1.0.0",
+    "sha256": "sha256:485f4fca434cf9ca296488c7e4e230a2dc7fb70e3c718e1980ff5e1dcd832e86"
+  },
+  "parameters": {
+    "logic_voltage": 5.0
+  },
+  "parameter_uncertainty": {},
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1.0,
+    "notes": "Catalog baseline model."
+  },
+  "metadata": {
+    "source_component": "control-board"
+  }
+}

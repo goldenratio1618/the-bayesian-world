@@ -1,0 +1,123 @@
+{
+  "format": "pmdl-1",
+  "id": "electrical.voltage_source.ideal",
+  "name": "Ideal voltage source",
+  "version": "1.0.0",
+  "domains": [
+    "electrical"
+  ],
+  "description": "Two-terminal source with a commanded voltage input and explicit supplied power.",
+  "power_ports": [
+    {
+      "name": "p",
+      "domain": "electrical",
+      "effort": "v_p",
+      "flow": "i_p",
+      "effort_unit": "V",
+      "flow_unit": "A",
+      "orientation": "into_component",
+      "frame": "electrical",
+      "reference": "positive source terminal"
+    },
+    {
+      "name": "n",
+      "domain": "electrical",
+      "effort": "v_n",
+      "flow": "i_n",
+      "effort_unit": "V",
+      "flow_unit": "A",
+      "orientation": "into_component",
+      "frame": "electrical",
+      "reference": "negative source terminal"
+    }
+  ],
+  "signal_ports": [
+    {
+      "name": "voltage_command",
+      "direction": "input",
+      "unit": "V",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Imposed terminal voltage."
+    }
+  ],
+  "relations": [
+    {
+      "name": "imposed_voltage",
+      "expression": "v_p - v_n - voltage_command"
+    },
+    {
+      "name": "charge_conservation",
+      "expression": "i_p + i_n"
+    }
+  ],
+  "sources": [
+    {
+      "name": "supplied_power",
+      "expression": "-1 * (v_p - v_n) * i_p",
+      "unit": "W",
+      "nonnegative": false,
+      "description": "Positive when the ideal source delivers power."
+    }
+  ],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [],
+    "required": []
+  },
+  "validity": {
+    "ranges": {
+      "voltage_command": {
+        "lower": -1000.0,
+        "upper": 1000.0
+      }
+    },
+    "assumptions": [
+      "Zero internal impedance",
+      "Source command is finite and piecewise smooth"
+    ],
+    "max_timestep": 0.001
+  },
+  "fidelity_levels": [
+    {
+      "name": "ideal",
+      "description": "Zero-impedance controlled source.",
+      "active_relations": [
+        "imposed_voltage",
+        "charge_conservation"
+      ],
+      "parameter_overrides": {},
+      "approximation_error": "Supply impedance and limits omitted",
+      "relative_cost": 1.0
+    }
+  ],
+  "properties": [
+    {
+      "name": "terminal_conservation",
+      "kind": "conservation",
+      "expression": "i_p + i_n == 0 * i_p",
+      "expected": true,
+      "samples": 32,
+      "tolerance": 1e-12
+    }
+  ],
+  "trust": {
+    "structural": "tested",
+    "physical": "reviewed",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": [
+      {
+        "kind": "textbook",
+        "reference": "Ideal voltage source",
+        "summary": "Canonical ideal circuit source."
+      }
+    ]
+  },
+  "metadata": {
+    "gold": true,
+    "causality": "acausal",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0"
+  },
+  "implements": "voltage-source"
+}

@@ -1,0 +1,317 @@
+{
+  "format": "static-part-1",
+  "id": "scanner.romi_chassis",
+  "name": "Pololu Romi chassis",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "body",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "deck",
+          "geometry": {
+            "kind": "box",
+            "dimensions_m": [
+              0.163,
+              0.149,
+              0.07
+            ]
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0.035
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "catalog",
+            "source": "Pololu Romi chassis nominal bounding envelope",
+            "reference": "Pololu 3500"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "left_drive",
+      "model_port": "left_drive",
+      "body": "body",
+      "domain": "mechanical",
+      "interface": "hub-translation",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0.075,
+          0.035
+        ],
+        "rotation_quaternion_wxyz": [
+          0.7071067811865476,
+          0.7071067811865475,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "left wheel hub center and axle orientation"
+      }
+    },
+    {
+      "id": "right_drive",
+      "model_port": "right_drive",
+      "body": "body",
+      "domain": "mechanical",
+      "interface": "hub-translation",
+      "local_pose": {
+        "translation_m": [
+          0,
+          -0.075,
+          0.035
+        ],
+        "rotation_quaternion_wxyz": [
+          0,
+          0,
+          0.7071067811865476,
+          0.7071067811865475
+        ]
+      },
+      "provenance": {
+        "kind": "derived",
+        "source": "right wheel hub translation frame aligned in full orientation with the assembled right-wheel virtual hub frame"
+      }
+    },
+    {
+      "id": "battery_mount",
+      "model_port": null,
+      "body": "body",
+      "domain": "mechanical",
+      "interface": "scanner-fixed-mount",
+      "local_pose": {
+        "translation_m": [
+          -0.02,
+          0,
+          0.045
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "prototype packaging layout"
+      }
+    },
+    {
+      "id": "controller_mount",
+      "model_port": null,
+      "body": "body",
+      "domain": "mechanical",
+      "interface": "scanner-fixed-mount",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0.078
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "prototype packaging layout"
+      }
+    },
+    {
+      "id": "left_motor_mount",
+      "model_port": null,
+      "body": "body",
+      "domain": "mechanical",
+      "interface": "scanner-fixed-mount",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0.0565,
+          0.035
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "prototype drivetrain layout"
+      }
+    },
+    {
+      "id": "right_motor_mount",
+      "model_port": null,
+      "body": "body",
+      "domain": "mechanical",
+      "interface": "scanner-fixed-mount",
+      "local_pose": {
+        "translation_m": [
+          0,
+          -0.0565,
+          0.035
+        ],
+        "rotation_quaternion_wxyz": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "prototype drivetrain layout"
+      }
+    },
+    {
+      "id": "encoder_mount",
+      "model_port": null,
+      "body": "body",
+      "domain": "mechanical",
+      "interface": "scanner-fixed-mount",
+      "local_pose": {
+        "translation_m": [
+          -0.025,
+          0,
+          0.045
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "prototype packaging layout"
+      }
+    },
+    {
+      "id": "regulator_mount",
+      "model_port": null,
+      "body": "body",
+      "domain": "mechanical",
+      "interface": "scanner-fixed-mount",
+      "local_pose": {
+        "translation_m": [
+          -0.045,
+          0.03,
+          0.105
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "prototype packaging layout"
+      }
+    },
+    {
+      "id": "lift_servo_mount",
+      "model_port": null,
+      "body": "body",
+      "domain": "mechanical",
+      "interface": "scanner-fixed-mount",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0.14
+        ],
+        "rotation_quaternion_wxyz": [
+          0.5,
+          -0.5,
+          -0.5,
+          -0.5
+        ]
+      },
+      "provenance": {
+        "kind": "derived",
+        "source": "centered lift mount whose shaft is tangential to the orbit and whose linkage sweeps the object-center radial/elevation plane"
+      }
+    },
+    {
+      "id": "compute_mount",
+      "model_port": null,
+      "body": "body",
+      "domain": "mechanical",
+      "interface": "scanner-fixed-mount",
+      "local_pose": {
+        "translation_m": [
+          0.025,
+          0,
+          0.1125
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "prototype packaging layout"
+      }
+    }
+  ],
+  "parameter_bindings": [
+    {
+      "model_parameter": "wheel_base",
+      "unit": "m",
+      "absolute_tolerance": 1e-12,
+      "measure": {
+        "kind": "connector_distance",
+        "first_connector": "left_drive",
+        "second_connector": "right_drive"
+      }
+    }
+  ],
+  "provenance": {
+    "kind": "catalog",
+    "source": "Pololu catalog plus explicitly estimated connector locations",
+    "reference": "Pololu 3500"
+  },
+  "purchasing": {},
+  "metadata": {}
+}

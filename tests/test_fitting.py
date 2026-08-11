@@ -6,7 +6,7 @@ import unittest
 
 import numpy as np
 
-from contraption.fitting import (
+from contraption.physics.fitting import (
     CandidateModel,
     ExperimentalData,
     FitOptions,
@@ -14,7 +14,8 @@ from contraption.fitting import (
     predict_experiment,
     select_models,
 )
-from contraption.simulator import RCCircuit, simulate
+from contraption.physics.electrical import RCCircuit
+from contraption.physics.simulator import simulate
 
 
 def synthetic_rc_data(

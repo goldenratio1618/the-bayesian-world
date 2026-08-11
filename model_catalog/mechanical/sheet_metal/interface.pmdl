@@ -1,0 +1,20 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "sheet-metal",
+  "name": "Sheet metal",
+  "version": "1.0.0",
+  "domains": [
+    "mechanical"
+  ],
+  "required_power_ports": [],
+  "required_signal_ports": [],
+  "ideal_models": [
+    "mechanical.rigid_body.planar"
+  ],
+  "constraints": [
+    "Instantiation records material, thickness, and geometry"
+  ],
+  "description": "Manufactured sheet stock or formed sheet component."
+}

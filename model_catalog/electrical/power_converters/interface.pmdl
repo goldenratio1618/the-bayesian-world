@@ -1,0 +1,19 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "power-converter",
+  "name": "Electrical power converter",
+  "version": "1.0.0",
+  "domains": [
+    "electrical"
+  ],
+  "required_power_ports": [],
+  "required_signal_ports": [],
+  "ideal_models": [],
+  "constraints": [
+    "Every input and output rail is explicit",
+    "Conversion and loss approximations are declared"
+  ],
+  "description": "A multiport electrical converter or driver whose rail-specific port contract is model-defined."
+}

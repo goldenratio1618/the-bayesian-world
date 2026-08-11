@@ -1,0 +1,33 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "device",
+  "abstract": true,
+  "id": "driven-wheel",
+  "name": "Driven wheel",
+  "version": "1.0.0",
+  "parent": "wheel",
+  "model_specificity": "Couples an axle torque port to a longitudinal contact force using rolling radius and compliant slip dynamics.",
+  "changes_contract": true,
+  "required_power_ports": [
+    {
+      "name": "axle",
+      "domain": "mechanical",
+      "effort_unit": "N*m",
+      "flow_unit": "rad/s"
+    },
+    {
+      "name": "contact",
+      "domain": "mechanical",
+      "effort_unit": "N",
+      "flow_unit": "m/s"
+    }
+  ],
+  "required_signal_ports": [],
+  "models": [
+    "mechanical.wheel_contact.ideal"
+  ],
+  "constraints": [
+    "Lateral and vertical tire dynamics are outside the ideal model"
+  ],
+  "description": ""
+}
