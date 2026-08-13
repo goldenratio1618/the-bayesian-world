@@ -1,0 +1,77 @@
+{
+  "format": "contraption-4",
+  "id": "test-system-rc-circuit",
+  "name": "RC circuit test system",
+  "version": "1.0.0",
+  "catalogs": [
+    {
+      "path": "catalog"
+    }
+  ],
+  "physical_root": {
+    "component": "rc",
+    "pose": {
+      "translation_m": [
+        0,
+        0,
+        0
+      ],
+      "rotation_quaternion_wxyz": [
+        1,
+        0,
+        0,
+        0
+      ]
+    },
+    "state_binding": null
+  },
+  "components": [
+    {
+      "id": "rc",
+      "instantiation": "test.rc_circuit.v1"
+    }
+  ],
+  "connections": [],
+  "actuators": [
+    {
+      "id": "voltage-input",
+      "source": "voltage",
+      "target": "rc.voltage",
+      "settings": {
+        "unit": "V",
+        "minimum": -1000,
+        "maximum": 1000,
+        "default": 0
+      },
+      "external": true
+    }
+  ],
+  "controllers": [],
+  "verifications": [
+    {
+      "id": "test_system.rc_circuit.physics",
+      "program": {
+        "path": "verification.verify",
+        "sha256": "sha256:e4ce769c2bcc18f747dbbdaf7e1b47aeb9c2a7a3c06ec0c9ce3cba82a56ff32b"
+      },
+      "inputs": {
+        "voltage": "rc.applied_voltage",
+        "capacitor_voltage": "rc.capacitor_voltage_observation",
+        "resistor_current": "rc.resistor_current"
+      }
+    }
+  ],
+  "environment": {},
+  "metadata": {
+    "fixture": true,
+    "dynamics_completeness": {
+      "schema": "contraption.dynamics-completeness/v1",
+      "status": "complete",
+      "modeled_scope": "declared_lumped_reference_system",
+      "parameter_basis": {
+        "kind": "exact_fixture_parameters"
+      },
+      "gates": []
+    }
+  }
+}

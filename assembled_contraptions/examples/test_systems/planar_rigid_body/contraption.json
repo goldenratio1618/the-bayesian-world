@@ -1,0 +1,105 @@
+{
+  "format": "contraption-4",
+  "id": "test-system-planar-rigid-body",
+  "name": "Planar rigid-body test system",
+  "version": "1.0.0",
+  "catalogs": [
+    {
+      "path": "catalog"
+    }
+  ],
+  "physical_root": {
+    "component": "body",
+    "pose": {
+      "translation_m": [
+        0,
+        0,
+        0
+      ],
+      "rotation_quaternion_wxyz": [
+        1,
+        0,
+        0,
+        0
+      ]
+    },
+    "state_binding": {
+      "kind": "planar",
+      "x": "body.x",
+      "y": "body.y",
+      "yaw": "body.yaw"
+    }
+  },
+  "components": [
+    {
+      "id": "body",
+      "instantiation": "test.planar_rigid_body.v1"
+    }
+  ],
+  "connections": [],
+  "actuators": [
+    {
+      "id": "force-x-input",
+      "source": "force_x",
+      "target": "body.force_x",
+      "settings": {
+        "unit": "N",
+        "minimum": -1000000000,
+        "maximum": 1000000000,
+        "default": 0
+      },
+      "external": true
+    },
+    {
+      "id": "force-y-input",
+      "source": "force_y",
+      "target": "body.force_y",
+      "settings": {
+        "unit": "N",
+        "minimum": -1000000000,
+        "maximum": 1000000000,
+        "default": 0
+      },
+      "external": true
+    },
+    {
+      "id": "torque-input",
+      "source": "torque",
+      "target": "body.torque",
+      "settings": {
+        "unit": "N*m",
+        "minimum": -1000000000,
+        "maximum": 1000000000,
+        "default": 0
+      },
+      "external": true
+    }
+  ],
+  "controllers": [],
+  "verifications": [
+    {
+      "id": "test_system.planar_rigid_body.physics",
+      "program": {
+        "path": "verification.verify",
+        "sha256": "sha256:aa5b07841e7535683230ebc759b769842c9d67aa8d0e6e65570133d233f011e7"
+      },
+      "inputs": {
+        "y": "body.y_observation",
+        "yaw": "body.yaw_observation"
+      }
+    }
+  ],
+  "environment": {},
+  "metadata": {
+    "fixture": true,
+    "dynamics_completeness": {
+      "schema": "contraption.dynamics-completeness/v1",
+      "status": "complete",
+      "modeled_scope": "declared_lumped_reference_system",
+      "parameter_basis": {
+        "kind": "exact_fixture_parameters"
+      },
+      "gates": []
+    }
+  }
+}

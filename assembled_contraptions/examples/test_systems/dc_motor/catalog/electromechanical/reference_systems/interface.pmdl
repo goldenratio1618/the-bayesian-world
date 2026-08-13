@@ -1,0 +1,44 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "test-dc-motor",
+  "name": "DC motor test system",
+  "version": "1.0.0",
+  "domains": [
+    "electromechanical",
+    "electrical",
+    "mechanical"
+  ],
+  "required_power_ports": [],
+  "required_signal_ports": [
+    {
+      "name": "voltage",
+      "direction": "input",
+      "unit": "V"
+    },
+    {
+      "name": "load_torque",
+      "direction": "input",
+      "unit": "N*m"
+    },
+    {
+      "name": "electromagnetic_torque",
+      "direction": "output",
+      "unit": "N*m"
+    },
+    {
+      "name": "armature_current_observation",
+      "direction": "output",
+      "unit": "A"
+    }
+  ],
+  "ideal_models": [
+    "test_system.dc_motor"
+  ],
+  "constraints": [
+    "All dynamics and observations are declared in PMDL.",
+    "Fixture ports preserve the canonical reference-system names."
+  ],
+  "description": "Aggregate dc motor test system reference-system contract."
+}

@@ -1,0 +1,47 @@
+{
+  "format": "verification-1",
+  "id": "test_system.dc_motor.physics",
+  "name": "DC motor physics verification",
+  "version": "1.1.0",
+  "description": "Physics identity checks for the declarative reference-system bundle.",
+  "inputs": [
+    {
+      "name": "armature_current",
+      "unit": "A",
+      "description": "Armature current."
+    },
+    {
+      "name": "electromagnetic_torque",
+      "unit": "N*m",
+      "description": "Electromagnetic torque."
+    }
+  ],
+  "parameters": [
+    {
+      "name": "torque_constant",
+      "unit": "N*m/A",
+      "value": 0.08
+    },
+    {
+      "name": "torque_tolerance",
+      "unit": "N*m",
+      "value": 1e-9
+    }
+  ],
+  "metrics": [
+    {
+      "name": "torque_law_rmse",
+      "expression": "electromagnetic_torque - torque_constant * armature_current",
+      "reducer": "rmse",
+      "unit": "N*m"
+    }
+  ],
+  "criteria": [
+    {
+      "name": "torque_law",
+      "expression": "torque_law_rmse <= torque_tolerance",
+      "minimum_probability": 0.95,
+      "confidence_level": 0.95
+    }
+  ]
+}

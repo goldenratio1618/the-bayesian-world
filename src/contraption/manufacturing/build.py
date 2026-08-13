@@ -17,6 +17,7 @@ from pathlib import Path
 import re
 from typing import Any, Mapping, Sequence
 
+from ..control import control_digest
 from ..physics.physical import TransformSpec
 from ..physics.resolved import ResolutionError, ResolvedAssembly
 
@@ -161,7 +162,7 @@ class BuildPlan:
     contraption_id: str
     assembly_sha256: str
     pmdl_sha256: str
-    controller: Mapping[str, Any] | None
+    controllers: tuple[Mapping[str, str], ...]
     bill_of_materials: tuple[BOMItem, ...]
     placements: tuple[PlacementInstruction, ...]
     mechanical: tuple[MechanicalInstruction, ...]
@@ -170,7 +171,7 @@ class BuildPlan:
     steps: tuple[AssemblyStep, ...]
     safety_notes: tuple[str, ...]
     unresolved: tuple[str, ...]
-    schema: str = "contraption.build-plan/v2"
+    schema: str = "contraption.build-plan/v3"
 
     def __post_init__(self) -> None:
         pattern = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -178,19 +179,24 @@ class BuildPlan:
             raise BuildInstructionError("build plan has an invalid assembly_sha256")
         if pattern.fullmatch(self.pmdl_sha256) is None:
             raise BuildInstructionError("build plan has an invalid pmdl_sha256")
-        if self.controller is not None:
-            if set(self.controller) != {"id", "version", "sha256"}:
+        ids: set[str] = set()
+        for controller in self.controllers:
+            if set(controller) != {"id", "version", "sha256"}:
                 raise BuildInstructionError(
-                    "build plan controller provenance must contain exactly id/version/sha256"
+                    "build plan controller provenance must contain exactly "
+                    "id/version/sha256"
                 )
             if not all(
-                isinstance(self.controller[name], str) and self.controller[name]
+                isinstance(controller[name], str) and controller[name]
                 for name in ("id", "version")
             ):
                 raise BuildInstructionError(
                     "build plan controller id/version must be non-empty strings"
                 )
-            if pattern.fullmatch(str(self.controller["sha256"])) is None:
+            if controller["id"] in ids:
+                raise BuildInstructionError("build plan controller ids must be unique")
+            ids.add(controller["id"])
+            if pattern.fullmatch(str(controller["sha256"])) is None:
                 raise BuildInstructionError(
                     "build plan controller provenance has an invalid sha256"
                 )
@@ -209,7 +215,7 @@ class BuildPlan:
             "contraption_id": self.contraption_id,
             "assembly_sha256": self.assembly_sha256,
             "pmdl_sha256": self.pmdl_sha256,
-            "controller": None if self.controller is None else dict(self.controller),
+            "controllers": [dict(item) for item in self.controllers],
             "build_ready": self.build_ready,
             "bill_of_materials": [item.to_dict() for item in self.bill_of_materials],
             "placements": [item.to_dict() for item in self.placements],
@@ -232,12 +238,14 @@ class BuildPlan:
             "",
             f"Assembly closure: `{self.assembly_sha256}`  ",
             f"PMDL closure: `{self.pmdl_sha256}`  ",
-            "Controller: "
+            "Controllers: "
             + (
                 "none"
-                if self.controller is None
-                else f"`{self.controller['id']}@{self.controller['version']}` "
-                f"(`{self.controller['sha256']}`)"
+                if not self.controllers
+                else ", ".join(
+                    f"`{item['id']}@{item['version']}` (`{item['sha256']}`)"
+                    for item in self.controllers
+                )
             )
             + "  ",
             f"Build ready: **{'yes' if self.build_ready else 'no'}**",
@@ -363,36 +371,36 @@ def _provenance_dict(value: Any) -> dict[str, Any]:
     }
 
 
-def _controller_identity(assembly: ResolvedAssembly) -> dict[str, str] | None:
-    """Project only the immutable controller identity into a build artifact.
+def _controller_identities(
+    assembly: ResolvedAssembly,
+) -> tuple[dict[str, str], ...]:
+    """Project immutable controller identities into a build artifact.
 
-    Output bindings and telemetry declarations remain part of the canonical
-    contraption closure (and therefore of ``assembly_sha256``), but they are
-    not an alternate controller representation in the build plan.
+    Wiring remains in the canonical assembly hash and is not copied into the
+    build plan as an alternate controller representation.
     """
 
-    reference = assembly.specification.controller
-    if reference is None:
-        if assembly.controller is not None:
+    declared = {item.id: item for item in assembly.specification.controllers}
+    if set(declared) != set(assembly.controllers):
+        raise BuildInstructionError(
+            "resolved controllers differ from canonical contraption links"
+        )
+    result: list[dict[str, str]] = []
+    for controller_id, controller in sorted(assembly.controllers.items()):
+        expected = declared[controller_id].program.sha256
+        actual = control_digest(controller.spec)
+        if actual != expected:
             raise BuildInstructionError(
-                "resolved controller has no canonical contraption reference"
+                f"controller {controller_id!r} hash differs from its canonical link"
             )
-        return None
-    if assembly.controller is None:
-        raise BuildInstructionError(
-            "contraption controller reference did not resolve to a ControlProgram"
+        result.append(
+            {
+                "id": controller_id,
+                "version": controller.spec.version,
+                "sha256": actual,
+            }
         )
-    identity = {
-        name: str(reference[name]) for name in ("id", "version", "sha256")
-    }
-    if (
-        identity["id"] != assembly.controller.name
-        or identity["version"] != assembly.controller.version
-    ):
-        raise BuildInstructionError(
-            "resolved controller identity differs from the canonical reference"
-        )
-    return identity
+    return tuple(result)
 
 
 def _bom(assembly: ResolvedAssembly) -> tuple[BOMItem, ...]:
@@ -453,6 +461,10 @@ def generate_build_instructions(
         raise BuildInstructionError(
             "resolved assembly lacks a valid mandatory dynamics_completeness record"
         ) from exc
+    if dynamics_completeness is None:
+        raise BuildInstructionError(
+            "resolved assembly lacks a valid mandatory dynamics_completeness record"
+        )
     for gate in dynamics_completeness.open_gates:
         unresolved.add(
             f"dynamics completeness gate {gate.id}: {gate.reason}"
@@ -484,13 +496,13 @@ def generate_build_instructions(
                     connection.id,
                     endpoint_keys[0],
                     endpoint_keys[1],
-                    attachment.kind,
-                    attachment.behavior_binding,
-                    attachment.coordinate,
-                    attachment.zero_angle_rad,
+                    attachment.joint.kind,
+                    attachment.joint.behavior_binding,
+                    attachment.joint.coordinate,
+                    attachment.joint.zero_angle_rad,
                     tuple(
                         binding.to_dict()
-                        for binding in attachment.coordinate_bindings
+                        for binding in attachment.joint.coordinate_bindings
                     ),
                     _pose_dict(parent_pose),
                     _pose_dict(child_pose),
@@ -524,7 +536,7 @@ def generate_build_instructions(
                     },
                 )
             )
-            if attachment.kind == "fixed":
+            if attachment.joint.kind == "fixed":
                 unresolved.add(
                     f"attachment {connection.id}: retention method, fastener specification, "
                     "quantity, locking method, and torque are not present in the canonical part closure"
@@ -662,7 +674,7 @@ def generate_build_instructions(
         resolved.specification.id,
         resolved.assembly_sha256,
         resolved.system.pmdl_sha256,
-        _controller_identity(resolved),
+        _controller_identities(resolved),
         _bom(resolved),
         tuple(placements),
         tuple(mechanical),

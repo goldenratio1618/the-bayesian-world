@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
+from pathlib import Path
 import unittest
 
 import numpy as np
 
+from contraption import load_contraption
 from contraption.physics.fitting import (
     CandidateModel,
     ExperimentalData,
@@ -14,8 +17,25 @@ from contraption.physics.fitting import (
     predict_experiment,
     select_models,
 )
-from contraption.physics.electrical import RCCircuit
 from contraption.physics.simulator import simulate
+
+
+ROOT = Path(__file__).resolve().parents[1]
+RC_BUNDLE = (
+    ROOT
+    / "assembled_contraptions"
+    / "examples"
+    / "test_systems"
+    / "rc_circuit"
+    / "contraption.json"
+)
+
+
+@lru_cache(maxsize=1)
+def rc_system():
+    """Load the real declarative RC fixture through the public bundle loader."""
+
+    return load_contraption(RC_BUNDLE).system
 
 
 def synthetic_rc_data(
@@ -26,20 +46,22 @@ def synthetic_rc_data(
 ) -> ExperimentalData:
     times = np.linspace(0.0, 2.0, 101)
     truth = simulate(
-        RCCircuit(resistance, capacitance),
+        rc_system(),
         times=times,
         controls={"voltage": 4.0},
+        parameters={"rc.resistance": resistance, "rc.capacitance": capacitance},
         num_samples=1,
         use_model_uncertainty=False,
         process_noise=False,
     )
     rng = np.random.default_rng(17)
-    voltage = truth.series("capacitor_voltage")[0] + rng.normal(0.0, noise_std, len(times))
+    voltage = truth.series("rc.capacitor_voltage")[0] + rng.normal(
+        0.0, noise_std, len(times)
+    )
     return ExperimentalData(
         time=times,
-        observations={"capacitor_voltage": voltage},
+        observations={"rc.capacitor_voltage": voltage},
         controls={"voltage": 4.0},
-        initial_state=[0.0],
         observation_std=noise_std,
     )
 
@@ -47,17 +69,19 @@ def synthetic_rc_data(
 class ParameterFittingTests(unittest.TestCase):
     def test_rc_parameter_fit_recovers_time_constant(self) -> None:
         data = synthetic_rc_data()
-        model = RCCircuit(resistance=4.0, capacitance=0.4)
+        model = rc_system()
         result = fit_parameters(
             model,
             data,
-            {"resistance": 4.0},
-            parameter_names=("resistance",),
-            fixed_parameters={"capacitance": 0.4},
+            {"rc.resistance": 4.0},
+            parameter_names=("rc.resistance",),
+            fixed_parameters={"rc.capacitance": 0.4},
             options=FitOptions(max_iterations=80, tolerance=1e-10),
         )
         self.assertTrue(result.converged, result.message)
-        self.assertAlmostEqual(float(result.parameters["resistance"]), 2.5, delta=0.015)
+        self.assertAlmostEqual(
+            float(result.parameters["rc.resistance"]), 2.5, delta=0.015
+        )
         self.assertEqual(result.covariance.shape, (1, 1))
         self.assertGreaterEqual(float(result.covariance[0, 0]), 0.0)
         self.assertLess(result.loss_history[-1], result.loss_history[0] * 0.01)
@@ -65,9 +89,10 @@ class ParameterFittingTests(unittest.TestCase):
     def test_two_outputs_identify_resistance_and_capacitance(self) -> None:
         times = np.linspace(0.0, 1.5, 121)
         truth = simulate(
-            RCCircuit(3.0, 0.2),
+            rc_system(),
             times=times,
             controls={"voltage": 5.0},
+            parameters={"rc.resistance": 3.0, "rc.capacitance": 0.2},
             num_samples=1,
             use_model_uncertainty=False,
             process_noise=False,
@@ -75,53 +100,69 @@ class ParameterFittingTests(unittest.TestCase):
         data = ExperimentalData(
             times,
             {
-                "capacitor_voltage": truth.series("capacitor_voltage")[0],
-                "resistor_current": truth.series("resistor_current", outputs_first=True)[0],
+                "rc.capacitor_voltage": truth.series("rc.capacitor_voltage")[0],
+                "rc.resistor_current": truth.series("rc.resistor_current")[0],
             },
             controls={"voltage": 5.0},
-            initial_state=[0.0],
-            observation_std={"capacitor_voltage": 0.01, "resistor_current": 0.01},
+            observation_std={
+                "rc.capacitor_voltage": 0.01,
+                "rc.resistor_current": 0.01,
+            },
         )
         result = fit_parameters(
-            RCCircuit(5.0, 0.4),
+            rc_system(),
             data,
-            {"resistance": 5.0, "capacitance": 0.4},
+            {"rc.resistance": 5.0, "rc.capacitance": 0.4},
+            bounds={
+                "rc.resistance": (0.1, 20.0),
+                "rc.capacitance": (0.01, 2.0),
+            },
             options=FitOptions(max_iterations=100, tolerance=1e-11),
         )
-        self.assertAlmostEqual(float(result.parameters["resistance"]), 3.0, delta=2e-3)
-        self.assertAlmostEqual(float(result.parameters["capacitance"]), 0.2, delta=2e-3)
+        self.assertAlmostEqual(
+            float(result.parameters["rc.resistance"]), 3.0, delta=2e-3
+        )
+        self.assertAlmostEqual(
+            float(result.parameters["rc.capacitance"]), 0.2, delta=2e-3
+        )
 
     def test_fit_honors_parameter_bounds(self) -> None:
         data = synthetic_rc_data()
         result = fit_parameters(
-            RCCircuit(4.0, 0.4),
+            rc_system(),
             data,
-            {"resistance": 4.0},
-            parameter_names=("resistance",),
-            bounds={"resistance": (3.0, 8.0)},
+            {"rc.resistance": 4.0},
+            parameter_names=("rc.resistance",),
+            fixed_parameters={"rc.capacitance": 0.4},
+            bounds={"rc.resistance": (3.0, 8.0)},
             options=FitOptions(max_iterations=40),
         )
-        self.assertAlmostEqual(float(result.parameters["resistance"]), 3.0, places=10)
+        self.assertAlmostEqual(
+            float(result.parameters["rc.resistance"]), 3.0, places=10
+        )
 
     def test_prediction_selects_named_derived_output(self) -> None:
         times = np.linspace(0.0, 0.3, 10)
-        model = RCCircuit(2.0, 0.5)
+        model = rc_system()
         truth = simulate(
             model,
             times=times,
             controls={"voltage": 3.0},
+            parameters={"rc.resistance": 2.0, "rc.capacitance": 0.5},
             num_samples=1,
             use_model_uncertainty=False,
             process_noise=False,
         )
-        observations = truth.series("resistor_current", outputs_first=True)[0]
+        observations = truth.series("rc.resistor_current")[0]
         data = ExperimentalData(
             times,
-            {"resistor_current": observations},
+            {"rc.resistor_current": observations},
             controls={"voltage": 3.0},
         )
         _, predicted, observed, residual = predict_experiment(
-            model, data, model.default_parameters
+            model,
+            data,
+            {"rc.resistance": 2.0, "rc.capacitance": 0.5},
         )
         np.testing.assert_allclose(predicted, observed, atol=1e-14)
         np.testing.assert_allclose(residual, 0.0, atol=1e-14)
@@ -129,8 +170,10 @@ class ParameterFittingTests(unittest.TestCase):
     def test_nan_observations_are_ignored(self) -> None:
         data = synthetic_rc_data()
         observations = dict(data.observations)
-        observations["capacitor_voltage"] = observations["capacitor_voltage"].copy()
-        observations["capacitor_voltage"][10:15] = np.nan
+        observations["rc.capacitor_voltage"] = observations[
+            "rc.capacitor_voltage"
+        ].copy()
+        observations["rc.capacitor_voltage"][10:15] = np.nan
         with_missing = ExperimentalData(
             data.time,
             observations,
@@ -139,24 +182,42 @@ class ParameterFittingTests(unittest.TestCase):
             observation_std=data.observation_std,
         )
         result = fit_parameters(
-            RCCircuit(3.5, 0.4),
+            rc_system(),
             with_missing,
-            {"resistance": 3.5},
-            parameter_names=("resistance",),
+            {"rc.resistance": 3.5},
+            parameter_names=("rc.resistance",),
+            fixed_parameters={"rc.capacitance": 0.4},
             options=FitOptions(max_iterations=60),
         )
         self.assertEqual(result.observation_count, len(data.time) - 5)
-        self.assertAlmostEqual(float(result.parameters["resistance"]), 2.5, delta=0.02)
+        self.assertAlmostEqual(
+            float(result.parameters["rc.resistance"]), 2.5, delta=0.02
+        )
 
 
 class ModelSelectionTests(unittest.TestCase):
     def test_bic_prefers_data_generating_candidate(self) -> None:
         data = synthetic_rc_data(noise_std=0.004)
-        candidates = {
-            "correct": RCCircuit(2.5, 0.4),
-            "too_slow": RCCircuit(6.0, 0.4),
-            "too_fast": RCCircuit(0.7, 0.4),
-        }
+        candidates = [
+            CandidateModel(
+                "correct",
+                rc_system(),
+                {"rc.resistance": 2.5, "rc.capacitance": 0.4},
+                (),
+            ),
+            CandidateModel(
+                "too_slow",
+                rc_system(),
+                {"rc.resistance": 6.0, "rc.capacitance": 0.4},
+                (),
+            ),
+            CandidateModel(
+                "too_fast",
+                rc_system(),
+                {"rc.resistance": 0.7, "rc.capacitance": 0.4},
+                (),
+            ),
+        ]
         result = select_models(candidates, data, criterion="bic")
         self.assertEqual(result.best_model, "correct")
         self.assertIn("BIC approximation", result.approximation_label)
@@ -168,12 +229,17 @@ class ModelSelectionTests(unittest.TestCase):
         candidates = [
             CandidateModel(
                 "adjustable",
-                RCCircuit(3.0, 0.4),
-                {"resistance": 3.0},
-                ("resistance",),
-                prior_std={"resistance": 2.0},
+                rc_system(),
+                {"rc.resistance": 3.0, "rc.capacitance": 0.4},
+                ("rc.resistance",),
+                prior_std={"rc.resistance": 2.0},
             ),
-            CandidateModel("fixed_wrong", RCCircuit(7.0, 0.4), {}, ()),
+            CandidateModel(
+                "fixed_wrong",
+                rc_system(),
+                {"rc.resistance": 7.0, "rc.capacitance": 0.4},
+                (),
+            ),
         ]
         result = select_models(
             candidates,

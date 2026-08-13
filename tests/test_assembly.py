@@ -17,7 +17,7 @@ from contraption.physics.assembly import (
 )
 from contraption.physics.backend import NumpyBackend
 from contraption.physics.dsl import load_model, parse_model
-from contraption.physics.specs import ControlBindingSpec, PortRef
+from contraption.physics.specs import ActuatorBindingSpec, PortRef
 from contraption.physics.simulator import simulate
 
 
@@ -44,8 +44,8 @@ def assemble_contraption(specification, *args, **kwargs):
             )
             for item in specification.get("connections", [])
         )
-        controls = tuple(
-            ControlBindingSpec.from_dict(item) for item in specification.get("controls", [])
+        actuators = tuple(
+            ActuatorBindingSpec.from_dict(item) for item in specification.get("actuators", [])
         )
         source = dict(specification)
         specification = SimpleNamespace(
@@ -54,7 +54,9 @@ def assemble_contraption(specification, *args, **kwargs):
             version=source["version"],
             components=components,
             connections=connections,
-            controls=controls,
+            actuators=actuators,
+            controllers=(),
+            verifications=(),
             environment=source.get("environment", {}),
             metadata=source.get("metadata", {}),
             to_dict=lambda: source,
@@ -148,7 +150,7 @@ def _circuit_spec(*, include_return: bool = True):
             },
         ],
         "connections": connections,
-        "controls": [
+        "actuators": [
             {
                 "id": "source-command",
                 "source": "external.voltage",
@@ -405,7 +407,7 @@ class PMDLAssemblyTests(unittest.TestCase):
             "components": [
                 {"id": "sink", "model_id": model.id, "geometry": _estimated_box()}
             ],
-            "controls": [
+            "actuators": [
                 {
                     "id": "command",
                     "source": "external.percent",
@@ -452,7 +454,7 @@ class PMDLAssemblyTests(unittest.TestCase):
             "components": [
                 {"id": "sink", "model_id": model.id, "geometry": _estimated_box()}
             ],
-            "controls": [
+            "actuators": [
                 {
                     "id": "command",
                     "source": "external.command",
@@ -472,7 +474,7 @@ class PMDLAssemblyTests(unittest.TestCase):
                 NumpyBackend(),
             )
 
-        spec["controls"][0]["settings"] = {"smoothing": "silent"}
+        spec["actuators"][0]["settings"] = {"smoothing": "silent"}
         with self.assertRaisesRegex(
             UnsupportedAssemblySemanticsError, "unsupported setting.*smoothing"
         ):
@@ -497,32 +499,22 @@ class PMDLAssemblyTests(unittest.TestCase):
         )
         system.require_network_invariants(final[None, :], None, NumpyBackend())
 
-    def test_descriptor_feedback_uses_the_command_applied_during_each_step(self) -> None:
+    def test_descriptor_external_control_provider_cannot_read_plant_state(self) -> None:
         system = assemble_contraption(_circuit_spec(), _circuit_models())
-        command_index = system.state_names.index("source.voltage_command")
 
         def feedback(t, state):
-            return {"external.voltage": 1.0 + state[:, command_index]}
+            return {"external.voltage": 1.0 + state[:, 0]}
 
-        result = simulate(
-            system,
-            duration=0.001,
-            dt=0.001,
-            controls=feedback,
-            num_samples=1,
-            use_model_uncertainty=False,
-            process_noise=False,
-        )
-
-        # Initialization applies 1 V from the caller's zero algebraic guess;
-        # the next held feedback command is 2 V.  Re-evaluating feedback after
-        # the solve would ask the invariant checker to compare against 3 V.
-        self.assertAlmostEqual(
-            float(result.samples[0, 0, command_index]), 1.0, places=10
-        )
-        self.assertAlmostEqual(
-            float(result.samples[0, 1, command_index]), 2.0, places=10
-        )
+        with self.assertRaisesRegex(TypeError, "open-loop.*plant state"):
+            simulate(
+                system,
+                duration=0.001,
+                dt=0.001,
+                controls=feedback,
+                num_samples=1,
+                use_model_uncertainty=False,
+                process_noise=False,
+            )
 
     def test_torch_backend_matches_numpy_when_available(self) -> None:
         try:

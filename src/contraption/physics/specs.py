@@ -428,6 +428,134 @@ SourceSpec = NamedExpressionSpec
 
 
 @dataclass(frozen=True, slots=True)
+class ProcessNoiseChannelSpec(StrictRecord):
+    """One dimensionless stochastic driver for accepted-step state increments."""
+
+    name: str
+    distribution: str
+    description: str = ""
+
+    def __post_init__(self) -> None:
+        _identifier(self.name, "process_noise.channel.name", symbol=True)
+        if self.distribution != "standard_normal":
+            raise SpecError(
+                "process_noise.channel.distribution must be 'standard_normal'"
+            )
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "ProcessNoiseChannelSpec":
+        data = _object(data, "process_noise.channel")
+        _keys(
+            data,
+            ("name", "distribution", "description"),
+            "process_noise.channel",
+            ("name", "distribution"),
+        )
+        return cls(
+            _identifier(data["name"], "process_noise.channel.name", symbol=True),
+            _string(data["distribution"], "process_noise.channel.distribution"),
+            _string(data.get("description", ""), "process_noise.channel.description"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ProcessNoiseIncrementSpec(StrictRecord):
+    """A backend-native expression added to one differential state per step."""
+
+    target: str
+    expression: str
+    description: str = ""
+
+    def __post_init__(self) -> None:
+        _identifier(self.target, "process_noise.increment.target", symbol=True)
+        if not self.expression.strip():
+            raise SpecError("process_noise.increment.expression may not be empty")
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "ProcessNoiseIncrementSpec":
+        data = _object(data, "process_noise.increment")
+        _keys(
+            data,
+            ("target", "expression", "description"),
+            "process_noise.increment",
+            ("target", "expression"),
+        )
+        return cls(
+            _identifier(data["target"], "process_noise.increment.target", symbol=True),
+            _string(data["expression"], "process_noise.increment.expression"),
+            _string(data.get("description", ""), "process_noise.increment.description"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ProcessNoiseSpec(StrictRecord):
+    """Declarative stochastic increments with an explicit replay contract.
+
+    The only admitted policy derives one RNG stream from ``simulate(seed=...)``.
+    Draws are reproducible for an unchanged PMDL closure, time grid, sample
+    count, numerical backend, device, and dtype.  Increment expressions receive
+    the actual accepted-step ``dt`` and are applied after the deterministic
+    integration step.
+    """
+
+    seed_policy: str = "simulation_seed"
+    reproducibility: str = "same_backend_device"
+    application: str = "accepted_step_increment"
+    channels: tuple[ProcessNoiseChannelSpec, ...] = ()
+    increments: tuple[ProcessNoiseIncrementSpec, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.seed_policy != "simulation_seed":
+            raise SpecError("process_noise.seed_policy must be 'simulation_seed'")
+        if self.reproducibility != "same_backend_device":
+            raise SpecError(
+                "process_noise.reproducibility must be 'same_backend_device'"
+            )
+        if self.application != "accepted_step_increment":
+            raise SpecError(
+                "process_noise.application must be 'accepted_step_increment'"
+            )
+        if bool(self.channels) != bool(self.increments):
+            raise SpecError(
+                "process_noise.channels and process_noise.increments must either "
+                "both be empty or both be non-empty"
+            )
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.channels)
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "ProcessNoiseSpec":
+        data = _object(data, "process_noise")
+        names = (
+            "seed_policy",
+            "reproducibility",
+            "application",
+            "channels",
+            "increments",
+        )
+        # An explicit empty object is canonical no-noise, identical to omission.
+        # A non-empty block must spell out the complete replay contract.
+        _keys(data, names, "process_noise", () if not data else names)
+        if not data:
+            return cls()
+        return cls(
+            _string(data["seed_policy"], "process_noise.seed_policy"),
+            _string(data["reproducibility"], "process_noise.reproducibility"),
+            _string(data["application"], "process_noise.application"),
+            tuple(
+                ProcessNoiseChannelSpec.from_dict(item)
+                for item in _sequence(data["channels"], "process_noise.channels")
+            ),
+            tuple(
+                ProcessNoiseIncrementSpec.from_dict(item)
+                for item in _sequence(data["increments"], "process_noise.increments")
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class TransitionSpec(StrictRecord):
     target: str
     guard: str
@@ -605,6 +733,7 @@ class ModelSpec(StrictRecord):
     stored_energy: tuple[NamedExpressionSpec, ...] = ()
     dissipation: tuple[NamedExpressionSpec, ...] = ()
     sources: tuple[NamedExpressionSpec, ...] = ()
+    process_noise: ProcessNoiseSpec = ProcessNoiseSpec()
     modes: tuple[ModeSpec, ...] = ()
     initialization: InitializationSpec = InitializationSpec()
     validity: ValiditySpec = ValiditySpec()
@@ -655,12 +784,18 @@ class ModelSpec(StrictRecord):
 
     residual = evaluate_residual
 
+    def to_dict(self) -> dict[str, Any]:
+        result = StrictRecord.to_dict(self)
+        if not self.process_noise.enabled:
+            result.pop("process_noise", None)
+        return result
+
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "ModelSpec":
         data = _object(data, "model")
         names = (
             "format", "id", "name", "version", "domains", "implements", "description", "power_ports", "signal_ports",
-            "states", "algebraics", "parameters", "relations", "stored_energy", "dissipation", "sources", "modes",
+            "states", "algebraics", "parameters", "relations", "stored_energy", "dissipation", "sources", "process_noise", "modes",
             "initialization", "validity", "fidelity_levels", "properties", "trust", "metadata",
         )
         _keys(data, names, "model", names[:6])
@@ -679,6 +814,7 @@ class ModelSpec(StrictRecord):
             tuple(NamedExpressionSpec.from_dict(item, "stored_energy") for item in seq("stored_energy")),
             tuple(NamedExpressionSpec.from_dict(item, "dissipation") for item in seq("dissipation")),
             tuple(NamedExpressionSpec.from_dict(item, "source") for item in seq("sources")),
+            ProcessNoiseSpec.from_dict(data.get("process_noise", {})),
             tuple(ModeSpec.from_dict(item) for item in seq("modes")),
             InitializationSpec.from_dict(data.get("initialization", {})), ValiditySpec.from_dict(data.get("validity", {})),
             tuple(FidelitySpec.from_dict(item) for item in seq("fidelity_levels")),
@@ -731,11 +867,97 @@ class PortRef(StrictRecord):
 
 
 @dataclass(frozen=True, slots=True)
+class JointCoordinateBindingSpec(StrictRecord):
+    """Map a PMDL angle state onto one physical revolute coordinate."""
+
+    state: str
+    joint_angle_at_state_zero_rad: float
+
+    def __post_init__(self) -> None:
+        PortRef.from_dict(self.state)
+        value = self.joint_angle_at_state_zero_rad
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+            raise SpecError("joint coordinate zero angle must be finite")
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "JointCoordinateBindingSpec":
+        value = _object(data, "joint coordinate binding")
+        names = ("state", "joint_angle_at_state_zero_rad")
+        _keys(value, names, "joint coordinate binding", names)
+        angle = value["joint_angle_at_state_zero_rad"]
+        if isinstance(angle, bool) or not isinstance(angle, (int, float)):
+            raise SpecError("joint coordinate zero angle must be numeric")
+        return cls(
+            _string(value["state"], "joint coordinate binding.state"),
+            float(angle),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class JointSpec(StrictRecord):
+    """Typed physical semantics for an attachment connection."""
+
+    kind: str
+    behavior_binding: str
+    coordinate_bindings: tuple[JointCoordinateBindingSpec, ...]
+    coordinate: str | None = None
+    zero_angle_rad: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.kind not in {"fixed", "revolute"}:
+            raise SpecError("joint.kind must be 'fixed' or 'revolute'")
+        if self.behavior_binding not in {"kinematic_only", "pmdl"}:
+            raise SpecError("joint.behavior_binding must be 'kinematic_only' or 'pmdl'")
+        if not math.isfinite(float(self.zero_angle_rad)):
+            raise SpecError("joint.zero_angle_rad must be finite")
+        if len({binding.state for binding in self.coordinate_bindings}) != len(self.coordinate_bindings):
+            raise SpecError("joint coordinate bindings must name unique PMDL states")
+        if self.kind == "fixed":
+            if self.coordinate is not None or self.coordinate_bindings or self.zero_angle_rad != 0.0:
+                raise SpecError("fixed joints cannot declare a coordinate, bindings, or nonzero zero angle")
+        else:
+            if self.coordinate is None:
+                raise SpecError("revolute joints require a coordinate")
+            PortRef.from_dict(self.coordinate)
+            if not self.coordinate_bindings:
+                raise SpecError("revolute joints require coordinate_bindings")
+            if self.coordinate_bindings[0].state != self.coordinate:
+                raise SpecError("the first revolute coordinate binding must name joint.coordinate")
+            if not math.isclose(
+                self.coordinate_bindings[0].joint_angle_at_state_zero_rad,
+                self.zero_angle_rad,
+                rel_tol=0.0,
+                abs_tol=1e-12,
+            ):
+                raise SpecError("joint.zero_angle_rad must match the primary coordinate binding")
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "JointSpec":
+        value = _object(data, "joint")
+        names = ("kind", "behavior_binding", "coordinate_bindings", "coordinate", "zero_angle_rad")
+        _keys(value, names, "joint", names[:3])
+        zero = value.get("zero_angle_rad", 0.0)
+        if isinstance(zero, bool) or not isinstance(zero, (int, float)):
+            raise SpecError("joint.zero_angle_rad must be numeric")
+        return cls(
+            _string(value["kind"], "joint.kind"),
+            _string(value["behavior_binding"], "joint.behavior_binding"),
+            tuple(
+                JointCoordinateBindingSpec.from_dict(item)
+                for item in _sequence(value["coordinate_bindings"], "joint.coordinate_bindings")
+            ),
+            None if value.get("coordinate") is None else _string(value["coordinate"], "joint.coordinate"),
+            float(zero),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class ConnectionSpec(StrictRecord):
     id: str
     kind: str
     endpoints: tuple[PortRef, ...]
     domain: str | None = None
+    joint: JointSpec | None = None
     metadata: FrozenDict[Any] = FrozenDict()
 
     def __post_init__(self) -> None:
@@ -744,20 +966,36 @@ class ConnectionSpec(StrictRecord):
             raise SpecError(f"unsupported connection kind {self.kind!r}")
         if len(self.endpoints) < 2:
             raise SpecError("connection requires at least two endpoints")
+        if self.kind == "attachment":
+            if len(self.endpoints) != 2 or self.joint is None:
+                raise SpecError("attachment connections require two endpoints and a joint")
+            endpoint_components = {endpoint.component for endpoint in self.endpoints}
+            invalid = sorted(
+                binding.state.rsplit(".", 1)[0]
+                for binding in self.joint.coordinate_bindings
+                if binding.state.rsplit(".", 1)[0] not in endpoint_components
+            )
+            if invalid:
+                raise SpecError(f"joint coordinate bindings must reference endpoint components: {invalid}")
+        elif self.joint is not None:
+            raise SpecError("only attachment connections may declare a joint")
         object.__setattr__(self, "metadata", _freeze(self.metadata, "connection.metadata"))
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "ConnectionSpec":
         data = _object(data, "connection")
-        _keys(data, ("id", "kind", "endpoints", "domain", "metadata"), "connection", ("id", "kind", "endpoints"))
+        _keys(data, ("id", "kind", "endpoints", "domain", "joint", "metadata"), "connection", ("id", "kind", "endpoints"))
         return cls(_identifier(data["id"], "connection.id"), _string(data["kind"], "connection.kind"),
                    tuple(PortRef.from_dict(item) for item in _sequence(data["endpoints"], "connection.endpoints")),
                    None if data.get("domain") is None else _identifier(data["domain"], "connection.domain"),
+                   None if data.get("joint") is None else JointSpec.from_dict(_object(data["joint"], "connection.joint")),
                    _freeze(_object(data.get("metadata", {}), "connection.metadata")))
 
 
 @dataclass(frozen=True, slots=True)
-class ControlBindingSpec(StrictRecord):
+class ActuatorBindingSpec(StrictRecord):
+    """One resolved controller/external output driving a PMDL signal input."""
+
     id: str
     source: str
     target: PortRef
@@ -765,11 +1003,190 @@ class ControlBindingSpec(StrictRecord):
     external: bool = False
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> "ControlBindingSpec":
-        data = _object(data, "control")
-        _keys(data, ("id", "source", "target", "settings", "external"), "control", ("id", "source", "target"))
-        return cls(_identifier(data["id"], "control.id"), _string(data["source"], "control.source"), PortRef.from_dict(data["target"]),
-                   _freeze(_object(data.get("settings", {}), "control.settings")), _boolean(data.get("external", False), "control.external"))
+    def from_dict(cls, data: Mapping[str, Any]) -> "ActuatorBindingSpec":
+        data = _object(data, "actuator binding")
+        names = ("id", "source", "target", "settings", "external")
+        _keys(data, names, "actuator binding", names[:3])
+        return cls(
+            _identifier(data["id"], "actuator_binding.id"),
+            _string(data["source"], "actuator_binding.source"),
+            PortRef.from_dict(data["target"]),
+            _freeze(_object(data.get("settings", {}), "actuator_binding.settings")),
+            _boolean(data.get("external", False), "actuator_binding.external"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogLinkSpec(StrictRecord):
+    """Relative catalog root included in a contraption closure."""
+
+    path: str
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any] | str) -> "CatalogLinkSpec":
+        if isinstance(data, str):
+            return cls(_string(data, "catalog path"))
+        value = _object(data, "catalog link")
+        _keys(value, ("path",), "catalog link", ("path",))
+        return cls(_string(value["path"], "catalog path"))
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactLinkSpec(StrictRecord):
+    """Hash-bound artifact path relative to the contraption document."""
+
+    path: str
+    sha256: str
+
+    def __post_init__(self) -> None:
+        path = Path(self.path)
+        if path.is_absolute() or ".." in path.parts or not path.parts:
+            raise SpecError("artifact path must be a non-empty, contained relative path")
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", self.sha256) is None:
+            raise SpecError("artifact sha256 must be 'sha256:' plus 64 lowercase hex digits")
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "ArtifactLinkSpec":
+        value = _object(data, "artifact link")
+        _keys(value, ("path", "sha256"), "artifact link", ("path", "sha256"))
+        return cls(
+            _string(value["path"], "artifact path"),
+            _string(value["sha256"], "artifact sha256"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ExplicitInputBindingSpec(StrictRecord):
+    """Physical/external wiring for one controller explicit input pin."""
+
+    signal: str | None = None
+    external: str | None = None
+
+    def __post_init__(self) -> None:
+        if (self.signal is None) == (self.external is None):
+            raise SpecError("explicit input binding requires exactly one of signal/external")
+        if self.signal is not None:
+            PortRef.from_dict(self.signal)
+        if self.external is not None:
+            _identifier(self.external, "explicit input external name", symbol=True)
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "ExplicitInputBindingSpec":
+        value = _object(data, "explicit input binding")
+        _keys(value, ("signal", "external"), "explicit input binding")
+        return cls(
+            None if value.get("signal") is None else _string(value["signal"], "input signal"),
+            None if value.get("external") is None else _string(value["external"], "external input"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ControllerOutputBindingSpec(StrictRecord):
+    """Physical signal wiring or one named external hardware/telemetry pin."""
+
+    signal: str | None = None
+    external: str | None = None
+
+    def __post_init__(self) -> None:
+        if (self.signal is None) == (self.external is None):
+            raise SpecError(
+                "controller output binding requires exactly one of signal/external"
+            )
+        if self.signal is not None:
+            PortRef.from_dict(self.signal)
+        if self.external is not None:
+            _identifier(self.external, "controller output external name", symbol=True)
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "ControllerOutputBindingSpec":
+        value = _object(data, "controller output binding")
+        _keys(value, ("signal", "external"), "controller output binding")
+        return cls(
+            None
+            if value.get("signal") is None
+            else _string(value["signal"], "controller output signal"),
+            None
+            if value.get("external") is None
+            else _string(value["external"], "controller output external name"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ControllerLinkSpec(StrictRecord):
+    """One deployable controller plus its physical pin wiring."""
+
+    id: str
+    program: ArtifactLinkSpec
+    explicit_inputs: FrozenDict[Any]
+    implicit_inputs: FrozenDict[Any]
+    outputs: FrozenDict[Any]
+
+    def __post_init__(self) -> None:
+        _identifier(self.id, "controller link id")
+        if (
+            not isinstance(self.explicit_inputs, FrozenDict)
+            or not isinstance(self.implicit_inputs, FrozenDict)
+            or not isinstance(self.outputs, FrozenDict)
+        ):
+            raise SpecError("controller link bindings must be frozen mappings")
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "ControllerLinkSpec":
+        value = _object(data, "controller link")
+        names = ("id", "program", "explicit_inputs", "implicit_inputs", "outputs")
+        _keys(value, names, "controller link", names)
+        raw_inputs = _object(value["explicit_inputs"], "controller explicit_inputs")
+        raw_implicit = _object(value["implicit_inputs"], "controller implicit_inputs")
+        raw_outputs = _object(value["outputs"], "controller outputs")
+        inputs = {
+            _identifier(name, "controller input name", symbol=True):
+            ExplicitInputBindingSpec.from_dict(_object(binding, f"controller input {name}"))
+            for name, binding in raw_inputs.items()
+        }
+        outputs = {
+            _identifier(name, "controller output name", symbol=True):
+            ControllerOutputBindingSpec.from_dict(
+                _object(binding, f"controller output {name}")
+            )
+            for name, binding in raw_outputs.items()
+        }
+        implicit_inputs = {
+            _identifier(name, "controller implicit input name", symbol=True):
+            _string(target, f"controller implicit input {name}")
+            for name, target in raw_implicit.items()
+        }
+        return cls(
+            _identifier(value["id"], "controller link id"),
+            ArtifactLinkSpec.from_dict(_object(value["program"], "controller program")),
+            FrozenDict(inputs),
+            FrozenDict(implicit_inputs),
+            FrozenDict(outputs),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class VerificationLinkSpec(StrictRecord):
+    """One posterior verification program and its observable bindings."""
+
+    id: str
+    program: ArtifactLinkSpec
+    inputs: FrozenDict[Any]
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "VerificationLinkSpec":
+        value = _object(data, "verification link")
+        names = ("id", "program", "inputs")
+        _keys(value, names, "verification link", names)
+        bindings = {
+            _identifier(name, "verification input name", symbol=True):
+            _string(source, f"verification input {name}")
+            for name, source in _object(value["inputs"], "verification inputs").items()
+        }
+        return cls(
+            _identifier(value["id"], "verification link id"),
+            ArtifactLinkSpec.from_dict(_object(value["program"], "verification program")),
+            FrozenDict(bindings),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -778,42 +1195,51 @@ class ContraptionSpec(StrictRecord):
     id: str
     name: str
     version: str
+    catalogs: tuple[CatalogLinkSpec, ...]
+    physical_root: FrozenDict[Any]
     components: tuple[ComponentReferenceSpec, ...]
     connections: tuple[ConnectionSpec, ...] = ()
-    controls: tuple[ControlBindingSpec, ...] = ()
+    actuators: tuple[ActuatorBindingSpec, ...] = ()
+    controllers: tuple[ControllerLinkSpec, ...] = ()
+    verifications: tuple[VerificationLinkSpec, ...] = ()
     environment: FrozenDict[Any] = FrozenDict()
     metadata: FrozenDict[Any] = FrozenDict()
 
     def __post_init__(self) -> None:
-        if self.format != "contraption-3":
+        if self.format != "contraption-4":
             raise SpecError(f"unsupported contraption format {self.format!r}")
         _identifier(self.id, "contraption.id")
         if not self.name or not self.version:
             raise SpecError("contraption name and version may not be empty")
         object.__setattr__(self, "environment", _freeze(self.environment, "contraption.environment"))
         object.__setattr__(self, "metadata", _freeze(self.metadata, "contraption.metadata"))
-
-    @property
-    def control_bindings(self) -> tuple[ControlBindingSpec, ...]:
-        return self.controls
+        if not self.catalogs:
+            raise SpecError("contraption requires at least one linked catalog")
+        if len({item.id for item in self.controllers}) != len(self.controllers):
+            raise SpecError("contraption controller ids must be unique")
+        if len({item.id for item in self.verifications}) != len(self.verifications):
+            raise SpecError("contraption verification ids must be unique")
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "ContraptionSpec":
         data = _object(data, "contraption")
-        names = ("format", "id", "name", "version", "components", "connections", "controls", "environment", "metadata")
-        _keys(data, names, "contraption", names[:5])
+        names = (
+            "format", "id", "name", "version", "catalogs", "physical_root",
+            "components", "connections", "actuators", "controllers", "verifications",
+            "environment", "metadata",
+        )
+        _keys(data, names, "contraption", (*names[:7], "metadata"))
         return cls(_string(data["format"], "contraption.format"), _identifier(data["id"], "contraption.id"),
                    _string(data["name"], "contraption.name"), _string(data["version"], "contraption.version"),
+                   tuple(CatalogLinkSpec.from_dict(item) for item in _sequence(data["catalogs"], "contraption.catalogs")),
+                   _freeze(_object(data["physical_root"], "contraption.physical_root")),
                    tuple(ComponentReferenceSpec.from_dict(item) for item in _sequence(data["components"], "contraption.components")),
                    tuple(ConnectionSpec.from_dict(item) for item in _sequence(data.get("connections", []), "contraption.connections")),
-                   tuple(ControlBindingSpec.from_dict(item) for item in _sequence(data.get("controls", []), "contraption.controls")),
+                   tuple(ActuatorBindingSpec.from_dict(item) for item in _sequence(data.get("actuators", []), "contraption.actuators")),
+                   tuple(ControllerLinkSpec.from_dict(item) for item in _sequence(data.get("controllers", []), "contraption.controllers")),
+                   tuple(VerificationLinkSpec.from_dict(item) for item in _sequence(data.get("verifications", []), "contraption.verifications")),
                    _freeze(_object(data.get("environment", {}), "contraption.environment")),
                    _freeze(_object(data.get("metadata", {}), "contraption.metadata")))
-
-
-def load_contraption(path: str) -> ContraptionSpec:
-    with open(path, "r", encoding="utf-8") as handle:
-        return ContraptionSpec.from_json(handle.read())
 
 
 def json_schema_for(record_type: type[StrictRecord]) -> dict[str, Any]:
@@ -867,7 +1293,7 @@ def json_schema_for(record_type: type[StrictRecord]) -> dict[str, Any]:
                 required.append(field.name)
         constants = {
             ("ModelSpec", "format"): "pmdl-1",
-            ("ContraptionSpec", "format"): "contraption-3",
+            ("ContraptionSpec", "format"): "contraption-4",
         }
         for field_name in properties:
             constant = constants.get((cls.__name__, field_name))

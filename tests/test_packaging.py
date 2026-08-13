@@ -22,12 +22,31 @@ class RuntimeAssetTests(unittest.TestCase):
         self.assertTrue(
             (
                 root
-                / "examples"
-                / "scanner_robot"
+                / "assembled_contraptions"
+                / "scanner"
                 / "controls"
-                / "scanner.control.json"
+                / "scanner.control"
             ).is_file()
         )
+        self.assertTrue(
+            (
+                root
+                / "assembled_contraptions"
+                / "examples"
+                / "part_import_canary"
+                / "fixed_resistor.json"
+            ).is_file()
+        )
+        self.assertTrue(
+            (
+                root
+                / "assembled_contraptions"
+                / "examples"
+                / "test_systems"
+                / "README.md"
+            ).is_file()
+        )
+        self.assertFalse((root / "examples").exists())
         self.assertTrue((root / "web" / "viewer.js").is_file())
         self.assertGreater(len(load_interface_catalog(catalog).categories), 1)
 
@@ -38,10 +57,8 @@ class RuntimeAssetTests(unittest.TestCase):
             package.mkdir(parents=True)
             assets = target / "share" / "contraption"
             for relative in (
-                "model_catalog/electrical/interface.pmdl",
-                "model_catalog/electrical/resistors/fixed_resistors/resistor.pmdl",
-                "examples/scanner_robot/contraption.json",
-                "examples/scanner_robot/controls/scanner.control.json",
+                "model_catalog/example/interface.pmdl",
+                "assembled_contraptions/example/contraption.json",
             ):
                 path = assets / relative
                 path.parent.mkdir(parents=True, exist_ok=True)

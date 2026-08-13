@@ -1,0 +1,29 @@
+{
+  "format": "model-instance-1",
+  "id": "test.planar_rigid_body.v1",
+  "variant": "v1",
+  "part": "test.planar_rigid_body",
+  "version": "1.1.0",
+  "model": {
+    "id": "test_system.planar_rigid_body",
+    "version": "1.1.0",
+    "sha256": "sha256:1e91ad7652d977d6d596406559f62e52174e666afab653d3f81a0ec9698466ed"
+  },
+  "parameters": {
+    "mass": 1,
+    "moment_of_inertia": 0.1,
+    "linear_drag": 0,
+    "angular_drag": 0,
+    "roughness_std": 0,
+    "roughness_reference_length": 1
+  },
+  "parameter_uncertainty": {},
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1,
+    "notes": "Analytic test-system fixture with declarative, seeded stochastic pose roughness."
+  },
+  "metadata": {
+    "fixture": true
+  }
+}

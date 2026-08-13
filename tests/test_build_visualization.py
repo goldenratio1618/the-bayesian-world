@@ -13,6 +13,7 @@ from unittest import mock
 import numpy as np
 
 from contraption.manufacturing.build import BuildInstructionError, generate_build_instructions
+from contraption import load_contraption
 from contraption.cli import (
     _trajectory_payload,
     _trajectory_result,
@@ -20,11 +21,12 @@ from contraption.cli import (
     command_compile,
 )
 from contraption.physics.physical import (
+    PhysicalAssemblySpec,
     ResolvedPartRegistry,
     ResolvedPartSpec,
     resolve_physical_assembly as _resolve_physical_assembly,
 )
-from contraption.applications.scanner import load_scanner_assembly, simulate_scanner_robot
+from contraption.physics.simulator import simulate
 from contraption.physics.specs import FrozenDict
 from contraption.visualization.viewer import (
     VisualizationError,
@@ -42,11 +44,15 @@ def resolve_physical_assembly(contraption, parts):
         value if isinstance(value, ResolvedPartSpec) else ResolvedPartSpec.from_dict(value)
         for value in values
     )
-    return _resolve_physical_assembly(contraption, registry)
+    return _resolve_physical_assembly(
+        PhysicalAssemblySpec.from_dict(contraption), registry
+    )
 
 
 def scanner_assembly():
-    return load_scanner_assembly(ROOT)
+    return load_contraption(
+        ROOT / "assembled_contraptions" / "scanner" / "contraption.json"
+    )
 
 
 class BuildInstructionTests(unittest.TestCase):
@@ -62,13 +68,20 @@ class BuildInstructionTests(unittest.TestCase):
         self.assertEqual(first.assembly_sha256, self.assembly.assembly_sha256)
         self.assertEqual(first.pmdl_sha256, self.assembly.system.pmdl_sha256)
         self.assertIn(self.assembly.assembly_sha256, first.to_markdown())
-        reference = self.assembly.specification.controller
-        self.assertIsNotNone(reference)
-        self.assertEqual(
-            first.controller,
-            {name: reference[name] for name in ("id", "version", "sha256")},
+        expected = tuple(
+            {
+                "id": controller.id,
+                "version": controller.spec.version,
+                "sha256": link.program.sha256,
+            }
+            for link in self.assembly.specification.controllers
+            for controller in (self.assembly.controllers[link.id],)
         )
-        self.assertIn(reference["sha256"], first.to_markdown())
+        self.assertEqual(
+            first.controllers,
+            expected,
+        )
+        self.assertIn(expected[0]["sha256"], first.to_markdown())
 
     def test_every_written_build_artifact_carries_the_exact_closure_hash(self) -> None:
         plan = generate_build_instructions(self.assembly)
@@ -78,7 +91,7 @@ class BuildInstructionTests(unittest.TestCase):
             human = paths["BUILD_INSTRUCTIONS.md"].read_text(encoding="utf-8")
         self.assertEqual(machine["assembly_sha256"], self.assembly.assembly_sha256)
         self.assertEqual(machine["pmdl_sha256"], self.assembly.system.pmdl_sha256)
-        self.assertEqual(machine["controller"], plan.controller)
+        self.assertEqual(machine["controllers"], [dict(item) for item in plan.controllers])
         self.assertIn(self.assembly.assembly_sha256, human)
         self.assertIn(self.assembly.system.pmdl_sha256, human)
 
@@ -152,7 +165,8 @@ class BuildInstructionTests(unittest.TestCase):
         plan = generate_build_instructions(self.assembly)
         expected = {
             attachment.id: tuple(
-                binding.to_dict() for binding in attachment.coordinate_bindings
+                binding.to_dict()
+                for binding in attachment.joint.coordinate_bindings
             )
             for attachment in self.assembly.physical.attachments
         }
@@ -676,10 +690,10 @@ class CliTrajectoryArtifactTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.assembly = scanner_assembly()
-        cls.result = simulate_scanner_robot(
+        cls.result = simulate(
             cls.assembly,
-            duration=0.05,
-            dt=0.05,
+            duration=0.02,
+            dt=0.01,
             num_samples=1,
             seed=5,
             use_model_uncertainty=False,
@@ -707,6 +721,12 @@ class CliTrajectoryArtifactTests(unittest.TestCase):
         with redirect_stderr(StringIO()), self.assertRaises(SystemExit):
             build_parser().parse_args(["view", "--scene", "detached.json"])
 
+    def test_simulation_tick_defaults_to_resolved_controller_subdivision(self) -> None:
+        arguments = build_parser().parse_args(
+            ["simulate", "--spec", str(ROOT / "assembled_contraptions" / "scanner" / "contraption.json")]
+        )
+        self.assertIsNone(arguments.dt)
+
     def test_v2_rejects_redundant_pose_metadata(self) -> None:
         payload = _trajectory_payload(self.result, {})
         payload["metadata"]["body_pose_frames"] = {"forged": True}
@@ -727,34 +747,45 @@ class CliTrajectoryArtifactTests(unittest.TestCase):
             ), self.assertRaisesRegex(ValueError, message):
                 _trajectory_result(self.assembly, Path("ignored-trajectory.json"))
 
-    def test_compile_cli_surfaces_open_dynamics_gates(self) -> None:
-        completeness = self.assembly.dynamics_completeness.to_dict()
-        artifact = mock.Mock()
-        artifact.manifest = {"dynamics_completeness": completeness}
-        artifact.write.return_value = {"scanner.c": Path("/tmp/scanner.c")}
+    def test_compile_cli_emits_each_resolved_controller_to_both_targets(self) -> None:
+        bundle = mock.Mock()
+        bundle.source_digest = "sha256:" + "c" * 64
+        bundle.targets = ("c99", "verilog")
+        bundle.artifacts = (
+            SimpleNamespace(path="controller.h", sha256="sha256:" + "1" * 64),
+            SimpleNamespace(path="controller.c", sha256="sha256:" + "2" * 64),
+            SimpleNamespace(path="controller.v", sha256="sha256:" + "3" * 64),
+        )
+        bundle.closure = {"assembly_sha256": self.assembly.assembly_sha256}
+        bundle.manifest = {"closure": bundle.closure}
+        bundle.write.return_value = (
+            Path("/tmp/scanner/controller.h"),
+            Path("/tmp/scanner/controller.c"),
+            Path("/tmp/scanner/controller.v"),
+            Path("/tmp/scanner/manifest.json"),
+        )
         arguments = SimpleNamespace(
             output="ignored-output",
-            model_name="scanner",
-            nominal_dt=0.05,
-            skip_syntax_check=True,
-            compiler=None,
         )
         stream = StringIO()
         with mock.patch(
             "contraption.cli._assembly_from_args", return_value=self.assembly
         ), mock.patch(
-            "contraption.cli.compile_resolved_assembly", return_value=artifact
-        ), redirect_stdout(stream):
+            "contraption.cli.compile_resolved_controller", return_value=bundle
+        ) as compile_controller, redirect_stdout(stream):
             self.assertEqual(command_compile(arguments), 0)
         reported = json.loads(stream.getvalue())
-        self.assertEqual(reported["dynamics_completeness"], completeness)
-        self.assertEqual(reported["dynamics_completeness"]["status"], "incomplete")
-        self.assertTrue(
-            any(
-                gate["id"] == "fixed_payload_mass_inertia"
-                for gate in reported["dynamics_completeness"]["gates"]
-            )
+        controller_id = next(iter(self.assembly.controllers))
+        self.assertEqual(
+            reported["compiled"][controller_id]["targets"], ["c99", "verilog"]
         )
+        compile_controller.assert_called_once_with(
+            self.assembly,
+            controller_id,
+            identifier=controller_id,
+            targets=("c99", "verilog"),
+        )
+        bundle.write.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,54 @@
+{
+  "format": "model-instance-1",
+  "id": "test.dc_motor.v1",
+  "variant": "v1",
+  "part": "test.dc_motor",
+  "version": "1.0.0",
+  "model": {
+    "id": "test_system.dc_motor",
+    "version": "1.0.0",
+    "sha256": "sha256:480f1a902892f7099098853509f59ea945cf3f329934c3c7b3dbcc8d7c51449b"
+  },
+  "parameters": {
+    "resistance": 2,
+    "inductance": 0.01,
+    "torque_constant": 0.08,
+    "back_emf_constant": 0.08,
+    "inertia": 0.002,
+    "viscous_friction": 0.001
+  },
+  "parameter_uncertainty": {
+    "resistance": {
+      "distribution": "normal",
+      "std": 0.04
+    },
+    "inductance": {
+      "distribution": "normal",
+      "std": 0.0002
+    },
+    "torque_constant": {
+      "distribution": "normal",
+      "std": 0.0016
+    },
+    "back_emf_constant": {
+      "distribution": "normal",
+      "std": 0.0016
+    },
+    "inertia": {
+      "distribution": "normal",
+      "std": 0.00004
+    },
+    "viscous_friction": {
+      "distribution": "normal",
+      "std": 0.00002
+    }
+  },
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1,
+    "notes": "Deterministic analytic test-system fixture."
+  },
+  "metadata": {
+    "fixture": true
+  }
+}

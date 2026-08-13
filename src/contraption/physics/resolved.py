@@ -1,9 +1,7 @@
-"""Resolve one instantiation-only contraption into a physical PMDL assembly.
+"""Resolve one closed ``contraption-4`` bundle into physical and PMDL views.
 
-``contraption-3`` components name catalog model instances.  Their PMDL class,
-initialized parameters, uncertainty, static geometry, and connector bindings
-are resolved from ``model_catalog`` and cannot be overridden by the
-contraption document.
+The resolver accepts parsed, hash-verified controller and verification
+artifacts. Filesystem access belongs to :mod:`contraption.loading`.
 """
 
 from __future__ import annotations
@@ -13,14 +11,18 @@ from dataclasses import dataclass
 import hashlib
 import json
 import math
-import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
+from ..catalog.instantiations import PartInstantiationRegistry
+from ..control import ControlSpec, OutputSpec, control_digest
+from ..verification import VerificationProgram
+
 from .assembly import AssembledPMDLSystem, AssemblyError, assemble_contraption
-from .controls import ControlProgram
 from .physical import (
+    PhysicalAssemblySpec,
+    PhysicalComponentInstance,
     ResolvedPartRegistry,
     ResolvedPartSpec,
     PlanarRootStateBindingSpec,
@@ -30,20 +32,29 @@ from .physical import (
     resolve_physical_assembly,
     split_state_reference,
 )
-from .specs import ControlBindingSpec, FrozenDict, ModelSpec, PortRef
+from .specs import (
+    ActuatorBindingSpec,
+    ConnectionSpec,
+    ContraptionSpec,
+    ControllerLinkSpec,
+    ControllerOutputBindingSpec,
+    ExplicitInputBindingSpec,
+    FrozenDict,
+    ModelSpec,
+    PortRef,
+    VerificationLinkSpec,
+)
 from .units import UnitError, parse_unit
 from .validation import validate_model
-from ..catalog.instantiations import PartInstantiationRegistry
 
 if TYPE_CHECKING:
+    from ..control.observer import AffineObserverModel
     from .simulator import SimulationResult
 
 
 class ResolutionError(ValueError):
     """The canonical assembly closure is missing, stale, or incompatible."""
 
-
-_SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 def _mapping(value: Any, context: str) -> Mapping[str, Any]:
@@ -255,28 +266,6 @@ def _parse_dynamics_completeness(
 
 
 @dataclass(frozen=True, slots=True)
-class ResolvedConnection:
-    id: str
-    kind: str
-    endpoints: tuple[PortRef, ...]
-    domain: str | None
-    joint: FrozenDict[Any]
-    metadata: FrozenDict[Any]
-
-    def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {
-            "id": self.id,
-            "kind": self.kind,
-            "endpoints": [endpoint.to_dict() for endpoint in self.endpoints],
-            "domain": self.domain,
-            "metadata": dict(self.metadata),
-        }
-        if self.kind == "attachment":
-            result["joint"] = dict(self.joint)
-        return result
-
-
-@dataclass(frozen=True, slots=True)
 class ResolvedContraptionRecord:
     """Narrow typed protocol accepted by the PMDL assembly compiler."""
 
@@ -285,18 +274,107 @@ class ResolvedContraptionRecord:
     name: str
     version: str
     components: tuple[ResolvedComponent, ...]
-    connections: tuple[ResolvedConnection, ...]
-    controls: tuple[ControlBindingSpec, ...]
+    connections: tuple[ConnectionSpec, ...]
+    actuators: tuple[ActuatorBindingSpec, ...]
+    controllers: tuple[ControllerLinkSpec, ...]
+    verifications: tuple[VerificationLinkSpec, ...]
     environment: FrozenDict[Any]
     metadata: FrozenDict[Any]
     physical_root: FrozenDict[Any]
-    controller: FrozenDict[Any] | None
     source: FrozenDict[Any]
 
     def to_dict(self) -> dict[str, Any]:
         # Return the exact normalized source.  It is the provenance record, not
         # a second model assembled from selected fields.
         return _canonical(dict(self.source), "resolved contraption source")
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedExplicitInputBinding:
+    """One controller input wired to an external pin or exact PMDL state."""
+
+    kind: str
+    source: str
+    state_name: str | None = None
+    state_index: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedImplicitInputBinding:
+    """One controller latent bound to an exact namespaced PMDL variable."""
+
+    source: str
+    state_name: str
+    state_index: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedControllerOutputBinding:
+    """One controller output exposed as a plant signal or external pin."""
+
+    kind: Literal["signal", "external"]
+    source: str
+    state_name: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind not in {"signal", "external"}:
+            raise ResolutionError(
+                "resolved controller output kind must be 'signal' or 'external'"
+            )
+        if not isinstance(self.source, str) or not self.source:
+            raise ResolutionError(
+                "resolved controller output source must be a non-empty string"
+            )
+        if self.kind == "signal":
+            if not isinstance(self.state_name, str) or not self.state_name:
+                raise ResolutionError(
+                    "resolved signal output requires a non-empty PMDL state_name"
+                )
+        elif self.state_name is not None:
+            raise ResolutionError(
+                "resolved external output may not declare a PMDL state_name"
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedController:
+    """A parsed controller plus fully resolved runtime wiring."""
+
+    id: str
+    spec: ControlSpec
+    explicit_input_bindings: FrozenDict[ResolvedExplicitInputBinding]
+    implicit_input_bindings: FrozenDict[ResolvedImplicitInputBinding]
+    output_bindings: FrozenDict[ResolvedControllerOutputBinding]
+    controller_link_digest: str
+    observer: "AffineObserverModel | None" = None
+
+    @property
+    def plant_output_bindings(self) -> FrozenDict[str]:
+        """Map only PMDL-driving outputs to assembled plant control sources."""
+
+        return FrozenDict(
+            (name, binding.source)
+            for name, binding in self.output_bindings.items()
+            if binding.kind == "signal"
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedVerificationInputBinding:
+    """One verification input wired to an exact PMDL state coordinate."""
+
+    source: str
+    state_name: str
+    state_index: int
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedVerification:
+    """A parsed verification program plus its observable wiring."""
+
+    id: str
+    spec: VerificationProgram
+    input_bindings: FrozenDict[ResolvedVerificationInputBinding]
 
 
 @dataclass(frozen=True, slots=True)
@@ -307,7 +385,8 @@ class ResolvedAssembly:
     parts: ResolvedPartRegistry
     component_models: FrozenDict[ModelSpec]
     connector_bindings: FrozenDict[str | None]
-    controller: ControlProgram | None
+    controllers: FrozenDict[ResolvedController]
+    verifications: FrozenDict[ResolvedVerification]
     physical: ResolvedPhysicalAssembly
     system: AssembledPMDLSystem
 
@@ -320,35 +399,145 @@ class ResolvedAssembly:
         return self.physical.scene
 
     @property
-    def controller_output_bindings(self) -> FrozenDict[str]:
-        """Hash-bound controller-output to assembled-control-source mapping."""
-
-        if self.specification.controller is None:
-            return FrozenDict()
-        bindings = self.specification.controller["output_bindings"]
-        assert isinstance(bindings, FrozenDict)
-        return bindings
-
-    @property
-    def controller_telemetry_outputs(self) -> tuple[str, ...]:
-        """Controller outputs intentionally retained as non-actuator telemetry."""
-
-        if self.specification.controller is None:
-            return ()
-        values = self.specification.controller["telemetry_outputs"]
-        assert isinstance(values, tuple)
-        return values
-
-    @property
-    def dynamics_completeness(self) -> DynamicsCompletenessRecord:
+    def dynamics_completeness(self) -> DynamicsCompletenessRecord | None:
         """Return the already-validated hash-bound dynamics-fidelity record."""
 
-        result = _parse_dynamics_completeness(self.specification.metadata)
-        if result is None:  # Resolution requires it; retain a corruption guard.
+        return _parse_dynamics_completeness(self.specification.metadata)
+
+    def resolve_signal_state(
+        self,
+        reference: PortRef | str,
+        *,
+        direction: str,
+        system: AssembledPMDLSystem | None = None,
+        context: str = "signal binding",
+    ) -> tuple[str, int]:
+        """Re-resolve one canonical connector to its exact PMDL state coordinate."""
+
+        components = {item.id: item for item in self.specification.components}
+        endpoint = _resolve_signal_endpoint(
+            reference,
+            direction=direction,
+            components=components,
+            parts=self.parts,
+            models=self.component_models,
+            context=context,
+        )
+        active_system = self.system if system is None else system
+        try:
+            index = active_system.state_names.index(endpoint.state_name)
+        except ValueError as exc:
             raise ResolutionError(
-                "resolved contraption lost mandatory metadata.dynamics_completeness"
+                f"{context} resolved to missing PMDL state {endpoint.state_name!r}"
+            ) from exc
+        return endpoint.state_name, index
+
+    def attest_pmdl_system(self) -> AssembledPMDLSystem:
+        """Independently rebuild and attest the executable PMDL projection.
+
+        Compiler provenance may not trust the mutable assembled-system object or
+        its stored digest.  The canonical resolved source, exact-hash component
+        models, connector projection, and physical assembly identity are compiled
+        again, then every executable semantic field is compared before the fresh
+        system is returned.
+        """
+
+        try:
+            canonical = assemble_contraption(
+                self.specification,
+                self.component_models,
+                component_models=self.component_models,
+                connector_bindings=self.connector_bindings,
+                canonical_assembly_sha256=self.physical.assembly_sha256,
             )
-        return result
+        except AssemblyError as exc:
+            raise ResolutionError(
+                f"canonical PMDL reassembly failed during provenance attestation: {exc}"
+            ) from exc
+
+        actual = self.system
+
+        def equation_payload(system: AssembledPMDLSystem) -> tuple[Any, ...]:
+            return tuple(
+                (
+                    equation.name,
+                    tuple(equation.terms),
+                    equation.control_source,
+                    equation.control_scale,
+                )
+                for equation in system._network_equations
+            )
+
+        def layout_payload(system: AssembledPMDLSystem) -> tuple[Any, ...]:
+            return tuple(
+                (
+                    layout.component.id,
+                    _plain(layout.component.parameters),
+                    layout.component.model_reference,
+                    layout.model.to_dict(),
+                    tuple(layout.unknown_indices.items()),
+                    tuple(layout.derivative_indices.items()),
+                    tuple(layout.parameter_names.items()),
+                    tuple((name, repr(expression)) for name, expression in layout.relations),
+                    tuple(layout.process_noise_channels),
+                    tuple(
+                        (
+                            increment.target_index,
+                            increment.target_name,
+                            repr(increment.expression),
+                        )
+                        for increment in layout.process_noise_increments
+                    ),
+                )
+                for layout in system._layouts
+            )
+
+        fields = {
+            "specification": lambda value: value.specification.to_dict(),
+            "layouts": layout_payload,
+            "component_models": lambda value: {
+                name: model.to_dict() for name, model in value.component_models.items()
+            },
+            "connector_bindings": lambda value: dict(value.connector_bindings),
+            "state_names": lambda value: tuple(value.state_names),
+            "initial_state": lambda value: tuple(value.initial_state),
+            "differential_state_names": lambda value: tuple(value.differential_state_names),
+            "differential_state_indices": lambda value: tuple(value.differential_state_indices),
+            "algebraic_names": lambda value: tuple(value.algebraic_names),
+            "algebraic_indices": lambda value: tuple(value.algebraic_indices),
+            "residual_names": lambda value: tuple(value.residual_names),
+            "network_equations": equation_payload,
+            "network_residual_names": lambda value: tuple(value.network_residual_names),
+            "default_parameters": lambda value: dict(value.default_parameters),
+            "parameter_bounds": lambda value: dict(value.parameter_bounds),
+            "parameter_uncertainty": lambda value: _plain(value.parameter_uncertainty),
+            "correlated_uncertainty": lambda value: tuple(value._correlated_uncertainty),
+            "control_names": lambda value: tuple(value.control_names),
+            "control_defaults": lambda value: dict(value.control_defaults),
+            "control_bounds": lambda value: dict(value.control_bounds),
+            "control_slew_rates": lambda value: dict(value.control_slew_rates),
+            "validity": lambda value: value.validity.to_dict(),
+            "process_noise_channel_names": lambda value: tuple(value.process_noise_channel_names),
+            "process_noise_seed_policy": lambda value: value.process_noise_seed_policy,
+            "process_noise_reproducibility": lambda value: value.process_noise_reproducibility,
+            "has_process_noise": lambda value: value.has_process_noise,
+            "kinematic_connection_ids": lambda value: tuple(value.kinematic_connection_ids),
+            "assembly_sha256": lambda value: value.assembly_sha256,
+            "pmdl_sha256": lambda value: value.pmdl_sha256,
+            "canonical_assembly_sha256": lambda value: value.canonical_assembly_sha256,
+            "balance": lambda value: value.balance,
+        }
+        mismatches = [
+            name
+            for name, projection in fields.items()
+            if projection(actual) != projection(canonical)
+        ]
+        if mismatches:
+            raise ResolutionError(
+                "resolved PMDL system differs from independent canonical reassembly; "
+                "mismatched semantic field(s): " + ", ".join(mismatches)
+            )
+        return canonical
 
     def with_configuration(
         self,
@@ -561,7 +750,8 @@ class ResolvedAssembly:
             "differential_state_count": len(self.system.differential_state_names),
             "equation_count": len(self.system.residual_names),
             "kinematic_connection_ids": list(self.system.kinematic_connection_ids),
-            "controller": None if self.controller is None else self.controller.name,
+            "controller_ids": list(self.controllers),
+            "verification_ids": list(self.verifications),
         }
 
     def _configuration_from_result_sample(
@@ -597,10 +787,10 @@ class ResolvedAssembly:
 
         coordinates: dict[str, float] = {}
         for attachment in self.physical.attachments:
-            if attachment.kind != "revolute":
+            if attachment.joint.kind != "revolute":
                 continue
-            assert attachment.coordinate is not None
-            coordinate = attachment.coordinate
+            assert attachment.joint.coordinate is not None
+            coordinate = attachment.joint.coordinate
             coordinates[coordinate] = _attachment_coordinate_from_sample(
                 self,
                 attachment,
@@ -800,8 +990,8 @@ def _required_physical_state_references(
     result.update(
         binding.state
         for attachment in physical.attachments
-        if attachment.kind == "revolute"
-        for binding in attachment.coordinate_bindings
+        if attachment.joint.kind == "revolute"
+        for binding in attachment.joint.coordinate_bindings
     )
     for component in physical.components:
         part = physical.parts[component.part]
@@ -897,12 +1087,15 @@ def _attachment_coordinate_from_sample(
     sample_index: int,
     time_index: int,
 ) -> float:
-    if attachment.kind != "revolute" or not attachment.coordinate_bindings:
+    if (
+        attachment.joint.kind != "revolute"
+        or not attachment.joint.coordinate_bindings
+    ):
         raise PhysicalSpecError(
             f"attachment {attachment.id!r} has no revolute coordinate bindings"
         )
     state_values: list[tuple[str, float, float]] = []
-    for binding in attachment.coordinate_bindings:
+    for binding in attachment.joint.coordinate_bindings:
         state_angle = _state_sample_in_unit(
             assembly,
             binding.state,
@@ -981,9 +1174,9 @@ def _validate_physical_state_bindings(
     }
     initial_coordinates: dict[str, float] = {}
     for attachment in physical.attachments:
-        if attachment.kind != "revolute":
+        if attachment.joint.kind != "revolute":
             continue
-        assert attachment.coordinate is not None
+        assert attachment.joint.coordinate is not None
         endpoint_components = {
             attachment.parent.component,
             attachment.child.component,
@@ -998,7 +1191,7 @@ def _validate_physical_state_bindings(
                     f"{endpoint.component}.{connector.joint_coordinate_state}"
                 )
         declared_bindings = {
-            binding.state for binding in attachment.coordinate_bindings
+            binding.state for binding in attachment.joint.coordinate_bindings
         }
         if declared_bindings != expected_bindings:
             raise ResolutionError(
@@ -1007,7 +1200,7 @@ def _validate_physical_state_bindings(
                 f"extra={sorted(declared_bindings - expected_bindings)}"
             )
         initial_joint_angles: list[tuple[str, float, float]] = []
-        for coordinate_binding in attachment.coordinate_bindings:
+        for coordinate_binding in attachment.joint.coordinate_bindings:
             reference = coordinate_binding.state
             coordinate_component, _state_name = split_state_reference(reference)
             if (
@@ -1051,9 +1244,10 @@ def _validate_physical_state_bindings(
         initial_coordinates[primary_reference] = primary_initial
 
     attachment_coordinates = {
-        attachment.coordinate_bindings[0].state
+        attachment.joint.coordinate_bindings[0].state
         for attachment in physical.attachments
-        if attachment.kind == "revolute" and attachment.coordinate_bindings
+        if attachment.joint.kind == "revolute"
+        and attachment.joint.coordinate_bindings
     }
     for component in physical.components:
         part = physical.parts[component.part]
@@ -1105,41 +1299,6 @@ def _parse_component(
         instantiation.model_instance.model.id,
         instantiation.parameters,
         instantiation.model_instance.condition,
-    )
-
-
-def _parse_connection(value: Mapping[str, Any], index: int) -> ResolvedConnection:
-    context = f"contraption.connections[{index}]"
-    kind = _text(value.get("kind"), f"{context}.kind")
-    allowed = {"id", "kind", "endpoints", "domain", "metadata"}
-    if kind == "attachment":
-        allowed.add("joint")
-    _keys(value, allowed, context, {"id", "kind", "endpoints"})
-    endpoints = tuple(
-        PortRef.from_dict(endpoint)
-        for endpoint in _sequence(value["endpoints"], f"{context}.endpoints")
-    )
-    if len(endpoints) < 2:
-        raise ResolutionError(f"{context} requires at least two endpoints")
-    if kind == "attachment" and len(endpoints) != 2:
-        raise ResolutionError(f"{context} attachment must be pairwise")
-    domain = value.get("domain")
-    if domain is not None:
-        domain = _text(domain, f"{context}.domain")
-    joint = _mapping(value.get("joint", {}), f"{context}.joint")
-    metadata = _mapping(value.get("metadata", {}), f"{context}.metadata")
-    if metadata:
-        raise ResolutionError(
-            f"{context}.metadata must be empty; connection semantics require "
-            "typed fields rather than opaque metadata"
-        )
-    return ResolvedConnection(
-        _text(value["id"], f"{context}.id"),
-        kind,
-        endpoints,
-        domain,
-        _freeze(_canonical(joint, f"{context}.joint")),
-        _freeze(_canonical(metadata, f"{context}.metadata")),
     )
 
 
@@ -1332,310 +1491,624 @@ def _verify_part_model(
     return model
 
 
-def _controller_digest(program: ControlProgram) -> str:
-    payload = json.dumps(
-        _canonical(program.to_dict(), "control program"),
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        allow_nan=False,
-    ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(payload).hexdigest()
+@dataclass(frozen=True, slots=True)
+class _ResolvedSignalEndpoint:
+    reference: PortRef
+    model_port: Any
+    state_name: str
 
 
-def _resolve_controller(
-    raw_reference: Mapping[str, Any] | None,
-    control_programs: Mapping[str, ControlProgram] | None,
-    controls: Sequence[ControlBindingSpec],
-) -> ControlProgram | None:
-    if raw_reference is None:
-        return None
-    reference = _mapping(raw_reference, "contraption.controller")
-    names = {"id", "version", "sha256", "output_bindings", "telemetry_outputs"}
-    _keys(reference, names, "contraption.controller", names)
-    identifier = _text(reference["id"], "contraption.controller.id")
-    version = _text(reference["version"], "contraption.controller.version")
-    expected_digest = _text(reference["sha256"], "contraption.controller.sha256")
-    if _SHA256.fullmatch(expected_digest) is None:
-        raise ResolutionError(
-            "contraption.controller.sha256 must be 'sha256:' followed by 64 "
-            "lowercase hexadecimal characters"
-        )
-    if control_programs is None:
-        raise ResolutionError(
-            f"contraption references controller {identifier!r}, but no parsed "
-            "control-program registry was supplied"
-        )
+def _resolve_signal_endpoint(
+    reference: PortRef | str,
+    *,
+    direction: str,
+    components: Mapping[str, ResolvedComponent],
+    parts: ResolvedPartRegistry,
+    models: Mapping[str, ModelSpec],
+    context: str,
+) -> _ResolvedSignalEndpoint:
     try:
-        program = control_programs[identifier]
+        endpoint = reference if isinstance(reference, PortRef) else PortRef.from_dict(reference)
+    except Exception as exc:
+        raise ResolutionError(f"{context} must name a component connector: {exc}") from exc
+    try:
+        component = components[endpoint.component]
+        connector = parts[component.part].connector_map[endpoint.port]
     except KeyError as exc:
         raise ResolutionError(
-            f"contraption references missing controller {identifier!r}"
+            f"{context} references missing connector {endpoint.component}.{endpoint.port}"
         ) from exc
-    if not isinstance(program, ControlProgram):
+    if connector.model_port is None:
         raise ResolutionError(
-            f"controller registry entry {identifier!r} must be a parsed ControlProgram"
+            f"{context} connector {endpoint.component}.{endpoint.port} has no PMDL port binding"
         )
-    if program.name != identifier or program.version != version:
+    ports = {port.name: port for port in models[endpoint.component].signal_ports}
+    try:
+        model_port = ports[connector.model_port]
+    except KeyError as exc:
         raise ResolutionError(
-            f"controller identity/version mismatch: reference={identifier}@{version}, "
-            f"registry={program.name}@{program.version}"
+            f"{context} connector {endpoint.component}.{endpoint.port} does not bind a PMDL signal port"
+        ) from exc
+    if model_port.direction != direction:
+        raise ResolutionError(
+            f"{context} must bind a PMDL signal {direction}, got {model_port.direction!r}"
         )
-    actual_digest = _controller_digest(program)
-    if actual_digest != expected_digest:
+    if model_port.shape:
+        raise ResolutionError(f"{context} must bind a scalar PMDL signal")
+    return _ResolvedSignalEndpoint(
+        endpoint, model_port, f"{endpoint.component}.{model_port.name}"
+    )
+
+
+def _validate_control_dtype(control_dtype: str, pmdl_dtype: str, context: str) -> None:
+    compatible = (
+        control_dtype == "real" and pmdl_dtype in {"float32", "float64"}
+    ) or (control_dtype == "bool" and pmdl_dtype == "bool")
+    if not compatible:
         raise ResolutionError(
-            f"controller {identifier!r} content hash mismatch: expected "
-            f"{expected_digest}, got {actual_digest}; stale or substituted controller refused"
+            f"{context} dtype {control_dtype!r} is incompatible with PMDL dtype {pmdl_dtype!r}"
         )
 
-    raw_bindings = _mapping(
-        reference["output_bindings"], "contraption.controller.output_bindings"
-    )
-    output_bindings = {
-        _text(name, "controller output binding name"): _text(
-            target, f"controller output binding {name!r} target"
-        )
-        for name, target in raw_bindings.items()
-    }
-    telemetry_values = _sequence(
-        reference["telemetry_outputs"], "contraption.controller.telemetry_outputs"
-    )
-    telemetry_outputs = tuple(
-        _text(value, f"contraption.controller.telemetry_outputs[{index}]")
-        for index, value in enumerate(telemetry_values)
-    )
-    if len(set(telemetry_outputs)) != len(telemetry_outputs):
-        raise ResolutionError("contraption.controller.telemetry_outputs must be unique")
-    overlap = sorted(set(output_bindings) & set(telemetry_outputs))
-    if overlap:
+
+def _validate_units(
+    authored: str,
+    pmdl: str,
+    context: str,
+    *,
+    exact_scale: bool,
+) -> None:
+    try:
+        authored_unit = parse_unit(authored)
+        pmdl_unit = parse_unit(pmdl)
+    except UnitError as exc:
+        raise ResolutionError(f"{context} has invalid units: {exc}") from exc
+    if authored_unit.dimension != pmdl_unit.dimension or (
+        exact_scale and authored_unit.scale != pmdl_unit.scale
+    ):
+        qualifier = " and scale" if exact_scale else ""
         raise ResolutionError(
-            "controller outputs may not be both actuator-bound and telemetry-only: "
-            + ", ".join(overlap)
+            f"{context} unit {authored!r} must match PMDL unit {pmdl!r} dimension{qualifier}"
         )
-    program_outputs = {output.name: output for output in program.outputs}
-    covered_outputs = set(output_bindings) | set(telemetry_outputs)
-    if covered_outputs != set(program_outputs):
+
+
+def _output_settings(output: OutputSpec) -> FrozenDict[Any]:
+    settings: dict[str, Any] = {"unit": output.unit, "default": output.default}
+    if output.bounds.lower is not None:
+        settings["minimum"] = output.bounds.lower
+    if output.bounds.upper is not None:
+        settings["maximum"] = output.bounds.upper
+    if output.slew_rate is not None:
+        settings["slew_per_second"] = output.slew_rate
+    return FrozenDict(settings)
+
+
+def _prepare_runtime_wiring(
+    specification: ContraptionSpec,
+    controller_specs: Mapping[str, ControlSpec],
+    *,
+    components: Mapping[str, ResolvedComponent],
+    parts: ResolvedPartRegistry,
+    models: Mapping[str, ModelSpec],
+) -> tuple[
+    tuple[ActuatorBindingSpec, ...],
+    FrozenDict[ResolvedController],
+]:
+    expected = {link.id for link in specification.controllers}
+    supplied = set(controller_specs)
+    if supplied != expected:
         raise ResolutionError(
-            f"controller output coverage mismatch; missing="
-            f"{sorted(set(program_outputs) - covered_outputs)}, extra="
-            f"{sorted(covered_outputs - set(program_outputs))}"
+            "controller artifact registry must exactly cover contraption links; "
+            f"missing={sorted(expected - supplied)}, extra={sorted(supplied - expected)}"
         )
-    controls_by_source = {control.source: control for control in controls}
-    if len(controls_by_source) != len(controls):
-        raise ResolutionError("contraption control binding sources must be unique")
-    bound_sources = list(output_bindings.values())
-    if len(set(bound_sources)) != len(bound_sources):
-        raise ResolutionError("controller actuator outputs must bind distinct control sources")
-    if set(bound_sources) != set(controls_by_source):
-        raise ResolutionError(
-            f"controller/contraption control-source coverage mismatch; unbound="
-            f"{sorted(set(controls_by_source) - set(bound_sources))}, unknown="
-            f"{sorted(set(bound_sources) - set(controls_by_source))}"
-        )
-    for output_name, source in output_bindings.items():
-        output = program_outputs[output_name]
-        settings = controls_by_source[source].settings
-        for setting_name, output_value in (
-            ("default", output.default),
-            ("minimum", output.minimum),
-            ("maximum", output.maximum),
-        ):
-            if setting_name not in settings:
-                raise ResolutionError(
-                    f"control source {source!r} lacks {setting_name!r} required by "
-                    f"controller output {output_name!r}"
-                )
-            setting_value = settings[setting_name]
-            if output_value is None or setting_value != output_value:
-                raise ResolutionError(
-                    f"controller output {output_name!r} {setting_name}="
-                    f"{output_value!r} disagrees with control source {source!r} "
-                    f"setting={setting_value!r}"
-                )
-        setting_unit = _text(
-            settings.get("unit"), f"control source {source!r} unit"
-        )
-        try:
-            output_unit = parse_unit(output.unit)
-            bound_unit = parse_unit(setting_unit)
-        except UnitError as exc:
+
+    actuators: list[ActuatorBindingSpec] = []
+    target_drivers: dict[str, str] = {}
+    output_sources: dict[str, str] = {}
+    actuator_ids: set[str] = set()
+
+    def claim_output_source(source: str, driver_id: str) -> None:
+        previous = output_sources.get(source)
+        if previous is not None:
             raise ResolutionError(
-                f"controller output {output_name!r} unit is invalid: {exc}"
-            ) from exc
-        if (
-            output_unit.dimension != bound_unit.dimension
-            or output_unit.scale != bound_unit.scale
-        ):
-            raise ResolutionError(
-                f"controller output {output_name!r} unit {output.unit!r} disagrees "
-                f"with control source {source!r} unit {setting_unit!r}"
+                f"controller output source {source!r} is exposed by both "
+                f"{previous!r} and {driver_id!r}"
             )
-    return program
+        output_sources[source] = driver_id
+
+    for actuator in specification.actuators:
+        if not actuator.external:
+            raise ResolutionError(
+                f"top-level actuator {actuator.id!r} must declare external:true; "
+                "controller outputs are derived from controllers[].outputs"
+            )
+        endpoint = _resolve_signal_endpoint(
+            actuator.target,
+            direction="input",
+            components=components,
+            parts=parts,
+            models=models,
+            context=f"actuator {actuator.id!r}",
+        )
+        previous = target_drivers.get(endpoint.state_name)
+        if previous is not None:
+            raise ResolutionError(
+                f"PMDL signal input {endpoint.state_name!r} is driven by both {previous!r} "
+                f"and actuator {actuator.id!r}"
+            )
+        if actuator.id in actuator_ids:
+            raise ResolutionError(f"duplicate actuator id {actuator.id!r}")
+        target_drivers[endpoint.state_name] = actuator.id
+        actuator_ids.add(actuator.id)
+        actuators.append(actuator)
+
+    controllers: dict[str, ResolvedController] = {}
+    for link in specification.controllers:
+        program = controller_specs[link.id]
+        if not isinstance(program, ControlSpec):
+            raise ResolutionError(
+                f"controller artifact {link.id!r} must be a parsed ControlSpec"
+            )
+        if program.id != link.id:
+            raise ResolutionError(
+                f"controller link id {link.id!r} does not match artifact id {program.id!r}"
+            )
+        actual_digest = control_digest(program)
+        if actual_digest != link.program.sha256:
+            raise ResolutionError(
+                f"controller artifact {link.id!r} canonical content hash mismatch: "
+                f"expected {link.program.sha256}, got {actual_digest}"
+            )
+        explicit = {item.name: item for item in program.explicit_inputs}
+        authored_inputs = dict(link.explicit_inputs)
+        if set(authored_inputs) != set(explicit):
+            raise ResolutionError(
+                f"controller {link.id!r} explicit input coverage mismatch; "
+                f"missing={sorted(set(explicit) - set(authored_inputs))}, "
+                f"extra={sorted(set(authored_inputs) - set(explicit))}"
+            )
+        resolved_inputs: dict[str, ResolvedExplicitInputBinding] = {}
+        for name, input_spec in explicit.items():
+            binding = authored_inputs[name]
+            assert isinstance(binding, ExplicitInputBindingSpec)
+            context = f"controller {link.id!r} input {name!r}"
+            if input_spec.source == "sensor":
+                if binding.signal is None:
+                    raise ResolutionError(f"{context} requires a signal binding")
+                endpoint = _resolve_signal_endpoint(
+                    binding.signal,
+                    direction="output",
+                    components=components,
+                    parts=parts,
+                    models=models,
+                    context=context,
+                )
+                _validate_control_dtype(input_spec.dtype, endpoint.model_port.dtype, context)
+                _validate_units(
+                    input_spec.unit,
+                    endpoint.model_port.unit,
+                    context,
+                    exact_scale=True,
+                )
+                resolved_inputs[name] = ResolvedExplicitInputBinding(
+                    "sensor", binding.signal, endpoint.state_name, None
+                )
+            else:
+                if binding.external is None:
+                    raise ResolutionError(f"{context} requires an external binding")
+                resolved_inputs[name] = ResolvedExplicitInputBinding(
+                    "external", binding.external
+                )
+
+        implicit = {item.name: item for item in program.implicit_inputs}
+        authored_implicit = dict(link.implicit_inputs)
+        if set(authored_implicit) != set(implicit):
+            raise ResolutionError(
+                f"controller {link.id!r} implicit input coverage mismatch; "
+                f"missing={sorted(set(implicit) - set(authored_implicit))}, "
+                f"extra={sorted(set(authored_implicit) - set(implicit))}"
+            )
+        resolved_implicit = {
+            name: ResolvedImplicitInputBinding(source, source)
+            for name, source in authored_implicit.items()
+        }
+
+        outputs = {item.name: item for item in program.outputs}
+        authored_outputs = dict(link.outputs)
+        if set(authored_outputs) != set(outputs):
+            raise ResolutionError(
+                f"controller {link.id!r} output coverage mismatch; "
+                f"missing={sorted(set(outputs) - set(authored_outputs))}, "
+                f"extra={sorted(set(authored_outputs) - set(outputs))}"
+            )
+        output_bindings: dict[str, ResolvedControllerOutputBinding] = {}
+        for name, output in outputs.items():
+            binding = authored_outputs[name]
+            assert isinstance(binding, ControllerOutputBindingSpec)
+            driver_id = f"{link.id}.{name}"
+            if binding.external is not None:
+                claim_output_source(binding.external, driver_id)
+                output_bindings[name] = ResolvedControllerOutputBinding(
+                    "external", binding.external
+                )
+                continue
+            assert binding.signal is not None
+            target = binding.signal
+            endpoint = _resolve_signal_endpoint(
+                target,
+                direction="input",
+                components=components,
+                parts=parts,
+                models=models,
+                context=f"controller {link.id!r} output {name!r}",
+            )
+            _validate_control_dtype(
+                output.dtype,
+                endpoint.model_port.dtype,
+                f"controller {link.id!r} output {name!r}",
+            )
+            _validate_units(
+                output.unit,
+                endpoint.model_port.unit,
+                f"controller {link.id!r} output {name!r}",
+                exact_scale=False,
+            )
+            actuator_id = driver_id
+            claim_output_source(actuator_id, driver_id)
+            previous = target_drivers.get(endpoint.state_name)
+            if previous is not None:
+                raise ResolutionError(
+                    f"PMDL signal input {endpoint.state_name!r} is driven by both "
+                    f"{previous!r} and controller output {actuator_id!r}"
+                )
+            if actuator_id in actuator_ids:
+                raise ResolutionError(f"duplicate actuator id {actuator_id!r}")
+            source = actuator_id
+            actuators.append(
+                ActuatorBindingSpec(
+                    actuator_id,
+                    source,
+                    PortRef.from_dict(target),
+                    _output_settings(output),
+                    False,
+                )
+            )
+            target_drivers[endpoint.state_name] = actuator_id
+            actuator_ids.add(actuator_id)
+            output_bindings[name] = ResolvedControllerOutputBinding(
+                "signal", source, endpoint.state_name
+            )
+        controllers[link.id] = ResolvedController(
+            link.id,
+            program,
+            FrozenDict(resolved_inputs),
+            FrozenDict(resolved_implicit),
+            FrozenDict(output_bindings),
+            "sha256:"
+            + hashlib.sha256(
+                json.dumps(
+                    link.to_dict(),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                    allow_nan=False,
+                ).encode("utf-8")
+            ).hexdigest(),
+        )
+    return tuple(actuators), FrozenDict(controllers)
+
+
+def _index_controllers(
+    controllers: Mapping[str, ResolvedController],
+    state_names: Sequence[str],
+    models: Mapping[str, ModelSpec],
+) -> FrozenDict[ResolvedController]:
+    indices = {name: index for index, name in enumerate(state_names)}
+    result: dict[str, ResolvedController] = {}
+    for identifier, controller in controllers.items():
+        bindings: dict[str, ResolvedExplicitInputBinding] = {}
+        for name, binding in controller.explicit_input_bindings.items():
+            if binding.kind == "external":
+                bindings[name] = binding
+                continue
+            assert binding.state_name is not None
+            try:
+                index = indices[binding.state_name]
+            except KeyError as exc:
+                raise ResolutionError(
+                    f"controller {identifier!r} sensor {name!r} resolved to missing PMDL state "
+                    f"{binding.state_name!r}"
+                ) from exc
+            bindings[name] = ResolvedExplicitInputBinding(
+                binding.kind, binding.source, binding.state_name, index
+            )
+        implicit_bindings: dict[str, ResolvedImplicitInputBinding] = {}
+        implicit_specs = {item.name: item for item in controller.spec.implicit_inputs}
+        for name, binding in controller.implicit_input_bindings.items():
+            try:
+                index = indices[binding.state_name]
+            except KeyError as exc:
+                raise ResolutionError(
+                    f"controller {identifier!r} implicit input {name!r} binds missing "
+                    f"PMDL variable {binding.state_name!r}"
+                ) from exc
+            if "." not in binding.state_name:
+                raise ResolutionError(
+                    f"controller {identifier!r} implicit input {name!r} must use an "
+                    "exact namespaced PMDL variable"
+                )
+            component_id, local_name = binding.state_name.rsplit(".", 1)
+            try:
+                model = models[component_id]
+            except KeyError as exc:
+                raise ResolutionError(
+                    f"controller {identifier!r} implicit input {name!r} names missing "
+                    f"component {component_id!r}"
+                ) from exc
+            pmdl_unit = _observable_unit(
+                model,
+                local_name,
+                f"controller {identifier!r} implicit input {name!r}",
+            )
+            _validate_units(
+                implicit_specs[name].unit,
+                pmdl_unit,
+                f"controller {identifier!r} implicit input {name!r}",
+                exact_scale=True,
+            )
+            implicit_bindings[name] = ResolvedImplicitInputBinding(
+                binding.source, binding.state_name, index
+            )
+        result[identifier] = ResolvedController(
+            controller.id,
+            controller.spec,
+            FrozenDict(bindings),
+            FrozenDict(implicit_bindings),
+            controller.output_bindings,
+            controller.controller_link_digest,
+            controller.observer,
+        )
+    return FrozenDict(result)
+
+
+def _observable_unit(model: ModelSpec, local_name: str, context: str) -> str:
+    matches: list[str] = []
+    matches.extend(item.unit for item in model.states if item.name == local_name)
+    matches.extend(item.unit for item in model.algebraics if item.name == local_name)
+    matches.extend(item.unit for item in model.signal_ports if item.name == local_name)
+    for port in model.power_ports:
+        if port.effort == local_name:
+            matches.append(port.effort_unit)
+        if port.flow == local_name:
+            matches.append(port.flow_unit)
+    if len(matches) != 1:
+        raise ResolutionError(f"{context} does not identify one PMDL scalar observable")
+    return matches[0]
+
+
+def _resolve_verifications(
+    specification: ContraptionSpec,
+    verification_specs: Mapping[str, VerificationProgram],
+    *,
+    components: Mapping[str, ResolvedComponent],
+    parts: ResolvedPartRegistry,
+    models: Mapping[str, ModelSpec],
+    state_names: Sequence[str],
+) -> FrozenDict[ResolvedVerification]:
+    expected = {link.id for link in specification.verifications}
+    supplied = set(verification_specs)
+    if supplied != expected:
+        raise ResolutionError(
+            "verification artifact registry must exactly cover contraption links; "
+            f"missing={sorted(expected - supplied)}, extra={sorted(supplied - expected)}"
+        )
+    indices = {name: index for index, name in enumerate(state_names)}
+    result: dict[str, ResolvedVerification] = {}
+    for link in specification.verifications:
+        program = verification_specs[link.id]
+        if not isinstance(program, VerificationProgram):
+            raise ResolutionError(
+                f"verification artifact {link.id!r} must be a parsed VerificationProgram"
+            )
+        if program.id != link.id:
+            raise ResolutionError(
+                f"verification link id {link.id!r} does not match artifact id {program.id!r}"
+            )
+        if program.sha256 != link.program.sha256:
+            raise ResolutionError(
+                f"verification artifact {link.id!r} canonical content hash mismatch: "
+                f"expected {link.program.sha256}, got {program.sha256}"
+            )
+        inputs = {item.name: item for item in program.inputs}
+        authored = dict(link.inputs)
+        if set(authored) != set(inputs):
+            raise ResolutionError(
+                f"verification {link.id!r} input coverage mismatch; "
+                f"missing={sorted(set(inputs) - set(authored))}, "
+                f"extra={sorted(set(authored) - set(inputs))}"
+            )
+        bindings: dict[str, ResolvedVerificationInputBinding] = {}
+        for name, input_spec in inputs.items():
+            source = authored[name]
+            context = f"verification {link.id!r} input {name!r}"
+            state_name = source
+            try:
+                ref = PortRef.from_dict(source)
+                component = components[ref.component]
+                connector = parts[component.part].connector_map.get(ref.port)
+            except Exception:
+                connector = None
+            if connector is not None:
+                endpoint = _resolve_signal_endpoint(
+                    source,
+                    direction="output",
+                    components=components,
+                    parts=parts,
+                    models=models,
+                    context=context,
+                )
+                state_name = endpoint.state_name
+            try:
+                state_index = indices[state_name]
+            except KeyError as exc:
+                raise ResolutionError(
+                    f"{context} references unknown PMDL state {state_name!r}"
+                ) from exc
+            component_id, local_name = state_name.rsplit(".", 1)
+            source_unit = _observable_unit(models[component_id], local_name, context)
+            _validate_units(input_spec.unit, source_unit, context, exact_scale=True)
+            bindings[name] = ResolvedVerificationInputBinding(
+                source, state_name, state_index
+            )
+        result[link.id] = ResolvedVerification(
+            link.id, program, FrozenDict(bindings)
+        )
+    return FrozenDict(result)
 
 
 def resolve_assembly(
-    specification: Mapping[str, Any] | Any,
+    specification: ContraptionSpec,
     instantiations: PartInstantiationRegistry,
     model_registry: Mapping[str, ModelSpec],
     *,
+    controller_specs: Mapping[str, ControlSpec] | None = None,
+    verification_specs: Mapping[str, VerificationProgram] | None = None,
     joint_coordinates: Mapping[str, float] | None = None,
-    control_programs: Mapping[str, ControlProgram] | None = None,
 ) -> ResolvedAssembly:
-    """Verify and compile a strict ``contraption-3`` assembly closure."""
+    """Resolve a strict contraption-4 closure with plural artifact wiring."""
 
+    if not isinstance(specification, ContraptionSpec):
+        raise TypeError("specification must be a parsed ContraptionSpec")
     if not isinstance(instantiations, PartInstantiationRegistry):
         raise TypeError("instantiations must be a PartInstantiationRegistry")
+    if not isinstance(model_registry, Mapping):
+        raise TypeError("model_registry must implement Mapping")
     instantiations.validate_models(model_registry)
-
-    raw_value = specification.to_dict() if hasattr(specification, "to_dict") else specification
-    raw = _mapping(raw_value, "contraption")
-    allowed = {
-        "format",
-        "id",
-        "name",
-        "version",
-        "physical_root",
-        "components",
-        "connections",
-        "controls",
-        "controller",
-        "environment",
-        "metadata",
-    }
-    required = {"format", "id", "name", "version", "physical_root", "components"}
-    _keys(raw, allowed, "contraption", required)
-    if raw["format"] != "contraption-3":
-        raise ResolutionError(
-            f"canonical assembly requires format 'contraption-3', got {raw['format']!r}"
-        )
-    canonical_source = _canonical(raw, "contraption")
+    canonical_source = _canonical(specification.to_dict(), "contraption")
     part_registry = instantiations.resolved_parts
     components = tuple(
-        _parse_component(
-            _mapping(value, f"contraption.components[{index}]"),
-            index,
-            instantiations,
-        )
-        for index, value in enumerate(
-            _sequence(raw["components"], "contraption.components")
-        )
+        _parse_component(item.to_dict(), index, instantiations)
+        for index, item in enumerate(specification.components)
     )
-    component_ids = [component.id for component in components]
-    if len(set(component_ids)) != len(component_ids):
+    if len({item.id for item in components}) != len(components):
         raise ResolutionError("contraption component identifiers must be unique")
-    connections = tuple(
-        _parse_connection(_mapping(value, f"contraption.connections[{index}]"), index)
-        for index, value in enumerate(
-            _sequence(raw.get("connections", []), "contraption.connections")
-        )
+    connections = specification.connections
+    duplicate_connection_ids = sorted(
+        {
+            connection.id
+            for connection in connections
+            if sum(item.id == connection.id for item in connections) > 1
+        }
     )
-    if len({connection.id for connection in connections}) != len(connections):
-        raise ResolutionError("contraption connection identifiers must be unique")
-    controls = tuple(
-        ControlBindingSpec.from_dict(value)
-        for value in _sequence(raw.get("controls", []), "contraption.controls")
-    )
-    environment = _mapping(raw.get("environment", {}), "contraption.environment")
-    metadata = _mapping(raw.get("metadata", {}), "contraption.metadata")
-    if _parse_dynamics_completeness(metadata) is None:
+    if duplicate_connection_ids:
         raise ResolutionError(
-            "contraption-3 requires metadata.dynamics_completeness so omitted "
-            "physical interactions cannot be silent"
+            "contraption connection identifiers must be unique; duplicates="
+            f"{duplicate_connection_ids}"
         )
-    raw_controller_value = raw.get("controller")
-    raw_controller = (
-        None
-        if raw_controller_value is None
-        else _mapping(raw_controller_value, "contraption.controller")
-    )
-    controller = _resolve_controller(raw_controller, control_programs, controls)
-    root = _mapping(raw["physical_root"], "contraption.physical_root")
-    record = ResolvedContraptionRecord(
-        "contraption-3",
-        _text(raw["id"], "contraption.id"),
-        _text(raw["name"], "contraption.name"),
-        _text(raw["version"], "contraption.version"),
-        components,
-        connections,
-        controls,
-        _freeze(_canonical(environment, "contraption.environment")),
-        _freeze(_canonical(metadata, "contraption.metadata")),
-        _freeze(_canonical(root, "contraption.physical_root")),
-        None
-        if raw_controller is None
-        else _freeze(_canonical(raw_controller, "contraption.controller")),
-        _freeze(canonical_source),
-    )
-
-    used_part_ids = {component.part for component in components}
+    for index, connection in enumerate(connections):
+        if connection.metadata:
+            raise ResolutionError(
+                f"contraption.connections[{index}].metadata must be empty; "
+                "connection semantics require typed fields rather than opaque metadata"
+            )
+    component_by_id = {item.id: item for item in components}
+    used_part_ids = {item.part for item in components}
     verified_models: dict[str, ModelSpec] = {}
-    part_models: dict[str, ModelSpec] = {}
-    for part_id in sorted(used_part_ids):
-        part_models[part_id] = _verify_part_model(
-            part_registry[part_id], model_registry
-        )
+    part_models = {
+        part_id: _verify_part_model(part_registry[part_id], model_registry)
+        for part_id in sorted(used_part_ids)
+    }
     for component in components:
         verified_models[component.id] = part_models[component.part]
         _validate_component_parameter_bindings(
-            component,
-            part_registry[component.part],
-            verified_models[component.id],
+            component, part_registry[component.part], verified_models[component.id]
         )
 
-    zero_coordinates = {
-        connection.joint["coordinate"]: 0.0
-        for connection in connections
-        if connection.kind == "attachment"
-        and connection.joint.get("kind") == "revolute"
-    }
+    actuators, controller_drafts = _prepare_runtime_wiring(
+        specification,
+        {} if controller_specs is None else controller_specs,
+        components=component_by_id,
+        parts=part_registry,
+        models=verified_models,
+    )
+    metadata = _mapping(specification.metadata, "contraption.metadata")
+    dynamics_record = _parse_dynamics_completeness(metadata)
+    if dynamics_record is None:
+        raise ResolutionError(
+            "contraption requires metadata.dynamics_completeness"
+        )
+    record = ResolvedContraptionRecord(
+        "contraption-4",
+        specification.id,
+        specification.name,
+        specification.version,
+        components,
+        connections,
+        actuators,
+        specification.controllers,
+        specification.verifications,
+        _freeze(_canonical(specification.environment, "contraption.environment")),
+        _freeze(_canonical(metadata, "contraption.metadata")),
+        _freeze(_canonical(specification.physical_root, "contraption.physical_root")),
+        _freeze(canonical_source),
+    )
+
+    zero_coordinates: dict[str, float] = {}
+    for connection in connections:
+        joint = connection.joint
+        if joint is not None and joint.kind == "revolute":
+            assert joint.coordinate is not None
+            zero_coordinates[joint.coordinate] = 0.0
     try:
         physical_source = dict(canonical_source)
-        physical_source["components"] = [
-            component.to_dict() for component in components
-        ]
+        physical_source["components"] = [item.to_dict() for item in components]
+        frozen_physical_source = _freeze(
+            _canonical(physical_source, "physical assembly source")
+        )
         physical = resolve_physical_assembly(
-            physical_source,
+            PhysicalAssemblySpec(
+                specification.id,
+                tuple(
+                    PhysicalComponentInstance(component.id, component.part)
+                    for component in components
+                ),
+                connections,
+                record.physical_root,
+                frozen_physical_source,
+            ),
             part_registry,
             zero_coordinates,
         )
     except PhysicalSpecError as exc:
         raise ResolutionError(f"physical assembly resolution failed: {exc}") from exc
-
-    initial_coordinates = _validate_physical_state_bindings(
-        physical, verified_models
-    )
+    initial_coordinates = _validate_physical_state_bindings(physical, verified_models)
     if joint_coordinates is not None:
         provided = dict(joint_coordinates)
         if set(provided) != set(initial_coordinates):
             raise ResolutionError(
-                "initial joint_coordinates must exactly cover PMDL-backed revolute "
-                f"states; missing={sorted(set(initial_coordinates) - set(provided))}, "
+                "initial joint_coordinates must exactly cover PMDL-backed revolute states; "
+                f"missing={sorted(set(initial_coordinates) - set(provided))}, "
                 f"extra={sorted(set(provided) - set(initial_coordinates))}"
             )
-        for name, expected in initial_coordinates.items():
+        for name, expected_value in initial_coordinates.items():
             actual = _number(provided[name], f"joint_coordinates.{name}")
-            if abs(actual - expected) > 1e-9:
+            if abs(actual - expected_value) > 1e-9:
                 raise ResolutionError(
-                    f"initial joint coordinate {name!r}={actual:.17g} rad disagrees "
-                    f"with PMDL state initial={expected:.17g} rad"
+                    f"initial joint coordinate {name!r} disagrees with PMDL state"
                 )
     try:
-        physical = physical.with_configuration(
-            joint_coordinates=initial_coordinates
-        )
+        physical = physical.with_configuration(joint_coordinates=initial_coordinates)
     except PhysicalSpecError as exc:
         raise ResolutionError(
             f"initial physical configuration validation failed: {exc}"
         ) from exc
 
     connector_bindings: dict[str, str | None] = {}
-    component_by_id = {component.id: component for component in components}
-    referenced_connectors = {
+    referenced = {
         f"{endpoint.component}.{endpoint.port}"
         for connection in connections
         for endpoint in connection.endpoints
-    } | {f"{control.target.component}.{control.target.port}" for control in controls}
-    for key in sorted(referenced_connectors):
+    } | {f"{actuator.target.component}.{actuator.target.port}" for actuator in actuators}
+    for key in sorted(referenced):
         component_id, connector_id = key.rsplit(".", 1)
         try:
             component = component_by_id[component_id]
@@ -1643,7 +2116,6 @@ def resolve_assembly(
         except KeyError as exc:
             raise ResolutionError(f"unresolved connector binding {key!r}") from exc
         connector_bindings[key] = connector.model_port
-
     try:
         system = assemble_contraption(
             record,
@@ -1655,13 +2127,67 @@ def resolve_assembly(
     except AssemblyError as exc:
         raise ResolutionError(f"PMDL assembly failed: {exc}") from exc
     if system.assembly_sha256 != physical.assembly_sha256:
-        raise ResolutionError("internal assembly hash mismatch between physical and PMDL projections")
+        raise ResolutionError(
+            "internal assembly hash mismatch between physical and PMDL projections"
+        )
+    indexed_controllers = _index_controllers(
+        controller_drafts, system.state_names, verified_models
+    )
+    controllers_with_observers: dict[str, ResolvedController] = {}
+    for identifier, controller in indexed_controllers.items():
+        observer = None
+        if controller.spec.implicit_inputs:
+            if dynamics_record is None:
+                raise ResolutionError(
+                    f"controller {identifier!r} uses implicit inputs but the contraption "
+                    "does not declare dynamics_completeness"
+                )
+            from ..control.observer import (
+                ObserverDerivationError,
+                derive_affine_observer,
+            )
+
+            try:
+                observer = derive_affine_observer(
+                    system,
+                    controller.spec,
+                    explicit_bindings=controller.explicit_input_bindings,
+                    implicit_bindings=controller.implicit_input_bindings,
+                    output_bindings=controller.plant_output_bindings,
+                    assembly_sha256=physical.assembly_sha256,
+                    pmdl_sha256=system.pmdl_sha256,
+                    controller_link_digest=controller.controller_link_digest,
+                    dynamics_completeness=dynamics_record.to_dict(),
+                )
+            except ObserverDerivationError as exc:
+                raise ResolutionError(
+                    f"controller {identifier!r} observer derivation failed: {exc}"
+                ) from exc
+        controllers_with_observers[identifier] = ResolvedController(
+            controller.id,
+            controller.spec,
+            controller.explicit_input_bindings,
+            controller.implicit_input_bindings,
+            controller.output_bindings,
+            controller.controller_link_digest,
+            observer,
+        )
+    controllers = FrozenDict(controllers_with_observers)
+    verifications = _resolve_verifications(
+        specification,
+        {} if verification_specs is None else verification_specs,
+        components=component_by_id,
+        parts=part_registry,
+        models=verified_models,
+        state_names=system.state_names,
+    )
     return ResolvedAssembly(
         record,
         part_registry,
         FrozenDict(verified_models),
         FrozenDict(connector_bindings),
-        controller,
+        controllers,
+        verifications,
         physical,
         system,
     )
@@ -1686,8 +2212,12 @@ __all__ = [
     "ResolutionError",
     "ResolvedAssembly",
     "ResolvedComponent",
-    "ResolvedConnection",
     "ResolvedContraptionRecord",
+    "ResolvedController",
+    "ResolvedControllerOutputBinding",
+    "ResolvedExplicitInputBinding",
+    "ResolvedVerification",
+    "ResolvedVerificationInputBinding",
     "resolve_assembly",
     "resolve_body_pose_frames",
 ]

@@ -9,17 +9,21 @@ from unittest import mock
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from contraption.physics.controls import SignalSpec
-from contraption.visualization.server import (
-    LiveRequestError,
-    LiveScannerApplication,
-    make_live_handler,
+from contraption.control import control_digest, parse_control
+from contraption.live import LiveApplication, LiveRequestError
+from contraption.paths import asset_root
+from contraption.physics.resolved import (
+    ResolvedAssembly,
+    ResolvedController,
+    ResolvedControllerOutputBinding,
+    ResolvedExplicitInputBinding,
 )
-from contraption.physics.resolved import ResolvedAssembly
+from contraption.physics.specs import FrozenDict
+from contraption.visualization.server import make_live_handler
 
 
 ASSEMBLY_HASH = "sha256:" + "a" * 64
-CONTROLLER_HASH = "sha256:" + "c" * 64
+CONTROLLER_LINK_DIGEST = "sha256:" + "0" * 64
 
 
 def _scene() -> dict:
@@ -81,52 +85,104 @@ def _scene() -> dict:
     }
 
 
-def _assembly() -> ResolvedAssembly:
-    assembly = object.__new__(ResolvedAssembly)
-    controller_reference = {
-        "id": "fixture.controller",
-        "version": "1.0.0",
-        "sha256": CONTROLLER_HASH,
-        "output_bindings": {},
-        "telemetry_outputs": ("status",),
+def _controller(
+    *,
+    bounded_target: bool = True,
+    identifier: str = "fixture.program",
+    period_s: float = 0.05,
+):
+    target_speed = {
+        "name": "target_speed",
+        "source": "external",
+        "default": 0.1,
+        "unit": "m/s",
+        "description": "fixture speed",
     }
-    controller = SimpleNamespace(
-        name="fixture.controller",
-        version="1.0.0",
-        inputs=(
-            SignalSpec(
-                "armed",
-                value_type="boolean",
-                source="external",
-                default=False,
-                unit="1",
-                description="enable the fixture",
-            ),
-            SignalSpec(
-                "target_speed",
-                source="external",
-                default=0.1,
-                minimum=0.0,
-                maximum=0.25,
-                unit="m/s",
-                description="fixture speed",
-            ),
-            SignalSpec(
-                "measured_speed",
-                source="sensor",
-                default=0.0,
-                minimum=-1.0,
-                maximum=1.0,
-                unit="m/s",
-            ),
-        ),
+    if bounded_target:
+        target_speed["bounds"] = [0.0, 0.25]
+    return parse_control(
+        {
+            "format": "control-1",
+            "id": identifier,
+            "name": "Fixture controller",
+            "version": "1.0.0",
+            "period_s": period_s,
+            "explicit_inputs": [
+                {
+                    "name": "armed",
+                    "source": "external",
+                    "dtype": "bool",
+                    "default": False,
+                    "description": "enable the fixture",
+                },
+                target_speed,
+                {
+                    "name": "measured_speed",
+                    "source": "sensor",
+                    "default": 0.0,
+                    "measurement_variance": 0.01,
+                    "bounds": [-1.0, 1.0],
+                    "unit": "m/s",
+                },
+            ],
+            "outputs": [{"name": "command", "default": 0.0}],
+            "modes": [{"name": "idle", "outputs": {"command": "0"}}],
+            "initial_mode": "idle",
+        }
     )
+
+
+def _assembly(*, controller_spec=None, additional_controller_spec=None) -> ResolvedAssembly:
+    assembly = object.__new__(ResolvedAssembly)
+    spec = _controller() if controller_spec is None else controller_spec
+    controller = ResolvedController(
+        id="fixture.controller",
+        spec=spec,
+        explicit_input_bindings=FrozenDict(
+            {
+                "armed": ResolvedExplicitInputBinding("external", "armed"),
+                "target_speed": ResolvedExplicitInputBinding(
+                    "external", "target_speed"
+                ),
+                "measured_speed": ResolvedExplicitInputBinding(
+                    "sensor", "plant.speed", "plant.speed", 0
+                ),
+            }
+        ),
+        implicit_input_bindings=FrozenDict(),
+        output_bindings=FrozenDict(
+            {
+                "command": ResolvedControllerOutputBinding(
+                    "signal", "fixture.controller.command", "plant.speed"
+                )
+            }
+        ),
+        controller_link_digest=CONTROLLER_LINK_DIGEST,
+    )
+    controllers = {controller.id: controller}
+    if additional_controller_spec is not None:
+        additional = ResolvedController(
+            id="fixture.slow-controller",
+            spec=additional_controller_spec,
+            explicit_input_bindings=controller.explicit_input_bindings,
+            implicit_input_bindings=FrozenDict(),
+            output_bindings=FrozenDict(
+                {
+                    "command": ResolvedControllerOutputBinding(
+                        "signal", "fixture.slow-controller.command", "plant.speed"
+                    )
+                }
+            ),
+            controller_link_digest=CONTROLLER_LINK_DIGEST,
+        )
+        controllers[additional.id] = additional
     values = {
-        "specification": SimpleNamespace(controller=controller_reference),
+        "specification": SimpleNamespace(name="Live fixture"),
         "parts": None,
-        "component_models": None,
-        "connector_bindings": None,
-        "controller": controller,
+        "component_models": FrozenDict(),
+        "connector_bindings": FrozenDict(),
+        "controllers": FrozenDict(controllers),
+        "verifications": FrozenDict(),
         "physical": SimpleNamespace(assembly_sha256=ASSEMBLY_HASH),
         "system": None,
     }
@@ -141,22 +197,25 @@ class _SimulationStub:
 
     def __call__(self, _assembly: ResolvedAssembly, **options):
         self.calls.append(options)
-        if options["external_inputs"]["target_speed"] == 0.2:
+        if options["controller_inputs"]["target_speed"] == 0.2:
             raise RuntimeError("deliberate simulator failure")
-        return SimpleNamespace(metadata={"pose_frame_sample_index": 0})
-
-
-class LiveScannerApplicationTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.simulate = _SimulationStub()
-        self.scene_patch = mock.patch(
-            "contraption.visualization.server.scanner_physical_scene",
-            side_effect=lambda _assembly, _result: _scene(),
+        return SimpleNamespace(
+            metadata={
+                "assembly_sha256": ASSEMBLY_HASH,
+                "pose_frame_sample_index": 0,
+            }
         )
-        self.scene_patch.start()
-        self.addCleanup(self.scene_patch.stop)
-        self.application = LiveScannerApplication(
-            _assembly(), simulate=self.simulate, duration=0.1, dt=0.05
+
+
+class LiveApplicationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.simulation = _SimulationStub()
+        self.application = LiveApplication(
+            _assembly(),
+            simulation=self.simulation,
+            scene_builder=lambda _assembly, _result: _scene(),
+            duration=0.1,
+            dt=0.05,
         )
 
     @staticmethod
@@ -169,16 +228,21 @@ class LiveScannerApplicationTests(unittest.TestCase):
             "inputs": self.valid_inputs() if inputs is None else inputs,
         }
 
-    def test_schema_is_derived_only_from_external_controller_inputs(self) -> None:
+    def test_schema_is_derived_from_all_external_controller_bindings(self) -> None:
         schema = self.application.control_schema()
+        self.assertEqual(schema["schema"], "contraption.live-controls/v2")
         self.assertEqual(schema["assembly_sha256"], ASSEMBLY_HASH)
+        controller = _controller()
         self.assertEqual(
-            schema["controller"],
-            {
-                "id": "fixture.controller",
-                "version": "1.0.0",
-                "sha256": CONTROLLER_HASH,
-            },
+            schema["controllers"],
+            [
+                {
+                    "id": "fixture.controller",
+                    "program_id": "fixture.program",
+                    "version": "1.0.0",
+                    "sha256": control_digest(controller),
+                }
+            ],
         )
         self.assertEqual(
             [item["name"] for item in schema["inputs"]],
@@ -186,22 +250,58 @@ class LiveScannerApplicationTests(unittest.TestCase):
         )
         self.assertNotIn("measured_speed", schema["values"])
 
-    def test_valid_controls_rerun_python_and_return_only_the_scene(self) -> None:
+    def test_browser_consumer_requires_plural_v2_schema(self) -> None:
+        source = (asset_root() / "web" / "viewer.js").read_text(encoding="utf-8")
+        self.assertIn('"contraption.live-controls/v2"', source)
+        self.assertIn('schema.controllers', source)
+        self.assertIn('["id", "program_id", "version", "sha256"]', source)
+        self.assertNotIn('schema.controller,', source)
+        self.assertNotIn('"contraption.live-controls/v1"', source)
+
+    def test_numeric_live_inputs_require_renderable_bounds(self) -> None:
+        with self.assertRaisesRegex(ValueError, "finite increasing bounds"):
+            LiveApplication(
+                _assembly(controller_spec=_controller(bounded_target=False)),
+                simulation=self.simulation,
+                scene_builder=lambda _assembly, _result: _scene(),
+                duration=0.1,
+                dt=0.05,
+            )
+
+    def test_valid_inputs_rerun_generic_simulation_and_return_scene(self) -> None:
         response = self.application.simulate_request(self.request())
         self.assertEqual(response["schema"], "contraption.physical-scene/v1")
         self.assertEqual(response["assembly_sha256"], ASSEMBLY_HASH)
         self.assertIn("body_pose_frames", response)
         self.assertNotIn("inputs", response)
         self.assertEqual(
-            self.simulate.calls[-1]["external_inputs"],
+            self.simulation.calls[-1]["controller_inputs"],
             {"armed": True, "target_speed": 0.15},
         )
 
+    def test_initial_inputs_and_heterogeneous_periods_are_applied_generically(self) -> None:
+        simulation = _SimulationStub()
+        application = LiveApplication(
+            _assembly(
+                additional_controller_spec=_controller(
+                    identifier="fixture.slow-program", period_s=0.1
+                )
+            ),
+            simulation=simulation,
+            scene_builder=lambda _assembly, _result: _scene(),
+            duration=0.1,
+            initial_inputs={"armed": True, "target_speed": 0.15},
+        )
+        self.assertEqual(application.dt, 0.05)
+        self.assertEqual(
+            simulation.calls[0]["controller_inputs"],
+            {"armed": True, "target_speed": 0.15},
+        )
+        self.assertTrue(application.control_schema()["values"]["armed"])
+
     def test_viewer_is_generated_from_the_assembly_and_actual_result(self) -> None:
         artifact = SimpleNamespace(files={"index.html": "canonical viewer"})
-        with mock.patch(
-            "contraption.visualization.server.generate_viewer", return_value=artifact
-        ) as generate:
+        with mock.patch("contraption.live.generate_viewer", return_value=artifact) as generate:
             files = self.application.viewer_files()
         self.assertEqual(files, artifact.files)
         positional = generate.call_args.args
@@ -209,8 +309,8 @@ class LiveScannerApplicationTests(unittest.TestCase):
         self.assertIs(positional[1], self.application._result)
         self.assertEqual(generate.call_args.kwargs["sample_index"], 0)
 
-    def test_stale_hash_and_invalid_control_sets_fail_before_simulation(self) -> None:
-        initial_calls = len(self.simulate.calls)
+    def test_stale_hash_and_invalid_input_sets_fail_before_simulation(self) -> None:
+        initial_calls = len(self.simulation.calls)
         cases = (
             (self.request(digest="sha256:" + "b" * 64), 409, "assembly_mismatch"),
             (self.request(inputs={"armed": True}), 400, "invalid_controls"),
@@ -238,9 +338,9 @@ class LiveScannerApplicationTests(unittest.TestCase):
                     self.application.simulate_request(request)
                 self.assertEqual(caught.exception.status, status)
                 self.assertEqual(caught.exception.code, code)
-        self.assertEqual(len(self.simulate.calls), initial_calls)
+        self.assertEqual(len(self.simulation.calls), initial_calls)
 
-    def test_simulation_failure_is_loud_and_does_not_publish_partial_state(self) -> None:
+    def test_simulation_failure_does_not_publish_partial_state(self) -> None:
         before = self.application.control_schema()["values"]
         with self.assertRaises(LiveRequestError) as caught:
             self.application.simulate_request(
@@ -290,7 +390,7 @@ class LiveScannerApplicationTests(unittest.TestCase):
         self.assertEqual(status, 422)
         self.assertEqual(body["code"], "simulation_failed")
 
-        calls_before_invalid_json = len(self.simulate.calls)
+        calls_before_invalid_json = len(self.simulation.calls)
         invalid_payloads = (
             (
                 b'{"assembly_sha256":"'
@@ -310,7 +410,7 @@ class LiveScannerApplicationTests(unittest.TestCase):
                 status, body = post_bytes(payload)
                 self.assertEqual(status, 400)
                 self.assertEqual(body["code"], "invalid_json")
-        self.assertEqual(len(self.simulate.calls), calls_before_invalid_json)
+        self.assertEqual(len(self.simulation.calls), calls_before_invalid_json)
 
 
 if __name__ == "__main__":

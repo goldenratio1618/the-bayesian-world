@@ -15,12 +15,15 @@ simulator without importing or modifying this file.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from fractions import Fraction
 import inspect
 import math
 from typing import Any, Callable, Iterable, Mapping, Protocol, Sequence
 
 import numpy as np
 
+from ..control import ControlFrame, ControlRuntime
+from ..verification import evaluate_verification
 from .backend import Array, Backend, as_jsonable, get_backend, infer_backend
 from .dsl import Binary, Call, Comparison, Conditional, Expression, Literal, Symbol, Unary, parse_expression
 from .uq import (
@@ -96,6 +99,41 @@ class SimulationConfig:
 
 
 @dataclass(frozen=True)
+class ControllerTrace:
+    """Hardware-equivalent controller outputs and posterior state over time.
+
+    Numeric arrays use ``[sample,time,channel]`` layout and stay on the active
+    backend so Torch traces remain differentiable. Mode names are diagnostic
+    discrete data indexed as ``[time][sample]``.
+    """
+
+    controller_id: str
+    output_names: tuple[str, ...]
+    output_samples: Array
+    implicit_input_names: tuple[str, ...]
+    implicit_means: Array
+    implicit_variances: Array
+    emergency_samples: Array
+    active_modes: tuple[tuple[str, ...], ...]
+    tick_mask: tuple[bool, ...]
+    frame_times_s: tuple[float, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "controller_id": self.controller_id,
+            "output_names": list(self.output_names),
+            "output_samples": as_jsonable(self.output_samples),
+            "implicit_input_names": list(self.implicit_input_names),
+            "implicit_means": as_jsonable(self.implicit_means),
+            "implicit_variances": as_jsonable(self.implicit_variances),
+            "emergency_samples": as_jsonable(self.emergency_samples),
+            "active_modes": [list(frame) for frame in self.active_modes],
+            "tick_mask": list(self.tick_mask),
+            "frame_times_s": list(self.frame_times_s),
+        }
+
+
+@dataclass(frozen=True)
 class SimulationResult:
     """Trajectory ensemble plus pointwise state and output distributions.
 
@@ -112,6 +150,8 @@ class SimulationResult:
     output_samples: Array
     summary: DistributionSummary
     output_summary: DistributionSummary
+    controller_traces: Mapping[str, ControllerTrace] = field(default_factory=dict)
+    verification_reports: Mapping[str, Any] = field(default_factory=dict)
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     @property
@@ -159,6 +199,12 @@ class SimulationResult:
             "output_names": list(self.output_names),
             "state_distribution": self.summary.to_dict(),
             "output_distribution": self.output_summary.to_dict(),
+            "controllers": {
+                name: trace.to_dict() for name, trace in self.controller_traces.items()
+            },
+            "verifications": {
+                name: report.to_dict() for name, report in self.verification_reports.items()
+            },
             "metadata": as_jsonable(dict(self.metadata)),
         }
         if include_samples:
@@ -625,6 +671,10 @@ class _ModelSpecAdapter:
         algebraics = tuple(getattr(model, "algebraic_names", ()))
         self._differential_state_count = len(physical_states)
         self.state_names = physical_states + algebraics
+        self.differential_state_indices = tuple(range(len(physical_states)))
+        self.algebraic_indices = tuple(
+            range(len(physical_states), len(self.state_names))
+        )
         self.default_parameters = _parameter_defaults(model)
         self.parameter_bounds = _parameter_bounds(model)
         self.parameter_uncertainty, self._correlated_uncertainty = _parameter_uncertainty(model)
@@ -636,6 +686,51 @@ class _ModelSpecAdapter:
             initial.append(getattr(algebraic, "initial", 0.0))
         self.initial_state = initial or [0.0] * len(self.state_names)
         self.control_names = tuple(getattr(model, "input_names", ()))
+        noise_spec = getattr(model, "process_noise", None)
+        self.has_process_noise = bool(getattr(noise_spec, "enabled", False))
+        self.process_noise_seed_policy = getattr(
+            noise_spec, "seed_policy", "simulation_seed"
+        )
+        self.process_noise_reproducibility = getattr(
+            noise_spec, "reproducibility", "same_backend_device"
+        )
+        self.process_noise_channel_names = tuple(
+            sorted(channel.name for channel in getattr(noise_spec, "channels", ()))
+        )
+        physical_state_indices = {
+            name: index for index, name in enumerate(physical_states)
+        }
+        compiled_noise_increments = []
+        noise_runtime_symbols = {
+            "t",
+            "dt",
+            *self.state_names,
+            *self.default_parameters,
+            *self.control_names,
+            *self.process_noise_channel_names,
+        }
+        for increment in getattr(noise_spec, "increments", ()):
+            if increment.target not in physical_state_indices:
+                raise UnsupportedPMDLSemanticsError(
+                    "PMDL process-noise increment target "
+                    f"{increment.target!r} is not a differential state"
+                )
+            expression = parse_expression(increment.expression)
+            unavailable = sorted(expression.variables() - noise_runtime_symbols)
+            if unavailable:
+                raise UnsupportedPMDLSemanticsError(
+                    "PMDL process-noise increment for standalone simulation "
+                    f"references unavailable symbol(s) {unavailable}; assemble the "
+                    "physical network so port variables have runtime values"
+                )
+            compiled_noise_increments.append(
+                (
+                    physical_state_indices[increment.target],
+                    increment.target,
+                    expression,
+                )
+            )
+        self._process_noise_increments = tuple(compiled_noise_increments)
         relations = getattr(model, "relations", None)
         relation_names = tuple(
             str(getattr(relation, "name", index))
@@ -766,9 +861,57 @@ class _ModelSpecAdapter:
         )
         return _invoke(evaluator, t, z, zdot, parameters, controls, backend=backend)
 
+    def process_noise(
+        self,
+        t: Any,
+        state: Array,
+        parameters: Mapping[str, Array],
+        controls: Mapping[str, Array],
+        dt: Any,
+        rng: Any,
+        backend: Backend,
+    ) -> Array:
+        """Evaluate PMDL noise draws and increment expressions without detaching."""
 
-def _resolve_system(candidate: Any) -> tuple[Any, Any | None]:
-    controller = getattr(candidate, "controller", None)
+        batch_size = int(state.shape[0])
+        if not self.has_process_noise:
+            return backend.zeros(tuple(state.shape))
+        draws = backend.normal(
+            (batch_size, len(self.process_noise_channel_names)), rng
+        )
+        environment: dict[str, Any] = {"t": t, "dt": dt}
+        for index, name in enumerate(self.state_names):
+            environment[name] = state[:, index]
+        environment.update(parameters)
+        environment.update(controls)
+        for index, name in enumerate(self.process_noise_channel_names):
+            environment[name] = draws[:, index]
+        increments: dict[int, Array] = {}
+        for target_index, target_name, expression in self._process_noise_increments:
+            raw = backend.asarray(
+                _evaluate_backend_expression(expression, environment, backend)
+            )
+            if len(raw.shape) == 0:
+                raw = backend.broadcast_to(raw, (batch_size,))
+            if tuple(raw.shape) != (batch_size,):
+                raise ValueError(
+                    f"PMDL process-noise increment {target_name!r} must produce "
+                    f"[sample], got {tuple(raw.shape)}"
+                )
+            increments[target_index] = raw
+        zero = backend.zeros((batch_size,))
+        return backend.stack(
+            [increments.get(index, zero) for index in range(len(self.state_names))],
+            axis=-1,
+        )
+
+
+def _resolve_system(candidate: Any) -> tuple[Any, Mapping[str, Any]]:
+    controllers = getattr(candidate, "controllers", {})
+    if controllers is None:
+        controllers = {}
+    if not isinstance(controllers, Mapping):
+        raise TypeError("contraption.controllers must be a mapping of resolved controllers")
     system = candidate
     if not hasattr(system, "derivative") and not hasattr(system, "residual"):
         for attribute in ("dynamics", "system", "simulation_model", "model"):
@@ -776,11 +919,242 @@ def _resolve_system(candidate: Any) -> tuple[Any, Any | None]:
             if nested is not None:
                 system = nested
                 break
+    # ModelSpec.process_noise is a declarative data record, not an executable
+    # Python hook; wrap all ModelSpec-shaped objects before generic dispatch.
     if not hasattr(system, "derivative") and hasattr(system, "evaluate_residual"):
         system = _ModelSpecAdapter(system)
     elif not hasattr(system, "derivative") and not hasattr(system, "residual"):
         raise TypeError("System must expose derivative(...) or residual(...)")
-    return system, controller
+    return system, controllers
+
+
+def _sample_scalar(value: Any, index: int, count: int, backend: Backend, context: str) -> Any:
+    array = backend.asarray(value)
+    if len(array.shape) == 0:
+        return array
+    if tuple(array.shape) == (count,):
+        return array[index]
+    raise ValueError(f"{context} must be scalar or [sample], got shape {tuple(array.shape)}")
+
+
+class _ResolvedControllerExecutor:
+    """Execute one resolved controller once per posterior sample.
+
+    A hardware controller is scalar and has discrete mode state. Keeping one
+    runtime per posterior sample preserves that exact behavior while numeric
+    expressions remain backend-native and differentiable within each selected
+    branch.
+    """
+
+    def __init__(self, resolved: Any, count: int, backend: Backend) -> None:
+        self.resolved = resolved
+        self.count = count
+        self.backend = backend
+        self.runtimes = tuple(
+            ControlRuntime(
+                resolved.spec,
+                observer=resolved.observer,
+                backend=backend,
+                emit_observability_warnings=sample_index == 0,
+            )
+            for sample_index in range(count)
+        )
+        self.frames: list[tuple[ControlFrame, ...]] = []
+        self.tick_mask: list[bool] = []
+        self._frame_times_s: list[float] = []
+        self._current_frames: tuple[ControlFrame, ...] | None = None
+        self._held_outputs: dict[str, Array] | None = None
+
+    def initialize(self, time_s: float) -> dict[str, Array]:
+        """Publish the untouched hardware reset state at simulation time zero."""
+
+        if self._current_frames is not None:
+            raise RuntimeError(
+                f"controller {self.resolved.id!r} is already initialized"
+            )
+        sample_frames = tuple(
+            ControlFrame(
+                time=runtime.time,
+                active_mode=runtime.mode,
+                next_mode=runtime.mode,
+                outputs=dict(runtime.outputs),
+                registers=dict(runtime.registers),
+                implicit_inputs=dict(runtime.implicit_inputs),
+                derived={},
+                emergency=False,
+            )
+            for runtime in self.runtimes
+        )
+        output_columns: dict[str, list[Any]] = {
+            name: []
+            for name, binding in self.resolved.output_bindings.items()
+            if binding.kind == "signal"
+        }
+        for frame in sample_frames:
+            for output_name in output_columns:
+                output_columns[output_name].append(frame.outputs[output_name])
+        result: dict[str, Array] = {}
+        for output_name, values in output_columns.items():
+            source = self.resolved.output_bindings[output_name].source
+            if source in result:
+                raise RuntimeError(
+                    f"controller {self.resolved.id!r} drives source {source!r} more than once"
+                )
+            result[source] = self.backend.stack(values, axis=0)
+        self.frames.append(sample_frames)
+        self.tick_mask.append(False)
+        self._frame_times_s.append(float(time_s))
+        self._current_frames = sample_frames
+        self._held_outputs = result
+        return dict(result)
+
+    @property
+    def external_names(self) -> frozenset[str]:
+        return frozenset(
+            binding.source
+            for binding in self.resolved.explicit_input_bindings.values()
+            if binding.kind == "external"
+        )
+
+    def step(
+        self,
+        state: Array,
+        external_inputs: Mapping[str, Any],
+        time_s: float,
+    ) -> dict[str, Array]:
+        sample_frames: list[ControlFrame] = []
+        output_columns: dict[str, list[Any]] = {
+            name: []
+            for name, binding in self.resolved.output_bindings.items()
+            if binding.kind == "signal"
+        }
+        for sample_index, runtime in enumerate(self.runtimes):
+            inputs: dict[str, Any] = {}
+            for name, binding in self.resolved.explicit_input_bindings.items():
+                if binding.kind == "sensor":
+                    if binding.state_index is None:
+                        raise RuntimeError(
+                            f"controller {self.resolved.id!r} sensor {name!r} lost its state index"
+                        )
+                    inputs[name] = state[sample_index, binding.state_index]
+                elif binding.kind == "external":
+                    if binding.source in external_inputs:
+                        inputs[name] = _sample_scalar(
+                            external_inputs[binding.source],
+                            sample_index,
+                            self.count,
+                            self.backend,
+                            f"controller input {binding.source!r}",
+                        )
+                else:
+                    raise RuntimeError(
+                        f"controller {self.resolved.id!r} has invalid input binding kind {binding.kind!r}"
+                    )
+            frame = runtime.step(inputs)
+            sample_frames.append(frame)
+            for output_name in output_columns:
+                output_columns[output_name].append(frame.outputs[output_name])
+        current_frames = tuple(sample_frames)
+        self.frames.append(current_frames)
+        self.tick_mask.append(True)
+        self._frame_times_s.append(float(time_s))
+        result: dict[str, Array] = {}
+        for output_name, values in output_columns.items():
+            source = self.resolved.output_bindings[output_name].source
+            if source in result:
+                raise RuntimeError(
+                    f"controller {self.resolved.id!r} drives source {source!r} more than once"
+                )
+            result[source] = self.backend.stack(values, axis=0)
+        self._current_frames = current_frames
+        self._held_outputs = result
+        return result
+
+    def hold(self, time_s: float) -> dict[str, Array]:
+        """Publish the previous hardware frame without advancing controller state."""
+
+        if self._current_frames is None or self._held_outputs is None:
+            raise RuntimeError(
+                f"controller {self.resolved.id!r} cannot hold before its initial tick"
+            )
+        self.frames.append(self._current_frames)
+        self.tick_mask.append(False)
+        self._frame_times_s.append(float(time_s))
+        return dict(self._held_outputs)
+
+    def trace(self) -> ControllerTrace:
+        output_names = tuple(item.name for item in self.resolved.spec.outputs)
+        implicit_names = tuple(item.name for item in self.resolved.spec.implicit_inputs)
+        output_by_time = [
+            self.backend.stack(
+                [
+                    self.backend.stack(
+                        [frame.outputs[name] for name in output_names], axis=-1
+                    )
+                    for frame in sample_frames
+                ],
+                axis=0,
+            )
+            for sample_frames in self.frames
+        ]
+        output_samples = self.backend.stack(output_by_time, axis=1)
+        if implicit_names:
+            means_by_time = [
+                self.backend.stack(
+                    [
+                        self.backend.stack(
+                            [frame.implicit_inputs[name].mean for name in implicit_names],
+                            axis=-1,
+                        )
+                        for frame in sample_frames
+                    ],
+                    axis=0,
+                )
+                for sample_frames in self.frames
+            ]
+            variances_by_time = [
+                self.backend.stack(
+                    [
+                        self.backend.stack(
+                            [frame.implicit_inputs[name].variance for name in implicit_names],
+                            axis=-1,
+                        )
+                        for frame in sample_frames
+                    ],
+                    axis=0,
+                )
+                for sample_frames in self.frames
+            ]
+            implicit_means = self.backend.stack(means_by_time, axis=1)
+            implicit_variances = self.backend.stack(variances_by_time, axis=1)
+        else:
+            implicit_means = self.backend.zeros((self.count, len(self.frames), 0))
+            implicit_variances = self.backend.zeros((self.count, len(self.frames), 0))
+        emergency_samples = self.backend.stack(
+            [
+                self.backend.stack(
+                    [self.backend.asarray(frame.emergency) for frame in sample_frames],
+                    axis=0,
+                )
+                for sample_frames in self.frames
+            ],
+            axis=1,
+        )
+        return ControllerTrace(
+            controller_id=self.resolved.id,
+            output_names=output_names,
+            output_samples=output_samples,
+            implicit_input_names=implicit_names,
+            implicit_means=implicit_means,
+            implicit_variances=implicit_variances,
+            emergency_samples=emergency_samples,
+            active_modes=tuple(
+                tuple(frame.active_mode for frame in sample_frames)
+                for sample_frames in self.frames
+            ),
+            tick_mask=tuple(self.tick_mask),
+            frame_times_s=tuple(self._frame_times_s),
+        )
 
 
 def _validate_accepted_step(
@@ -816,6 +1190,8 @@ def _time_grid(
         if grid.ndim != 1 or len(grid) < 2 or np.any(np.diff(grid) <= 0):
             raise ValueError("times must be a strictly increasing 1-D sequence")
         return grid
+    if not math.isfinite(float(dt)) or float(dt) <= 0.0:
+        raise ValueError("dt must be finite and positive")
     if t_span is None:
         t_span = (0.0, 1.0 if duration is None else float(duration))
     elif duration is not None:
@@ -829,36 +1205,167 @@ def _time_grid(
     return grid
 
 
-def _call_control(function: Callable[..., Any], t: float, state: Array, backend: Backend) -> Any:
+_CONTROLLER_SCHEDULE_ABSOLUTE_TOLERANCE = 1e-12
+_CONTROLLER_SCHEDULE_RELATIVE_TOLERANCE = 1e-9
+
+
+def _controller_tick_stride(period: float, physics_dt: float) -> int:
+    period = float(period)
+    physics_dt = float(physics_dt)
+    if not math.isfinite(period) or period <= 0.0:
+        raise ValueError("controller periods must be finite and positive")
+    if not math.isfinite(physics_dt) or physics_dt <= 0.0:
+        raise ValueError("physics dt must be finite and positive")
+    ratio = period / physics_dt
+    stride = int(round(ratio))
+    tolerance = max(
+        _CONTROLLER_SCHEDULE_ABSOLUTE_TOLERANCE,
+        _CONTROLLER_SCHEDULE_RELATIVE_TOLERANCE * max(period, physics_dt),
+    )
+    if stride < 1 or abs(period - stride * physics_dt) > tolerance:
+        raise ValueError(
+            f"controller period {period:.17g}s is not commensurate with physics dt "
+            f"{physics_dt:.17g}s; every controller period must be a positive integer "
+            f"multiple of dt within tolerance {tolerance:.3g}s"
+        )
+    return stride
+
+
+def controller_time_step(
+    periods: Iterable[float],
+    requested: float | None = None,
+    *,
+    default: float = 0.01,
+) -> float:
+    """Return or validate a common physics subdivision for controller periods.
+
+    Authored periods are decimal JSON numbers. Converting their string forms to
+    exact rational values gives a deterministic greatest common divisor for the
+    default grid while runtime admission still uses an explicit floating-point
+    tolerance.
+    """
+
+    values = tuple(float(period) for period in periods)
+    if any(not math.isfinite(period) or period <= 0.0 for period in values):
+        raise ValueError("controller periods must be finite and positive")
+    if requested is not None:
+        result = float(requested)
+    elif not values:
+        result = float(default)
+    else:
+        fractions = tuple(Fraction(str(period)) for period in values)
+        denominator = 1
+        for value in fractions:
+            denominator = math.lcm(denominator, value.denominator)
+        numerator = 0
+        for value in fractions:
+            scaled = value.numerator * (denominator // value.denominator)
+            numerator = math.gcd(numerator, abs(scaled))
+        result = float(Fraction(numerator, denominator))
+    if not math.isfinite(result) or result <= 0.0:
+        raise ValueError("physics dt must be finite and positive")
+    for period in values:
+        _controller_tick_stride(period, result)
+    return result
+
+
+def _call_external_input(function: Callable[..., Any], t: float, backend: Backend) -> Any:
+    """Call an open-loop provider without ever exposing plant state."""
+
     try:
         signature = inspect.signature(function)
-        parameters = list(signature.parameters.values())
-        accepts_kwargs = any(item.kind is inspect.Parameter.VAR_KEYWORD for item in parameters)
-        names = {item.name for item in parameters}
-        kwargs = {"backend": backend} if "backend" in names or accepts_kwargs else {}
-        positional = [
-            item
-            for item in parameters
-            if item.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
-        ]
-        if len(positional) >= 2:
-            return function(t, state, **kwargs)
-        return function(t, **kwargs)
     except (TypeError, ValueError):
         return function(t)
+    parameters = list(signature.parameters.values())
+    accepts_kwargs = any(
+        item.kind is inspect.Parameter.VAR_KEYWORD for item in parameters
+    )
+    names = {item.name for item in parameters}
+    kwargs = {"backend": backend} if "backend" in names or accepts_kwargs else {}
+    positional = [
+        item
+        for item in parameters
+        if item.name != "backend"
+        and item.kind
+        in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        )
+    ]
+    if len(positional) > 1:
+        raise TypeError(
+            "open-loop input/control providers may accept only time and optional "
+            "backend; plant state is available only to resolved control DSL sensors"
+        )
+    return function(t, **kwargs) if positional else function(**kwargs)
+
+
+def _external_input_value(
+    value: Any,
+    t: float,
+    backend: Backend,
+    times: np.ndarray,
+) -> Array:
+    if callable(value):
+        value = _call_external_input(value, t, backend)
+    elif hasattr(value, "evaluate"):
+        value = _call_external_input(value.evaluate, t, backend)
+    if isinstance(value, (list, tuple, np.ndarray)) or hasattr(value, "shape"):
+        array = backend.asarray(value)
+        if len(array.shape) > 0 and int(array.shape[0]) == len(times):
+            upper = int(np.searchsorted(times, t, side="right"))
+            if upper <= 0:
+                value = array[0]
+            elif upper >= len(times):
+                value = array[-1]
+            else:
+                lower = upper - 1
+                fraction = (t - times[lower]) / (times[upper] - times[lower])
+                value = array[lower] * (1.0 - fraction) + array[upper] * fraction
+            return backend.asarray(value)
+    return backend.asarray(value)
+
+
+def _evaluate_controller_inputs(
+    source: Any,
+    t: float,
+    backend: Backend,
+    times: np.ndarray,
+    allowed: frozenset[str],
+    sampled: frozenset[str] | None = None,
+) -> dict[str, Array]:
+    if source is None:
+        return {}
+    if isinstance(source, Mapping):
+        values = source
+    else:
+        evaluator = source.evaluate if hasattr(source, "evaluate") else source
+        values = _call_external_input(evaluator, t, backend)
+        if not isinstance(values, Mapping):
+            raise TypeError("A controller-input provider must return a mapping")
+    unknown = sorted(set(values) - allowed)
+    if unknown:
+        raise KeyError(
+            f"Unknown external controller input(s) {unknown}; declared inputs are {sorted(allowed)}"
+        )
+    selected = allowed if sampled is None else sampled
+    return {
+        str(name): _external_input_value(values[name], t, backend, times)
+        for name in selected
+        if name in values
+    }
 
 
 def _control_value(
     value: Any,
     t: float,
-    state: Array,
     backend: Backend,
     times: np.ndarray,
 ) -> Array:
     if callable(value):
-        value = _call_control(value, t, state, backend)
+        value = _call_external_input(value, t, backend)
     elif hasattr(value, "evaluate"):
-        value = _call_control(value.evaluate, t, state, backend)
+        value = _call_external_input(value.evaluate, t, backend)
     if isinstance(value, (list, tuple, np.ndarray)) or hasattr(value, "shape"):
         array = backend.asarray(value)
         if len(array.shape) > 0 and int(array.shape[0]) == len(times):
@@ -877,9 +1384,7 @@ def _control_value(
 
 def _evaluate_controls(
     source: Any,
-    controller: Any | None,
     t: float,
-    state: Array,
     backend: Backend,
     times: np.ndarray,
 ) -> dict[str, Array]:
@@ -888,32 +1393,30 @@ def _evaluate_controls(
         if isinstance(source, Mapping):
             result.update(
                 {
-                    str(name): _control_value(value, t, state, backend, times)
+                    str(name): _control_value(value, t, backend, times)
                     for name, value in source.items()
                 }
             )
         else:
             evaluator = source.evaluate if hasattr(source, "evaluate") else source
-            values = _call_control(evaluator, t, state, backend)
+            values = _call_external_input(evaluator, t, backend)
             if not isinstance(values, Mapping):
                 raise TypeError("A control provider must return a mapping")
             result.update({str(name): backend.asarray(value) for name, value in values.items()})
-    if controller is not None:
-        evaluator = controller.evaluate if hasattr(controller, "evaluate") else controller
-        internal = _call_control(evaluator, t, state, backend)
-        if not isinstance(internal, Mapping):
-            raise TypeError("An internal controller must return a mapping")
-        # Internal commands deliberately take precedence over equally-named
-        # external settings; external values remain available under other names.
-        result.update({str(name): backend.asarray(value) for name, value in internal.items()})
     return result
 
 
 def _merged_controls(
     external: Mapping[str, Array], internal: Mapping[str, Array]
 ) -> dict[str, Array]:
-    """Merge held internal commands over externally supplied settings."""
+    """Merge independent open-loop and controller-driven actuator sources."""
 
+    overlap = sorted(set(external) & set(internal))
+    if overlap:
+        raise ValueError(
+            "physical actuator sources cannot be driven externally and by a controller: "
+            + ", ".join(overlap)
+        )
     result = dict(external)
     result.update(internal)
     return result
@@ -994,7 +1497,7 @@ def _explicit_step(
     times: np.ndarray,
 ) -> tuple[Array, Mapping[str, Array]]:
     c1 = _merged_controls(
-        _evaluate_controls(control_source, None, t, state, backend, times),
+        _evaluate_controls(control_source, t, backend, times),
         held_internal_controls,
     )
     k1 = _explicit_derivative(system, t, state, parameters, c1, backend)
@@ -1002,19 +1505,19 @@ def _explicit_step(
         return state + dt * k1, c1
     midpoint = state + 0.5 * dt * k1
     c2 = _merged_controls(
-        _evaluate_controls(control_source, None, t + 0.5 * dt, midpoint, backend, times),
+        _evaluate_controls(control_source, t + 0.5 * dt, backend, times),
         held_internal_controls,
     )
     k2 = _explicit_derivative(system, t + 0.5 * dt, midpoint, parameters, c2, backend)
     midpoint = state + 0.5 * dt * k2
     c3 = _merged_controls(
-        _evaluate_controls(control_source, None, t + 0.5 * dt, midpoint, backend, times),
+        _evaluate_controls(control_source, t + 0.5 * dt, backend, times),
         held_internal_controls,
     )
     k3 = _explicit_derivative(system, t + 0.5 * dt, midpoint, parameters, c3, backend)
     endpoint = state + dt * k3
     c4 = _merged_controls(
-        _evaluate_controls(control_source, None, t + dt, endpoint, backend, times),
+        _evaluate_controls(control_source, t + dt, backend, times),
         held_internal_controls,
     )
     k4 = _explicit_derivative(system, t + dt, endpoint, parameters, c4, backend)
@@ -1305,6 +1808,7 @@ def simulate(
     duration: float | None = None,
     times: Sequence[float] | None = None,
     controls: Any = None,
+    controller_inputs: Any = None,
     parameters: Mapping[str, Any] | None = None,
     parameter_distribution: Mapping[str, Any] | Any | None = None,
     parameter_distributions: Mapping[str, Any] | Any | None = None,
@@ -1342,10 +1846,36 @@ def simulate(
         raise ValueError("Use only one of parameter_distribution/parameter_distributions")
     distributions = parameter_distribution if parameter_distribution is not None else parameter_distributions
     numerical = get_backend(backend, device=device, dtype=dtype)
-    system, controller = _resolve_system(contraption)
+    system, resolved_controllers = _resolve_system(contraption)
     names = _state_names(system)
     grid = _time_grid(t_span, duration, dt, times)
     _require_valid_timestep(system, grid)
+    controller_tick_strides: dict[str, int] = {}
+    if resolved_controllers:
+        if times is None:
+            physics_dt = float(dt)
+        else:
+            intervals = np.diff(grid)
+            physics_dt = float(intervals[0])
+            if not np.allclose(
+                intervals,
+                physics_dt,
+                rtol=_CONTROLLER_SCHEDULE_RELATIVE_TOLERANCE,
+                atol=_CONTROLLER_SCHEDULE_ABSOLUTE_TOLERANCE,
+            ):
+                raise ValueError(
+                    "controllers require a uniform explicit time grid whose step is a "
+                    "common subdivision of every controller period"
+                )
+        for controller_id, resolved_controller in resolved_controllers.items():
+            try:
+                controller_tick_strides[controller_id] = _controller_tick_stride(
+                    float(resolved_controller.spec.period_s), physics_dt
+                )
+            except ValueError as exc:
+                raise ValueError(f"controller {controller_id!r}: {exc}") from exc
+    else:
+        physics_dt = float(np.diff(grid)[0])
     defaults = _parameter_defaults(system)
     if parameters:
         unknown_parameters = sorted(set(parameters) - set(defaults))
@@ -1383,8 +1913,13 @@ def simulate(
         numerical,
         state_rng,
     )
-    if controller is not None and hasattr(controller, "reset"):
-        controller.reset()
+    controller_executors = tuple(
+        _ResolvedControllerExecutor(controller, num_samples, numerical)
+        for controller in resolved_controllers.values()
+    )
+    external_controller_names = frozenset(
+        name for executor in controller_executors for name in executor.external_names
+    )
     explicit = hasattr(system, "derivative")
     if integrator == "auto":
         integrator = "rk4" if explicit else "implicit_euler"
@@ -1395,10 +1930,15 @@ def simulate(
     if integrator not in {"euler", "rk4", "implicit_euler"}:
         raise ValueError(f"Unsupported integrator {integrator!r}")
 
-    external_controls = _evaluate_controls(controls, None, float(grid[0]), state, numerical, grid)
-    held_internal_controls = _evaluate_controls(
-        None, controller, float(grid[0]), state, numerical, grid
+    external_controls = _evaluate_controls(
+        controls, float(grid[0]), numerical, grid
     )
+    held_internal_controls: dict[str, Array] = {}
+    for executor in controller_executors:
+        held_internal_controls = _merged_controls(
+            held_internal_controls,
+            executor.initialize(float(grid[0])),
+        )
     first_controls = _merged_controls(external_controls, held_internal_controls)
     initializer = getattr(system, "consistent_initial_state", None)
     if callable(initializer):
@@ -1410,9 +1950,9 @@ def simulate(
             first_controls,
             backend=numerical,
         )
-        # Initial commands are sample-and-hold inputs to the consistency solve.
-        # Re-evaluating feedback against solved algebraics here would change the
-        # equations after solving them and publish an inconsistent first frame.
+    # Time zero is the hardware reset snapshot: declared/default actuator
+    # outputs are held, descriptor algebraics are consistent under those
+    # outputs, and no controller period or sensor-fusion update has elapsed.
     _require_runtime_validity(
         system,
         t=float(grid[0]),
@@ -1466,7 +2006,7 @@ def simulate(
             )
         else:
             step_controls = _merged_controls(
-                _evaluate_controls(controls, None, t + step_size, state, numerical, grid),
+                _evaluate_controls(controls, t + step_size, numerical, grid),
                 held_internal_controls,
             )
             next_state = _implicit_step(
@@ -1482,7 +2022,10 @@ def simulate(
                 step_index=index + 1,
             )
         noise_function = getattr(system, "process_noise", None)
-        if process_noise and noise_function is not None:
+        noise_declared = bool(
+            getattr(system, "has_process_noise", noise_function is not None)
+        )
+        if process_noise and noise_declared and noise_function is not None:
             increment = _invoke(
                 noise_function,
                 numerical.asarray(t + step_size),
@@ -1494,11 +2037,28 @@ def simulate(
                 backend=numerical,
             )
             next_state = next_state + _as_vector(increment, numerical, num_samples)
+            algebraic_indices = tuple(getattr(system, "algebraic_indices", ()))
+            if algebraic_indices:
+                reconciler = getattr(system, "consistent_initial_state", None)
+                if not callable(reconciler):
+                    raise UnsupportedPMDLSemanticsError(
+                        "process-noise increments changed differential state in a "
+                        "descriptor model with algebraic unknowns, but the system has "
+                        "no consistent-state reconciliation solver"
+                    )
+                next_state = _invoke(
+                    reconciler,
+                    numerical.asarray(t + step_size),
+                    next_state,
+                    sampled_parameters,
+                    step_controls,
+                    backend=numerical,
+                )
         state = next_state
         states.append(state)
         if explicit:
             next_external_controls = _evaluate_controls(
-                controls, None, float(grid[index + 1]), state, numerical, grid
+                controls, float(grid[index + 1]), numerical, grid
             )
             output_controls = _merged_controls(
                 next_external_controls, held_internal_controls
@@ -1545,9 +2105,56 @@ def simulate(
         if current_names != output_names:
             raise ValueError("observe() returned inconsistent output names across time")
         outputs.append(output)
-        held_internal_controls = _evaluate_controls(
-            None, controller, float(grid[index + 1]), state, numerical, grid
+        frame_time = float(grid[index + 1])
+        frame_index = index + 1
+        regular_grid_frame = (
+            times is not None
+            or frame_index < len(grid) - 1
+            or math.isclose(
+                step_size,
+                physics_dt,
+                rel_tol=_CONTROLLER_SCHEDULE_RELATIVE_TOLERANCE,
+                abs_tol=_CONTROLLER_SCHEDULE_ABSOLUTE_TOLERANCE,
+            )
         )
+        ticking = tuple(
+            regular_grid_frame
+            and frame_index % controller_tick_strides[executor.resolved.id] == 0
+            for executor in controller_executors
+        )
+        sampled_external_names = frozenset(
+            name
+            for executor, should_tick in zip(controller_executors, ticking)
+            if should_tick
+            for name in executor.external_names
+        )
+        next_controller_inputs = (
+            _evaluate_controller_inputs(
+                controller_inputs,
+                frame_time,
+                numerical,
+                grid,
+                external_controller_names,
+                sampled_external_names,
+            )
+            if any(ticking)
+            else {}
+        )
+        held_internal_controls = {}
+        for executor, should_tick in zip(controller_executors, ticking):
+            controller_controls = (
+                executor.step(
+                    state,
+                    next_controller_inputs,
+                    frame_time,
+                )
+                if should_tick
+                else executor.hold(frame_time)
+            )
+            held_internal_controls = _merged_controls(
+                held_internal_controls,
+                controller_controls,
+            )
 
     trajectory = numerical.stack(states, axis=1)
     output_trajectory = numerical.stack(outputs, axis=1)
@@ -1563,6 +2170,22 @@ def simulate(
         quantiles=quantiles,
         confidence_level=confidence_level,
     )
+    controller_traces = {
+        executor.resolved.id: executor.trace() for executor in controller_executors
+    }
+    verification_reports: dict[str, Any] = {}
+    for verification_id, verification in getattr(
+        contraption, "verifications", {}
+    ).items():
+        verification_inputs = {
+            name: trajectory[..., binding.state_index]
+            for name, binding in verification.input_bindings.items()
+        }
+        verification_reports[verification_id] = evaluate_verification(
+            verification.spec,
+            verification_inputs,
+            time=numerical.asarray(grid),
+        )
     result = SimulationResult(
         time=numerical.asarray(grid),
         state_names=names,
@@ -1571,6 +2194,8 @@ def simulate(
         output_samples=output_trajectory,
         summary=summary,
         output_summary=output_summary,
+        controller_traces=controller_traces,
+        verification_reports=verification_reports,
         metadata={
             "backend": numerical.name,
             "device": str(numerical.device),
@@ -1579,6 +2204,26 @@ def simulate(
             "sample_count": int(num_samples),
             "interval_kind": summary.interval_kind,
             "process_noise": bool(process_noise),
+            "process_noise_declared": bool(
+                getattr(
+                    system,
+                    "has_process_noise",
+                    getattr(system, "process_noise", None) is not None,
+                )
+            ),
+            "process_noise_seed_policy": getattr(
+                system, "process_noise_seed_policy", None
+            ),
+            "process_noise_reproducibility": getattr(
+                system, "process_noise_reproducibility", None
+            ),
+            "physics_dt_s": physics_dt,
+            "controller_periods_s": {
+                controller_id: float(controller.spec.period_s)
+                for controller_id, controller in resolved_controllers.items()
+            },
+            "controllers": list(controller_traces),
+            "verifications": list(verification_reports),
             **(
                 {"assembly_sha256": str(system.assembly_sha256)}
                 if getattr(system, "assembly_sha256", None) is not None
@@ -1722,6 +2367,7 @@ __all__ = [
     "ResidualSystem",
     "SimulationConfig",
     "SimulationResult",
+    "controller_time_step",
     "linearize_dynamics",
     "simulate",
 ]

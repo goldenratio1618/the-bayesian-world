@@ -24,7 +24,14 @@ from contraption.part_import.agents import (
 )
 from contraption.part_import.budget import BudgetExceeded, BudgetLedger, TokenPricing, Usage
 from contraption.catalog.interfaces import ModelInterfaceCatalog, interface_paths, load_interface_catalog
-from contraption.cli import _agent_key, _default_dotenv_path, _torch_diagnostics, build_parser
+from contraption.cli import (
+    _agent_key,
+    _default_dotenv_path,
+    _full_modeling_inputs,
+    _load_agent_job_bundle,
+    _torch_diagnostics,
+    build_parser,
+)
 from contraption.part_import.model_validation_tool import (
     assert_workspace_integrity,
     validate_candidate,
@@ -182,8 +189,8 @@ def _real_modeling_inputs() -> ModelingInputs:
         direct_hierarchy=(CATALOG_ROOT / "electromechanical" / "motors" / "brushed_dc_motors" / "dc_motor.pmdl",),
         component_information=(
             PROJECT_ROOT
-            / "examples"
-            / "scanner_robot"
+            / "assembled_contraptions"
+            / "scanner"
             / "component_inputs"
             / "romi_drive.json"
         ),
@@ -306,11 +313,34 @@ class BudgetTests(unittest.TestCase):
             failed = _torch_diagnostics()
         self.assertIn("driver mismatch", failed["cuda_runtime_error"])
 
-    def test_actual_agent_cli_defaults_to_one_staged_romi_drive_model(self):
-        args = build_parser().parse_args(["agent-run", "modeling-one"])
+    def test_actual_agent_cli_requires_a_declarative_job_file_and_target(self):
+        job_file = (
+            PROJECT_ROOT / "assembled_contraptions" / "scanner" / "agent_jobs.json"
+        )
+        args = build_parser().parse_args(
+            [
+                "agent-run",
+                "modeling-one",
+                "--job-file",
+                str(job_file),
+                "--target",
+                "romi_drive",
+            ]
+        )
         self.assertEqual(args.agent_job, "modeling-one")
         self.assertEqual(args.target, "romi_drive")
         self.assertFalse(args.force)
+        bundle = _load_agent_job_bundle(args.job_file)
+        inputs = _full_modeling_inputs(bundle, args.target)
+        self.assertEqual(
+            inputs.component_information,
+            PROJECT_ROOT
+            / "assembled_contraptions"
+            / "scanner"
+            / "component_inputs"
+            / "romi_drive.json",
+        )
+        self.assertEqual(inputs.interfaces, interface_paths(CATALOG_ROOT))
 
     def test_dotenv_resolution_supports_parent_workspace_layout(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -2,7 +2,7 @@
   "format": "static-part-1",
   "id": "scanner.romi_chassis",
   "name": "Pololu Romi chassis",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "physical_role": "part",
   "bodies": [
     {
@@ -292,6 +292,66 @@
       "provenance": {
         "kind": "estimated",
         "source": "prototype packaging layout"
+      }
+    },
+    {
+      "id": "position_x_measurement",
+      "model_port": "position_x_measurement",
+      "body": "body",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [0.025, 0.012, 0.08],
+        "rotation_quaternion_wxyz": [1, 0, 0, 0]
+      },
+      "provenance": {
+        "kind": "derived",
+        "source": "modeled planar-localization header channel"
+      }
+    },
+    {
+      "id": "position_y_measurement",
+      "model_port": "position_y_measurement",
+      "body": "body",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [0.025, 0.004, 0.08],
+        "rotation_quaternion_wxyz": [1, 0, 0, 0]
+      },
+      "provenance": {
+        "kind": "derived",
+        "source": "modeled planar-localization header channel"
+      }
+    },
+    {
+      "id": "heading_x_measurement",
+      "model_port": "heading_x_measurement",
+      "body": "body",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [0.025, -0.004, 0.08],
+        "rotation_quaternion_wxyz": [1, 0, 0, 0]
+      },
+      "provenance": {
+        "kind": "derived",
+        "source": "modeled planar-localization heading-vector channel"
+      }
+    },
+    {
+      "id": "heading_y_measurement",
+      "model_port": "heading_y_measurement",
+      "body": "body",
+      "domain": "signal",
+      "interface": "logic-signal",
+      "local_pose": {
+        "translation_m": [0.025, -0.012, 0.08],
+        "rotation_quaternion_wxyz": [1, 0, 0, 0]
+      },
+      "provenance": {
+        "kind": "derived",
+        "source": "modeled planar-localization heading-vector channel"
       }
     }
   ],

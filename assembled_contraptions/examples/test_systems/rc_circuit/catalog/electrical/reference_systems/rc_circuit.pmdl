@@ -1,0 +1,209 @@
+{
+  "format": "pmdl-1",
+  "id": "test_system.rc_circuit",
+  "name": "RC circuit reference system",
+  "version": "1.0.0",
+  "domains": [
+    "electrical"
+  ],
+  "description": "Series resistor-capacitor step-response model with capacitor voltage as the state.",
+  "power_ports": [],
+  "signal_ports": [
+    {
+      "name": "voltage",
+      "direction": "input",
+      "unit": "V",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Applied source voltage."
+    },
+    {
+      "name": "applied_voltage",
+      "direction": "output",
+      "unit": "V",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Diagnostic observation of the applied source voltage."
+    },
+    {
+      "name": "capacitor_voltage_observation",
+      "direction": "output",
+      "unit": "V",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Diagnostic observation of capacitor voltage."
+    },
+    {
+      "name": "resistor_current",
+      "direction": "output",
+      "unit": "A",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Series resistor current."
+    }
+  ],
+  "states": [
+    {
+      "name": "capacitor_voltage",
+      "unit": "V",
+      "initial": 0,
+      "derivative": "capacitor_voltage_dot",
+      "description": "Capacitor terminal voltage."
+    }
+  ],
+  "parameters": [
+    {
+      "name": "resistance",
+      "unit": "ohm",
+      "default": 1000,
+      "bounds": {
+        "lower": 1e-12,
+        "upper": 1000000000000
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 10
+        }
+      },
+      "learnable": true,
+      "description": "Series resistance."
+    },
+    {
+      "name": "capacitance",
+      "unit": "F",
+      "default": 0.001,
+      "bounds": {
+        "lower": 1e-15,
+        "upper": 10
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.00002
+        }
+      },
+      "learnable": true,
+      "description": "Capacitance."
+    }
+  ],
+  "relations": [
+    {
+      "name": "capacitor_dynamics",
+      "expression": "capacitor_voltage_dot - (voltage - capacitor_voltage) / (resistance * capacitance)",
+      "description": "RC charging law."
+    },
+    {
+      "name": "applied_voltage_output",
+      "expression": "applied_voltage - voltage",
+      "description": "Expose the actuator signal to verification programs."
+    },
+    {
+      "name": "capacitor_voltage_output",
+      "expression": "capacitor_voltage_observation - capacitor_voltage",
+      "description": "Expose the capacitor state to verification programs."
+    },
+    {
+      "name": "resistor_current_output",
+      "expression": "resistor_current - (voltage - capacitor_voltage) / resistance",
+      "description": "Ohm's law output."
+    }
+  ],
+  "stored_energy": [
+    {
+      "name": "electric_energy",
+      "expression": "0.5 * capacitance * capacitor_voltage ** 2",
+      "unit": "J",
+      "nonnegative": true,
+      "description": "Stored capacitor energy."
+    }
+  ],
+  "dissipation": [
+    {
+      "name": "resistor_loss",
+      "expression": "resistance * resistor_current ** 2",
+      "unit": "W",
+      "nonnegative": true,
+      "description": "Resistive loss."
+    }
+  ],
+  "sources": [],
+  "modes": [],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [],
+    "required": [
+      "capacitor_voltage"
+    ]
+  },
+  "validity": {
+    "ranges": {
+      "resistance": {
+        "lower": 1e-12,
+        "upper": 1000000000000
+      },
+      "capacitance": {
+        "lower": 1e-15,
+        "upper": 10
+      }
+    },
+    "assumptions": [
+      "Lumped deterministic reference system",
+      "Parameters remain constant during one simulation sample"
+    ],
+    "max_timestep": 0.05
+  },
+  "fidelity_levels": [
+    {
+      "name": "reference",
+      "description": "Exact equations of the declared lumped test system.",
+      "active_relations": [
+        "capacitor_dynamics",
+        "applied_voltage_output",
+        "capacitor_voltage_output",
+        "resistor_current_output"
+      ],
+      "parameter_overrides": {},
+      "approximation_error": "Effects outside the declared lumped model are omitted.",
+      "relative_cost": 1
+    }
+  ],
+  "properties": [
+    {
+      "name": "nonnegative_electric_energy",
+      "kind": "nonnegative_energy",
+      "expression": "0.5 * capacitance * capacitor_voltage ** 2 >= 0 * capacitance * capacitor_voltage ** 2",
+      "expected": true,
+      "samples": 32,
+      "tolerance": 1e-12
+    },
+    {
+      "name": "nonnegative_resistor_loss",
+      "kind": "nonnegative_dissipation",
+      "expression": "resistance * resistor_current ** 2 >= 0 * resistance * resistor_current ** 2",
+      "expected": true,
+      "samples": 32,
+      "tolerance": 1e-12
+    }
+  ],
+  "trust": {
+    "structural": "tested",
+    "physical": "unverified",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": [
+      {
+        "kind": "textbook",
+        "reference": "Series RC circuit",
+        "summary": "Canonical lumped reference equations used as an analytic simulator fixture."
+      }
+    ]
+  },
+  "metadata": {
+    "gold": false,
+    "test_fixture": true,
+    "causality": "causal aggregate expressed in descriptor form",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0"
+  },
+  "implements": "test-rc-circuit"
+}

@@ -483,6 +483,8 @@ def parse_model(source: str | bytes | Mapping[str, Any], *, source_name: str = "
         for collection in (model.stored_energy, model.dissipation, model.sources):
             for item in collection:
                 parse_expression(item.expression)
+        for increment in model.process_noise.increments:
+            parse_expression(increment.expression)
         for constraint in model.initialization.constraints:
             parse_expression(constraint.expression)
         for mode in model.modes:

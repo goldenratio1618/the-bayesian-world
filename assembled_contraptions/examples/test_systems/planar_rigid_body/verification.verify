@@ -1,0 +1,59 @@
+{
+  "format": "verification-1",
+  "id": "test_system.planar_rigid_body.physics",
+  "name": "Planar rigid-body drift verification",
+  "version": "1.1.0",
+  "description": "Physics identity checks for the declarative reference-system bundle.",
+  "inputs": [
+    {
+      "name": "y",
+      "unit": "m",
+      "description": "Transverse position."
+    },
+    {
+      "name": "yaw",
+      "unit": "rad",
+      "description": "Yaw angle."
+    }
+  ],
+  "parameters": [
+    {
+      "name": "position_tolerance",
+      "unit": "m",
+      "value": 1e-9
+    },
+    {
+      "name": "angle_tolerance",
+      "unit": "rad",
+      "value": 1e-9
+    }
+  ],
+  "metrics": [
+    {
+      "name": "max_abs_y",
+      "expression": "abs(y)",
+      "reducer": "max",
+      "unit": "m"
+    },
+    {
+      "name": "max_abs_yaw",
+      "expression": "abs(yaw)",
+      "reducer": "max",
+      "unit": "rad"
+    }
+  ],
+  "criteria": [
+    {
+      "name": "no_transverse_drift",
+      "expression": "max_abs_y <= position_tolerance",
+      "minimum_probability": 0.95,
+      "confidence_level": 0.95
+    },
+    {
+      "name": "no_yaw_drift",
+      "expression": "max_abs_yaw <= angle_tolerance",
+      "minimum_probability": 0.95,
+      "confidence_level": 0.95
+    }
+  ]
+}

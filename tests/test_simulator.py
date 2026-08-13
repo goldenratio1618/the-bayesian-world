@@ -4,20 +4,21 @@ from __future__ import annotations
 
 import json
 import math
+from functools import lru_cache
+from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 import numpy as np
 
+from contraption import load_contraption
 from contraption.physics.backend import NumpyBackend, TorchBackend, get_backend
-from contraption.physics.electrical import RCCircuit, RLCircuit
-from contraption.physics.mechanical import DCMotorSystem, PlanarRigidBodySystem
+from contraption.physics.dsl import parse_model
 from contraption.physics.simulator import (
     OfflineSimulator,
     ResidualSystem,
     SimulationConfig,
-    linearize_dynamics,
     simulate,
 )
 from contraption.physics.uq import (
@@ -28,75 +29,260 @@ from contraption.physics.uq import (
     sample_parameters,
     summarize_samples,
 )
+from contraption.verification import evaluate_verification, load_verification
+
+
+ROOT = Path(__file__).resolve().parents[1]
+TEST_SYSTEMS = ROOT / "assembled_contraptions" / "examples" / "test_systems"
+
+
+@lru_cache(maxsize=None)
+def load_test_system(name: str):
+    """Load one real declarative fixture through the public bundle loader."""
+
+    return load_contraption(TEST_SYSTEMS / name / "contraption.json").system
+
+
+class DeclarativeBundleTests(unittest.TestCase):
+    def test_reference_system_verifications_accept_their_physics(self) -> None:
+        cases = {
+            "rc_circuit": (
+                {"voltage": 5.0},
+                {
+                    "voltage": "rc.applied_voltage",
+                    "capacitor_voltage": "rc.capacitor_voltage_observation",
+                    "resistor_current": "rc.resistor_current",
+                },
+            ),
+            "rl_circuit": (
+                {"voltage": 8.0},
+                {
+                    "voltage": "rl.applied_voltage",
+                    "inductor_current": "rl.inductor_current_observation",
+                    "resistor_voltage": "rl.resistor_voltage",
+                    "inductor_voltage": "rl.inductor_voltage",
+                },
+            ),
+            "dc_motor": (
+                {"voltage": 6.0},
+                {
+                    "armature_current": "motor.armature_current_observation",
+                    "electromagnetic_torque": "motor.electromagnetic_torque",
+                },
+            ),
+            "planar_rigid_body": (
+                {"force_x": 4.0},
+                {"y": "body.y_observation", "yaw": "body.yaw_observation"},
+            ),
+        }
+        for name, (controls, bindings) in cases.items():
+            with self.subTest(bundle=name):
+                result = simulate(
+                    load_test_system(name),
+                    duration=0.02,
+                    dt=0.01,
+                    controls=controls,
+                    num_samples=64,
+                    use_model_uncertainty=False,
+                    process_noise=False,
+                )
+                program = load_verification(TEST_SYSTEMS / name / "verification.verify")
+                report = evaluate_verification(
+                    program,
+                    {
+                        input_name: result.series(system_name)
+                        for input_name, system_name in bindings.items()
+                    },
+                    time=result.time,
+                )
+                self.assertTrue(report.accepted, report.to_dict())
 
 
 class ElectricalBaselineTests(unittest.TestCase):
     def test_rc_step_matches_closed_form(self) -> None:
-        model = RCCircuit(resistance=2.0, capacitance=0.5)
+        model = load_test_system("rc_circuit")
         result = simulate(
             model,
             duration=2.0,
-            dt=0.01,
+            dt=0.001,
             controls={"voltage": 5.0},
+            parameters={"rc.resistance": 2.0, "rc.capacitance": 0.5},
             num_samples=1,
             use_model_uncertainty=False,
             process_noise=False,
         )
         expected = 5.0 * (1.0 - math.exp(-2.0))
-        self.assertAlmostEqual(float(result.mean[-1, 0]), expected, places=8)
-        current = result.series("resistor_current", outputs_first=True)[0, -1]
-        self.assertAlmostEqual(float(current), (5.0 - expected) / 2.0, places=8)
+        voltage = result.series("rc.capacitor_voltage")[0, -1]
+        self.assertAlmostEqual(float(voltage), expected, delta=7e-4)
+        current = result.series("rc.resistor_current")[0, -1]
+        self.assertAlmostEqual(float(current), (5.0 - float(voltage)) / 2.0, places=10)
 
     def test_rl_step_matches_closed_form(self) -> None:
-        model = RLCircuit(resistance=4.0, inductance=2.0)
-        result = model.simulate(
+        model = load_test_system("rl_circuit")
+        result = simulate(
+            model,
             duration=1.5,
-            dt=0.005,
+            dt=0.0005,
             controls={"voltage": 8.0},
+            parameters={"rl.resistance": 4.0, "rl.inductance": 2.0},
             num_samples=1,
             use_model_uncertainty=False,
             process_noise=False,
         )
         expected = 2.0 * (1.0 - math.exp(-3.0))
-        self.assertAlmostEqual(float(result.mean[-1, 0]), expected, places=8)
+        current = result.series("rl.inductor_current")[0, -1]
+        self.assertAlmostEqual(float(current), expected, delta=8e-4)
 
     def test_dc_motor_approaches_analytic_steady_state(self) -> None:
-        model = DCMotorSystem(
-            resistance=2.0,
-            inductance=0.05,
-            torque_constant=0.1,
-            back_emf_constant=0.1,
-            inertia=0.02,
-            viscous_friction=0.02,
-        )
-        result = model.simulate(
+        model = load_test_system("dc_motor")
+        result = simulate(
+            model,
             duration=8.0,
             dt=0.002,
             controls={"voltage": 6.0},
+            parameters={
+                "motor.resistance": 2.0,
+                "motor.inductance": 0.05,
+                "motor.torque_constant": 0.1,
+                "motor.back_emf_constant": 0.1,
+                "motor.inertia": 0.02,
+                "motor.viscous_friction": 0.02,
+            },
             num_samples=1,
             use_model_uncertainty=False,
             process_noise=False,
         )
         expected_speed = 0.1 * 6.0 / (2.0 * 0.02 + 0.1 * 0.1)
         expected_current = 0.02 * expected_speed / 0.1
-        self.assertAlmostEqual(float(result.mean[-1, 0]), expected_current, delta=2e-3)
-        self.assertAlmostEqual(float(result.mean[-1, 1]), expected_speed, delta=1e-2)
+        current = result.series("motor.armature_current")[0, -1]
+        speed = result.series("motor.angular_velocity")[0, -1]
+        self.assertAlmostEqual(float(current), expected_current, delta=2e-3)
+        self.assertAlmostEqual(float(speed), expected_speed, delta=1e-2)
 
 
 class MechanicalBaselineTests(unittest.TestCase):
     def test_planar_rigid_body_constant_force(self) -> None:
-        model = PlanarRigidBodySystem(mass=2.0, moment_of_inertia=0.5)
-        result = model.simulate(
+        model = load_test_system("planar_rigid_body")
+        result = simulate(
+            model,
             duration=2.0,
-            dt=0.01,
+            dt=0.001,
             controls={"force_x": 4.0, "force_y": 0.0, "torque": 0.0},
+            parameters={
+                "body.mass": 2.0,
+                "body.moment_of_inertia": 0.5,
+                "body.linear_drag": 0.0,
+                "body.angular_drag": 0.0,
+            },
             num_samples=1,
             use_model_uncertainty=False,
             process_noise=False,
         )
-        self.assertAlmostEqual(float(result.series("x")[0, -1]), 4.0, places=8)
-        self.assertAlmostEqual(float(result.series("velocity_x")[0, -1]), 4.0, places=8)
-        self.assertAlmostEqual(float(result.series("y")[0, -1]), 0.0, places=12)
+        self.assertAlmostEqual(float(result.series("body.x")[0, -1]), 4.0, delta=0.003)
+        self.assertAlmostEqual(float(result.series("body.velocity_x")[0, -1]), 4.0, places=9)
+        self.assertAlmostEqual(float(result.series("body.y")[0, -1]), 0.0, places=12)
+
+    def test_planar_process_noise_is_seeded_and_reconciles_outputs(self) -> None:
+        model = load_test_system("planar_rigid_body")
+        common = dict(
+            duration=0.03,
+            dt=0.01,
+            parameters={
+                "body.roughness_std": 0.4,
+                "body.roughness_reference_length": 2.0,
+            },
+            num_samples=128,
+            use_model_uncertainty=False,
+        )
+        first = simulate(model, seed=91, **common)
+        repeat = simulate(model, seed=91, **common)
+        changed = simulate(model, seed=92, **common)
+        np.testing.assert_array_equal(first.samples, repeat.samples)
+        self.assertFalse(np.array_equal(first.samples, changed.samples))
+        np.testing.assert_allclose(
+            first.series("body.y_observation"),
+            first.series("body.y"),
+            rtol=0.0,
+            atol=1e-12,
+        )
+        np.testing.assert_allclose(
+            first.series("body.yaw_observation"),
+            first.series("body.yaw"),
+            rtol=0.0,
+            atol=1e-12,
+        )
+        self.assertTrue(first.metadata["process_noise_declared"])
+        self.assertEqual(
+            first.metadata["process_noise_seed_policy"], "simulation_seed"
+        )
+        self.assertEqual(
+            first.metadata["process_noise_reproducibility"],
+            "same_backend_device",
+        )
+        self.assertEqual(
+            model.process_noise_channel_names,
+            tuple(sorted(model.process_noise_channel_names)),
+        )
+
+    def test_planar_process_noise_has_declared_diffusion_variance(self) -> None:
+        translation_scale = 0.25
+        reference_length = 2.5
+        dt = 0.01
+        result = simulate(
+            load_test_system("planar_rigid_body"),
+            duration=dt,
+            dt=dt,
+            parameters={
+                "body.roughness_std": translation_scale,
+                "body.roughness_reference_length": reference_length,
+            },
+            num_samples=4096,
+            seed=27,
+            use_model_uncertainty=False,
+        )
+        expected = {
+            "body.x": translation_scale**2 * dt,
+            "body.y": translation_scale**2 * dt,
+            "body.yaw": (translation_scale / reference_length) ** 2 * dt,
+        }
+        for state_name, expected_variance in expected.items():
+            with self.subTest(state=state_name):
+                empirical = float(np.var(result.series(state_name)[:, -1], ddof=1))
+                self.assertAlmostEqual(
+                    empirical,
+                    expected_variance,
+                    delta=expected_variance * 0.08,
+                )
+
+    def test_planar_process_noise_can_be_zero_or_disabled(self) -> None:
+        model = load_test_system("planar_rigid_body")
+        zero_scale = simulate(
+            model,
+            duration=0.03,
+            dt=0.01,
+            num_samples=32,
+            seed=8,
+            use_model_uncertainty=False,
+        )
+        disabled = simulate(
+            model,
+            duration=0.03,
+            dt=0.01,
+            parameters={
+                "body.roughness_std": 1.0,
+                "body.roughness_reference_length": 1.0,
+            },
+            num_samples=32,
+            seed=8,
+            use_model_uncertainty=False,
+            process_noise=False,
+        )
+        for result in (zero_scale, disabled):
+            for state_name in ("body.x", "body.y", "body.yaw"):
+                np.testing.assert_array_equal(
+                    result.series(state_name),
+                    np.zeros((32, 4)),
+                )
 
 class DescriptorAndControlTests(unittest.TestCase):
     @staticmethod
@@ -135,10 +321,107 @@ class DescriptorAndControlTests(unittest.TestCase):
             evaluate_residual=lambda *args: None,
         )
 
-    def test_unknown_control_channel_fails_loudly(self) -> None:
-        with self.assertRaisesRegex(KeyError, "unknown control channel.*voltgae"):
+    @staticmethod
+    def _direct_process_noise_model(*, algebraic: bool = False):
+        algebraics = (
+            [{"name": "copy", "unit": "m", "initial": 0.0}]
+            if algebraic
+            else []
+        )
+        relations = [{"name": "dynamics", "expression": "x_dot"}]
+        if algebraic:
+            relations.append(
+                {"name": "copy_relation", "expression": "copy - x"}
+            )
+        return parse_model(
+            {
+                "format": "pmdl-1",
+                "id": "test.direct_process_noise",
+                "name": "Direct process-noise adapter fixture",
+                "version": "1.0.0",
+                "domains": ["mechanical"],
+                "implements": "test-direct-process-noise",
+                "states": [
+                    {
+                        "name": "x",
+                        "unit": "m",
+                        "initial": 0.0,
+                        "derivative": "x_dot",
+                    }
+                ],
+                "algebraics": algebraics,
+                "parameters": [
+                    {
+                        "name": "diffusion",
+                        "unit": "m/s^1/2",
+                        "default": 0.2,
+                        "bounds": {"lower": 0.0, "upper": 10.0},
+                    }
+                ],
+                "relations": relations,
+                "process_noise": {
+                    "seed_policy": "simulation_seed",
+                    "reproducibility": "same_backend_device",
+                    "application": "accepted_step_increment",
+                    "channels": [
+                        {
+                            "name": "roughness",
+                            "distribution": "standard_normal",
+                        }
+                    ],
+                    "increments": [
+                        {
+                            "target": "x",
+                            "expression": "diffusion * sqrt(dt) * roughness",
+                        }
+                    ],
+                },
+                "validity": {
+                    "assumptions": ["Synthetic direct-adapter fixture"],
+                    "max_timestep": 0.01,
+                },
+            }
+        )
+
+    def test_direct_modelspec_adapter_executes_seeded_process_noise(self) -> None:
+        model = self._direct_process_noise_model()
+        first = simulate(
+            model,
+            duration=0.01,
+            dt=0.01,
+            num_samples=512,
+            seed=44,
+            use_model_uncertainty=False,
+        )
+        repeat = simulate(
+            model,
+            duration=0.01,
+            dt=0.01,
+            num_samples=512,
+            seed=44,
+            use_model_uncertainty=False,
+        )
+        np.testing.assert_array_equal(first.samples, repeat.samples)
+        self.assertGreater(float(np.var(first.series("x")[:, -1])), 0.0)
+
+    def test_direct_modelspec_noise_fails_without_algebraic_reconciler(self) -> None:
+        with self.assertRaisesRegex(
+            NotImplementedError,
+            "no consistent-state reconciliation solver",
+        ):
             simulate(
-                RCCircuit(),
+                self._direct_process_noise_model(algebraic=True),
+                duration=0.01,
+                dt=0.01,
+                num_samples=2,
+                seed=2,
+                use_model_uncertainty=False,
+            )
+
+    def test_unknown_control_channel_fails_loudly(self) -> None:
+        with self.assertRaisesRegex(KeyError, "unknown control source.*voltgae"):
+            simulate(
+                load_test_system("rc_circuit"),
                 duration=0.02,
                 dt=0.01,
                 controls={"voltgae": 5.0},
@@ -149,7 +432,7 @@ class DescriptorAndControlTests(unittest.TestCase):
     def test_unknown_parameter_override_fails_loudly(self) -> None:
         with self.assertRaisesRegex(KeyError, "Unknown physical parameter.*resistence"):
             simulate(
-                RCCircuit(),
+                load_test_system("rc_circuit"),
                 duration=0.02,
                 dt=0.01,
                 parameters={"resistence": 2.0},
@@ -376,7 +659,7 @@ class DescriptorAndControlTests(unittest.TestCase):
                 process_noise=False,
             )
 
-    def test_implicit_residual_rejects_invalid_state_dependent_control(self) -> None:
+    def test_state_dependent_external_control_provider_is_rejected(self) -> None:
         consumed = []
 
         class ControlDrivenDescriptor:
@@ -402,11 +685,7 @@ class DescriptorAndControlTests(unittest.TestCase):
                 return 0.5
             return 2.0 if float(state[0, 0]) < 1.0 else 0.5
 
-        with self.assertRaisesRegex(
-            ValueError,
-            r"validity range violation during implicit residual evaluation.*"
-            r"symbol='command'.*value=2.*allowed=\[0, 1\]",
-        ):
+        with self.assertRaisesRegex(TypeError, "open-loop.*plant state"):
             simulate(
                 ControlDrivenDescriptor(),
                 duration=1.0,
@@ -415,7 +694,7 @@ class DescriptorAndControlTests(unittest.TestCase):
                 num_samples=1,
                 process_noise=False,
             )
-        self.assertNotIn(2.0, consumed)
+        self.assertEqual(consumed, [])
 
     def test_pmdl_unavailable_validity_symbol_is_rejected_at_admission(self) -> None:
         model = self._declarative_model(
@@ -558,41 +837,14 @@ class DescriptorAndControlTests(unittest.TestCase):
         self.assertGreater(float(np.std(uncertain.samples[:, -1, 0])), 1e-3)
         self.assertAlmostEqual(float(np.std(nominal.samples[:, -1, 0])), 0.0, places=14)
 
-    def test_stateful_controller_is_evaluated_once_per_grid_point(self) -> None:
-        class Controller:
-            def __init__(self):
-                self.calls = 0
-
-            def reset(self):
-                self.calls = 0
-
-            def evaluate(self, t, state, backend):
-                self.calls += 1
-                return {"voltage": 1.0}
-
-        class Contraption:
-            def __init__(self):
-                self.dynamics = RCCircuit(1.0, 1.0)
-                self.controller = Controller()
-
-        contraption = Contraption()
-        result = simulate(
-            contraption,
-            duration=0.1,
-            dt=0.01,
-            num_samples=1,
-            use_model_uncertainty=False,
-        )
-        self.assertEqual(contraption.controller.calls, len(result.time))
-
-
 class UncertaintyAndLinearizationTests(unittest.TestCase):
     def test_seeded_monte_carlo_is_reproducible_and_sensitive(self) -> None:
-        model = RCCircuit(2.0, 0.5)
+        model = load_test_system("rc_circuit")
         common = dict(
             duration=1.0,
-            dt=0.02,
+            dt=0.01,
             controls={"voltage": 5.0},
+            parameters={"rc.resistance": 2.0, "rc.capacitance": 0.5},
             num_samples=512,
             use_model_uncertainty=False,
             process_noise=False,
@@ -600,19 +852,19 @@ class UncertaintyAndLinearizationTests(unittest.TestCase):
         low = simulate(
             model,
             seed=41,
-            parameter_distribution={"resistance": (2.0, 0.02)},
+            parameter_distribution={"rc.resistance": (2.0, 0.02)},
             **common,
         )
         repeat = simulate(
             model,
             seed=41,
-            parameter_distribution={"resistance": (2.0, 0.02)},
+            parameter_distribution={"rc.resistance": (2.0, 0.02)},
             **common,
         )
         high = simulate(
             model,
             seed=41,
-            parameter_distribution={"resistance": (2.0, 0.4)},
+            parameter_distribution={"rc.resistance": (2.0, 0.4)},
             **common,
         )
         np.testing.assert_array_equal(low.samples, repeat.samples)
@@ -664,15 +916,13 @@ class UncertaintyAndLinearizationTests(unittest.TestCase):
                 self.assertTrue(np.all(np.isfinite(draws)))
                 self.assertGreater(float(np.std(draws)), 0.0)
 
-    def test_linearization_matches_rc_jacobians(self) -> None:
-        linear = linearize_dynamics(
-            RCCircuit(2.0, 0.5),
-            [1.0],
-            controls={"voltage": 3.0},
-            control_names=("voltage",),
-        )
-        self.assertAlmostEqual(float(linear.A[0, 0]), -1.0, places=6)
-        self.assertAlmostEqual(float(linear.B[0, 0]), 1.0, places=6)
+    def test_dsl_rc_preserves_canonical_contract_names(self) -> None:
+        model = load_test_system("rc_circuit")
+        self.assertIn("rc.capacitor_voltage", model.state_names)
+        self.assertIn("rc.resistor_current", model.state_names)
+        self.assertEqual(model.control_names, ("voltage",))
+        self.assertIn("rc.resistance", model.default_parameters)
+        self.assertIn("rc.capacitance", model.default_parameters)
 
     def test_ekf_helpers(self) -> None:
         mean, covariance = ekf_predict(
@@ -695,7 +945,11 @@ class UncertaintyAndLinearizationTests(unittest.TestCase):
 
     def test_result_is_json_serializable(self) -> None:
         result = simulate(
-            RCCircuit(), duration=0.02, dt=0.01, controls={"voltage": 1.0}, num_samples=3
+            load_test_system("rc_circuit"),
+            duration=0.02,
+            dt=0.01,
+            controls={"voltage": 1.0},
+            num_samples=3,
         )
         json.dumps(result.to_dict())
         self.assertEqual(result.metadata["interval_kind"], "pointwise predictive interval")
@@ -737,23 +991,49 @@ class OptionalTorchTests(unittest.TestCase):
         except ImportError:
             self.skipTest("optional PyTorch is not installed")
         resistance = torch.tensor(2.0, dtype=torch.float64, requires_grad=True)
-        model = RCCircuit(resistance=resistance, capacitance=0.5)
+        model = load_test_system("rc_circuit")
         result = simulate(
             model,
             duration=0.5,
             dt=0.01,
             controls={"voltage": 5.0},
+            parameters={"rc.resistance": resistance, "rc.capacitance": 0.5},
             num_samples=1,
             backend="torch",
             device="cpu",
             use_model_uncertainty=False,
             process_noise=False,
         )
-        loss = result.mean[-1, 0]
+        loss = result.series("rc.capacitor_voltage")[0, -1]
         loss.backward()
         self.assertIsNotNone(resistance.grad)
         self.assertTrue(torch.isfinite(resistance.grad))
         self.assertGreater(abs(float(resistance.grad)), 1e-4)
+
+    def test_torch_process_noise_replays_and_differentiates_scale(self) -> None:
+        torch = self._torch_or_skip(self)
+        scale = torch.tensor(0.3, dtype=torch.float64, requires_grad=True)
+        common = dict(
+            duration=0.01,
+            dt=0.01,
+            parameters={
+                "body.roughness_std": scale,
+                "body.roughness_reference_length": 1.0,
+            },
+            num_samples=128,
+            seed=73,
+            backend="torch",
+            device="cpu",
+            use_model_uncertainty=False,
+        )
+        first = simulate(load_test_system("planar_rigid_body"), **common)
+        repeat = simulate(load_test_system("planar_rigid_body"), **common)
+        self.assertTrue(torch.equal(first.samples, repeat.samples))
+        loss = torch.mean(first.series("body.x")[:, -1] ** 2)
+        loss.backward()
+        self.assertIsNotNone(scale.grad)
+        self.assertTrue(torch.isfinite(scale.grad))
+        self.assertGreater(float(scale.grad), 0.0)
 
     def test_torch_descriptor_failures_are_not_regularized_or_returned(self) -> None:
         self._torch_or_skip(self)

@@ -2,7 +2,7 @@
   "format": "pmdl-1",
   "id": "mechanical.differential_drive_chassis.planar",
   "name": "Planar differential-drive scanner chassis",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "domains": [
     "mechanical"
   ],
@@ -29,6 +29,40 @@
       "orientation": "into_component",
       "frame": "right_hub",
       "reference": "rolling-reduced positive right hub translation"
+    }
+  ],
+  "signal_ports": [
+    {
+      "name": "position_x_measurement",
+      "direction": "output",
+      "unit": "m",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Ideal modeled planar-localization x measurement at this fidelity."
+    },
+    {
+      "name": "position_y_measurement",
+      "direction": "output",
+      "unit": "m",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Ideal modeled planar-localization y measurement at this fidelity."
+    },
+    {
+      "name": "heading_x_measurement",
+      "direction": "output",
+      "unit": "1",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Ideal modeled planar-localization heading-vector x measurement at this fidelity."
+    },
+    {
+      "name": "heading_y_measurement",
+      "direction": "output",
+      "unit": "1",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Ideal modeled planar-localization heading-vector y measurement at this fidelity."
     }
   ],
   "states": [
@@ -160,6 +194,22 @@
     {
       "name": "right_drive_velocity",
       "expression": "velocity_right - forward_speed - 0.5 * wheel_base * yaw_rate"
+    },
+    {
+      "name": "position_x_sensor",
+      "expression": "position_x_measurement - position_x"
+    },
+    {
+      "name": "position_y_sensor",
+      "expression": "position_y_measurement - position_y"
+    },
+    {
+      "name": "heading_x_sensor",
+      "expression": "heading_x_measurement - cos(yaw)"
+    },
+    {
+      "name": "heading_y_sensor",
+      "expression": "heading_y_measurement - sin(yaw)"
     }
   ],
   "initialization": {

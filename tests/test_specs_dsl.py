@@ -15,8 +15,9 @@ from contraption.physics.dsl import (
     load_model, parse_expression, parse_model,
 )
 from contraption.physics.specs import (
-    ComponentReferenceSpec, ConnectionSpec, ContraptionSpec, ControlBindingSpec,
-    ModelSpec, PortRef, SpecError, json_schema_for,
+    ActuatorBindingSpec, CatalogLinkSpec, ComponentReferenceSpec, ConnectionSpec,
+    ContraptionSpec, ControllerOutputBindingSpec, FrozenDict, ModelSpec, PortRef,
+    SpecError, json_schema_for,
 )
 from contraption.catalog.instantiations import PartInstantiationRegistry
 from contraption.catalog.interfaces import ModelInterfaceCatalog, load_interface_catalog
@@ -31,6 +32,17 @@ ROOT = Path(__file__).resolve().parents[1]
 MODELS = ROOT / "model_catalog"
 RESISTOR = MODELS / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl"
 CAPACITOR = MODELS / "electrical" / "capacitors" / "ceramic_capacitors" / "capacitor.pmdl"
+PLANAR_BODY = (
+    ROOT
+    / "assembled_contraptions"
+    / "examples"
+    / "test_systems"
+    / "planar_rigid_body"
+    / "catalog"
+    / "mechanical"
+    / "reference_systems"
+    / "planar_rigid_body.pmdl"
+)
 
 
 class UnitTests(unittest.TestCase):
@@ -170,6 +182,68 @@ class ModelContractTests(unittest.TestCase):
         with self.assertRaises(DSLParseError):
             parse_model(source)
 
+    def test_process_noise_is_strict_typed_and_canonical(self) -> None:
+        planar = load_model(PLANAR_BODY)
+        report = validate_model(planar)
+        self.assertTrue(report.valid, report.to_dict())
+        self.assertEqual(
+            planar.process_noise.seed_policy,
+            "simulation_seed",
+        )
+        self.assertEqual(
+            planar.process_noise.reproducibility,
+            "same_backend_device",
+        )
+        self.assertEqual(
+            tuple(channel.name for channel in planar.process_noise.channels),
+            ("roughness_x", "roughness_y", "roughness_yaw"),
+        )
+
+        resistor_source = json.loads(RESISTOR.read_text(encoding="utf-8"))
+        absent = parse_model(resistor_source)
+        resistor_source["process_noise"] = {}
+        explicit_empty = parse_model(resistor_source)
+        self.assertEqual(absent, explicit_empty)
+        self.assertNotIn("process_noise", explicit_empty.to_dict())
+
+        resistor_source["process_noise"] = {
+            "seed_policy": "simulation_seed",
+        }
+        with self.assertRaisesRegex(DSLParseError, "missing process_noise key"):
+            parse_model(resistor_source)
+
+    def test_process_noise_rejects_nonstate_targets_and_unit_errors(self) -> None:
+        source = json.loads(PLANAR_BODY.read_text(encoding="utf-8"))
+        source["process_noise"]["increments"][0]["target"] = "y_observation"
+        report = validate_model(parse_model(source))
+        self.assertIn("process_noise.target", {issue.code for issue in report.errors})
+
+        source = json.loads(PLANAR_BODY.read_text(encoding="utf-8"))
+        source["process_noise"]["increments"][0]["expression"] = (
+            "roughness_reference_length * sqrt(dt) * roughness_x"
+        )
+        report = validate_model(parse_model(source))
+        self.assertIn("process_noise.unit", {issue.code for issue in report.errors})
+
+        source = json.loads(PLANAR_BODY.read_text(encoding="utf-8"))
+        source["process_noise"]["increments"][0]["expression"] = (
+            "roughness_std * roughness_x * sqrt(t)"
+        )
+        report = validate_model(parse_model(source))
+        codes = {issue.code for issue in report.errors}
+        self.assertIn("process_noise.dt", codes)
+
+        source = json.loads(PLANAR_BODY.read_text(encoding="utf-8"))
+        source["process_noise"]["channels"][0]["name"] = "x_dot"
+        source["process_noise"]["increments"][0]["expression"] = (
+            "roughness_std * sqrt(dt) * x_dot"
+        )
+        report = validate_model(parse_model(source))
+        self.assertIn(
+            "process_noise.channel_collision",
+            {issue.code for issue in report.errors},
+        )
+
     def test_universal_residual_evaluation(self) -> None:
         model = load_model(RESISTOR)
         residual = model.evaluate_residual(
@@ -195,7 +269,9 @@ class ModelContractTests(unittest.TestCase):
 class ContraptionContractTests(unittest.TestCase):
     def _spec(self) -> ContraptionSpec:
         return ContraptionSpec(
-            format="contraption-3", id="bench-circuit", name="Bench circuit", version="1.0.0",
+            format="contraption-4", id="bench-circuit", name="Bench circuit", version="1.0.0",
+            catalogs=(CatalogLinkSpec("model_catalog"),),
+            physical_root=FrozenDict({"component": "source"}),
             components=(
                 ComponentReferenceSpec(id="source", instantiation="bench.source.v1"),
                 ComponentReferenceSpec(id="load", instantiation="generic-100ohm-resistor.v1"),
@@ -204,7 +280,7 @@ class ContraptionContractTests(unittest.TestCase):
                 ConnectionSpec(id="positive-net", kind="power", endpoints=(PortRef("source", "p"), PortRef("load", "p")), domain="electrical"),
                 ConnectionSpec(id="return-net", kind="power", endpoints=(PortRef("source", "n"), PortRef("load", "n")), domain="electrical"),
             ),
-            controls=(ControlBindingSpec(id="source-command", source="external.voltage", target=PortRef("source", "voltage_command"), external=True),),
+            actuators=(ActuatorBindingSpec(id="source-command", source="voltage", target=PortRef("source", "voltage_command"), external=True),),
             environment={"ambient_temperature_K": 293.15}, metadata={"fixture": True},
         )
 
@@ -231,11 +307,56 @@ class ContraptionContractTests(unittest.TestCase):
         self.assertFalse(report.valid)
         self.assertIn("reference.component", {issue.code for issue in report.errors})
 
+    def test_structural_validation_accepts_external_controller_output(self) -> None:
+        data = self._spec().to_dict()
+        data["controllers"] = [
+            {
+                "id": "camera-controller",
+                "program": {
+                    "path": "controls/camera.control",
+                    "sha256": "sha256:" + "0" * 64,
+                },
+                "explicit_inputs": {},
+                "implicit_inputs": {},
+                "outputs": {"record_video": {"external": "record_video"}},
+            }
+        ]
+        report = validate_contraption_structure(ContraptionSpec.from_dict(data))
+        self.assertTrue(report.valid, report.issues)
+
     def test_unknown_contraption_key_is_rejected(self) -> None:
         data = self._spec().to_dict()
         data["callback"] = "arbitrary_python"
         with self.assertRaises(SpecError):
             ContraptionSpec.from_dict(data)
+
+    def test_contraption_metadata_is_required(self) -> None:
+        data = self._spec().to_dict()
+        del data["metadata"]
+        with self.assertRaisesRegex(SpecError, "missing.*metadata"):
+            ContraptionSpec.from_dict(data)
+
+    def test_controller_output_bindings_are_strict_typed_unions(self) -> None:
+        self.assertEqual(
+            ControllerOutputBindingSpec.from_dict(
+                {"signal": "controller.command"}
+            ).signal,
+            "controller.command",
+        )
+        self.assertEqual(
+            ControllerOutputBindingSpec.from_dict(
+                {"external": "record_video"}
+            ).external,
+            "record_video",
+        )
+        for invalid in (
+            "controller.command",
+            {},
+            {"signal": "controller.command", "external": "record_video"},
+            {"telemetry": "record_video"},
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(SpecError):
+                ControllerOutputBindingSpec.from_dict(invalid)  # type: ignore[arg-type]
 
 
 class CatalogContractTests(unittest.TestCase):
@@ -274,7 +395,7 @@ class CatalogContractTests(unittest.TestCase):
             self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")
         self.assertEqual(
             json_schema_for(ContraptionSpec)["$defs"]["ContraptionSpec"]["properties"]["format"],
-            {"const": "contraption-3"},
+            {"const": "contraption-4"},
         )
 
 

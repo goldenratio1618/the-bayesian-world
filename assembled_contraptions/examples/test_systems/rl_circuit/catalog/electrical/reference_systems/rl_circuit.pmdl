@@ -1,0 +1,223 @@
+{
+  "format": "pmdl-1",
+  "id": "test_system.rl_circuit",
+  "name": "RL circuit reference system",
+  "version": "1.0.0",
+  "domains": [
+    "electrical"
+  ],
+  "description": "Series resistor-inductor step-response model with inductor current as the state.",
+  "power_ports": [],
+  "signal_ports": [
+    {
+      "name": "voltage",
+      "direction": "input",
+      "unit": "V",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Applied source voltage."
+    },
+    {
+      "name": "applied_voltage",
+      "direction": "output",
+      "unit": "V",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Diagnostic observation of the applied source voltage."
+    },
+    {
+      "name": "inductor_current_observation",
+      "direction": "output",
+      "unit": "A",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Diagnostic observation of inductor current."
+    },
+    {
+      "name": "resistor_voltage",
+      "direction": "output",
+      "unit": "V",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Resistor voltage drop."
+    },
+    {
+      "name": "inductor_voltage",
+      "direction": "output",
+      "unit": "V",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Inductor voltage drop."
+    }
+  ],
+  "states": [
+    {
+      "name": "inductor_current",
+      "unit": "A",
+      "initial": 0,
+      "derivative": "inductor_current_dot",
+      "description": "Series inductor current."
+    }
+  ],
+  "parameters": [
+    {
+      "name": "resistance",
+      "unit": "ohm",
+      "default": 10,
+      "bounds": {
+        "lower": 1e-12,
+        "upper": 1000000000000
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.1
+        }
+      },
+      "learnable": true,
+      "description": "Series resistance."
+    },
+    {
+      "name": "inductance",
+      "unit": "H",
+      "default": 0.1,
+      "bounds": {
+        "lower": 1e-15,
+        "upper": 1000
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.002
+        }
+      },
+      "learnable": true,
+      "description": "Inductance."
+    }
+  ],
+  "relations": [
+    {
+      "name": "inductor_dynamics",
+      "expression": "inductor_current_dot - (voltage - resistance * inductor_current) / inductance",
+      "description": "RL current dynamics."
+    },
+    {
+      "name": "applied_voltage_output",
+      "expression": "applied_voltage - voltage",
+      "description": "Expose the actuator signal to verification programs."
+    },
+    {
+      "name": "inductor_current_output",
+      "expression": "inductor_current_observation - inductor_current",
+      "description": "Expose the inductor state to verification programs."
+    },
+    {
+      "name": "resistor_voltage_output",
+      "expression": "resistor_voltage - resistance * inductor_current",
+      "description": "Resistor voltage drop."
+    },
+    {
+      "name": "inductor_voltage_output",
+      "expression": "inductor_voltage - (voltage - resistor_voltage)",
+      "description": "Kirchhoff voltage balance."
+    }
+  ],
+  "stored_energy": [
+    {
+      "name": "magnetic_energy",
+      "expression": "0.5 * inductance * inductor_current ** 2",
+      "unit": "J",
+      "nonnegative": true,
+      "description": "Stored magnetic energy."
+    }
+  ],
+  "dissipation": [
+    {
+      "name": "resistor_loss",
+      "expression": "resistance * inductor_current ** 2",
+      "unit": "W",
+      "nonnegative": true,
+      "description": "Resistive loss."
+    }
+  ],
+  "sources": [],
+  "modes": [],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [],
+    "required": [
+      "inductor_current"
+    ]
+  },
+  "validity": {
+    "ranges": {
+      "resistance": {
+        "lower": 1e-12,
+        "upper": 1000000000000
+      },
+      "inductance": {
+        "lower": 1e-15,
+        "upper": 1000
+      }
+    },
+    "assumptions": [
+      "Lumped deterministic reference system",
+      "Parameters remain constant during one simulation sample"
+    ],
+    "max_timestep": 0.01
+  },
+  "fidelity_levels": [
+    {
+      "name": "reference",
+      "description": "Exact equations of the declared lumped test system.",
+      "active_relations": [
+        "inductor_dynamics",
+        "applied_voltage_output",
+        "inductor_current_output",
+        "resistor_voltage_output",
+        "inductor_voltage_output"
+      ],
+      "parameter_overrides": {},
+      "approximation_error": "Effects outside the declared lumped model are omitted.",
+      "relative_cost": 1
+    }
+  ],
+  "properties": [
+    {
+      "name": "nonnegative_magnetic_energy",
+      "kind": "nonnegative_energy",
+      "expression": "0.5 * inductance * inductor_current ** 2 >= 0 * inductance * inductor_current ** 2",
+      "expected": true,
+      "samples": 32,
+      "tolerance": 1e-12
+    },
+    {
+      "name": "nonnegative_resistor_loss",
+      "kind": "nonnegative_dissipation",
+      "expression": "resistance * inductor_current ** 2 >= 0 * resistance * inductor_current ** 2",
+      "expected": true,
+      "samples": 32,
+      "tolerance": 1e-12
+    }
+  ],
+  "trust": {
+    "structural": "tested",
+    "physical": "unverified",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": [
+      {
+        "kind": "textbook",
+        "reference": "Series RL circuit",
+        "summary": "Canonical lumped reference equations used as an analytic simulator fixture."
+      }
+    ]
+  },
+  "metadata": {
+    "gold": false,
+    "test_fixture": true,
+    "causality": "causal aggregate expressed in descriptor form",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0"
+  },
+  "implements": "test-rl-circuit"
+}

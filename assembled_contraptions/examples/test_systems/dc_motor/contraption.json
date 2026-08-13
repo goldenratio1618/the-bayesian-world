@@ -1,0 +1,88 @@
+{
+  "format": "contraption-4",
+  "id": "test-system-dc-motor",
+  "name": "DC motor test system",
+  "version": "1.0.0",
+  "catalogs": [
+    {
+      "path": "catalog"
+    }
+  ],
+  "physical_root": {
+    "component": "motor",
+    "pose": {
+      "translation_m": [
+        0,
+        0,
+        0
+      ],
+      "rotation_quaternion_wxyz": [
+        1,
+        0,
+        0,
+        0
+      ]
+    },
+    "state_binding": null
+  },
+  "components": [
+    {
+      "id": "motor",
+      "instantiation": "test.dc_motor.v1"
+    }
+  ],
+  "connections": [],
+  "actuators": [
+    {
+      "id": "voltage-input",
+      "source": "voltage",
+      "target": "motor.voltage",
+      "settings": {
+        "unit": "V",
+        "minimum": -1000,
+        "maximum": 1000,
+        "default": 0
+      },
+      "external": true
+    },
+    {
+      "id": "load-torque-input",
+      "source": "load_torque",
+      "target": "motor.load_torque",
+      "settings": {
+        "unit": "N*m",
+        "minimum": -1000,
+        "maximum": 1000,
+        "default": 0
+      },
+      "external": true
+    }
+  ],
+  "controllers": [],
+  "verifications": [
+    {
+      "id": "test_system.dc_motor.physics",
+      "program": {
+        "path": "verification.verify",
+        "sha256": "sha256:2a5e9aed8367fe70a795547f4a39025526122f373370655ee2097435f955e34f"
+      },
+      "inputs": {
+        "armature_current": "motor.armature_current_observation",
+        "electromagnetic_torque": "motor.electromagnetic_torque"
+      }
+    }
+  ],
+  "environment": {},
+  "metadata": {
+    "fixture": true,
+    "dynamics_completeness": {
+      "schema": "contraption.dynamics-completeness/v1",
+      "status": "complete",
+      "modeled_scope": "declared_lumped_reference_system",
+      "parameter_basis": {
+        "kind": "exact_fixture_parameters"
+      },
+      "gates": []
+    }
+  }
+}

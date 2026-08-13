@@ -1,0 +1,89 @@
+name: CI
+
+"on":
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install native controller toolchains
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes gcc iverilog verilator yosys
+
+      - name: Install Python package and test dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4"
+          python -m pip install --editable ".[gpu,dev]"
+
+      - name: Report and require qualification tools
+        run: |
+          contraption doctor
+          command -v gcc
+          command -v iverilog
+          command -v verilator
+          command -v yosys
+
+      - name: Run repository tests
+        run: python -m pytest
+
+      - name: Compile Python sources
+        run: python -m compileall -q src tests scripts
+
+      - name: Validate every shipped contraption closure
+        run: |
+          contraption validate --spec assembled_contraptions/scanner/contraption.json
+          contraption validate --spec assembled_contraptions/examples/test_systems/rc_circuit/contraption.json
+          contraption validate --spec assembled_contraptions/examples/test_systems/rl_circuit/contraption.json
+          contraption validate --spec assembled_contraptions/examples/test_systems/dc_motor/contraption.json
+          contraption validate --spec assembled_contraptions/examples/test_systems/planar_rigid_body/contraption.json
+
+      - name: Exercise NumPy, Torch CPU, and autograd
+        run: python scripts/verify_acceleration.py --expect cpu --samples 8 --steps 4
+
+      - name: Generate the resolved scanner controller
+        run: >-
+          contraption compile
+          --spec assembled_contraptions/scanner/contraption.json
+          --output outputs/ci/controllers
+
+      - name: Compile generated C99 strictly
+        run: >-
+          gcc -std=c99 -Wall -Wextra -Werror -pedantic
+          -I outputs/ci/controllers/scanner_orbit_controller
+          -c outputs/ci/controllers/scanner_orbit_controller/scanner_orbit_controller.c
+          -o outputs/ci/scanner_orbit_controller.o
+
+      - name: Parse generated Verilog with Icarus
+        run: >-
+          iverilog -g2005 -tnull
+          outputs/ci/controllers/scanner_orbit_controller/scanner_orbit_controller.v
+
+      - name: Lint generated Verilog with Verilator
+        run: >-
+          verilator --lint-only --language 1364-2005 -Wall -Wno-fatal
+          outputs/ci/controllers/scanner_orbit_controller/scanner_orbit_controller.v
+
+      - name: Admit generated Verilog to synthesis with Yosys
+        run: >-
+          yosys -p
+          "read_verilog outputs/ci/controllers/scanner_orbit_controller/scanner_orbit_controller.v;
+          hierarchy -check -top scanner_orbit_controller; proc; opt; check"
+
+      - name: Build wheel and source distribution
+        run: python -m build

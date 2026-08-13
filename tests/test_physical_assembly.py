@@ -17,6 +17,7 @@ from contraption.physics.physical import (
     ResolvedPartSpec,
     ConnectorCoincidenceError,
     ConnectorCompatibilityError,
+    PhysicalAssemblySpec,
     PhysicalSpecError,
     TransformSpec,
     resolve_configuration,
@@ -36,7 +37,9 @@ def resolve_physical_assembly(contraption, parts, *args, **kwargs):
             value if isinstance(value, ResolvedPartSpec) else ResolvedPartSpec.from_dict(value)
             for value in values
         )
-    return _resolve_physical_assembly(contraption, parts, *args, **kwargs)
+    return _resolve_physical_assembly(
+        PhysicalAssemblySpec.from_dict(contraption), parts, *args, **kwargs
+    )
 
 
 def pose(
@@ -348,6 +351,31 @@ class TransformTests(unittest.TestCase):
 
 
 class PhysicalAssemblyTests(unittest.TestCase):
+    def test_typed_projection_reuses_the_canonical_joint_record(self) -> None:
+        base = ResolvedPartSpec.from_dict(
+            resolved_part("base-package", [connector("mount", x=1.0)])
+        )
+        arm = ResolvedPartSpec.from_dict(
+            resolved_part("arm-package", [connector("mount", x=-1.0)])
+        )
+        specification = PhysicalAssemblySpec.from_dict(
+            contraption(
+                [{"id": "base", "part": base.id}, {"id": "arm", "part": arm.id}],
+                [attachment("base-arm", "base.mount", "arm.mount")],
+            )
+        )
+
+        registry = ResolvedPartRegistry((base, arm))
+        with self.assertRaisesRegex(TypeError, "parsed PhysicalAssemblySpec"):
+            _resolve_physical_assembly(specification.source, registry)
+        assembly = _resolve_physical_assembly(specification, registry)
+
+        self.assertIsNotNone(specification.connections[0].joint)
+        self.assertIs(
+            assembly.attachments[0].joint,
+            specification.connections[0].joint,
+        )
+
     def test_bundled_scanner_resolves_from_canonical_json(self) -> None:
         project = Path(__file__).resolve().parents[1]
         catalog_root = project / "model_catalog"
@@ -358,7 +386,12 @@ class PhysicalAssemblyTests(unittest.TestCase):
             catalog_root, models=models
         )
         scanner = json.loads(
-            (project / "examples" / "scanner_robot" / "contraption.json").read_text(
+            (
+                project
+                / "assembled_contraptions"
+                / "scanner"
+                / "contraption.json"
+            ).read_text(
                 encoding="utf-8"
             )
         )

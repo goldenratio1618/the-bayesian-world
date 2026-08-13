@@ -109,7 +109,7 @@ GPU verification is intentionally fail-closed:
 contraption doctor
 python scripts/verify_acceleration.py --expect cuda
 python -m pytest
-contraption validate
+contraption validate --spec assembled_contraptions/scanner/contraption.json
 ```
 
 `--expect cuda` exits nonzero if CUDA is unavailable, if the installed wheel is
@@ -120,10 +120,13 @@ Run the full GPU scanner fixture with:
 
 ```bash
 contraption simulate \
+  --spec assembled_contraptions/scanner/contraption.json \
   --backend torch --device cuda \
+  --controller-input armed=true \
   --output outputs/scanner_demo
 
 contraption view \
+  --spec assembled_contraptions/scanner/contraption.json \
   --trajectory outputs/scanner_demo/trajectory.json \
   --output outputs/scanner_demo/viewer
 
@@ -135,13 +138,22 @@ contraption/catalog-instantiation/PMDL/controller closure and require the same a
 The browser is display-only: it does not infer placement or execute a second
 model. The CLI reconstructs poses from the trajectory's exact per-sample states
 through that resolved assembly; detached scene JSON is not an admitted input.
+Repeat `--controller-input NAME=JSON` for external controller pins, or supply a
+strict JSON object through `--controller-input-file`. When `--dt` is omitted,
+the runtime derives the greatest common subdivision of all controller periods;
+an explicit `--dt` must divide every period within the scheduler tolerance.
+Programmatic `simulate(..., controls=...)` providers are open-loop and may depend
+only on time (plus the optional backend); plant-state feedback must be authored
+as a resolved controller so hidden state cannot bypass explicit sensor wiring.
 
 To change the controller's declared external inputs interactively, run the
 loopback live server instead of `http.server`:
 
 ```bash
 contraption serve \
+  --spec assembled_contraptions/scanner/contraption.json \
   --backend torch --device cuda \
+  --controller-input armed=true \
   --host 127.0.0.1 --port 8000
 ```
 
@@ -153,8 +165,8 @@ remote deployment is outside Phase 1.
 Generate and host-compile the DAE-derived onboard reference separately:
 
 ```bash
-contraption compile --output outputs/scanner_demo/online
-contraption build --output outputs/scanner_demo/build
+contraption compile --spec assembled_contraptions/scanner/contraption.json --output outputs/scanner_demo/online
+contraption build --spec assembled_contraptions/scanner/contraption.json --output outputs/scanner_demo/build
 ```
 
 ## 5. Configure optional component agents
@@ -165,7 +177,7 @@ directory, but requires `--env-file` if both locations contain a file:
 
 ```bash
 contraption agent-canary --kind both --env-file ../.env
-contraption agent-run classification-all --env-file ../.env
+contraption agent-run classification-all --job-file assembled_contraptions/scanner/agent_jobs.json --env-file ../.env
 ```
 
 Never commit `.env`. Paid runs use the persistent

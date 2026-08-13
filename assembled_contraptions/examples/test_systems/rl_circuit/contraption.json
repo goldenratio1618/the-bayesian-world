@@ -1,0 +1,78 @@
+{
+  "format": "contraption-4",
+  "id": "test-system-rl-circuit",
+  "name": "RL circuit test system",
+  "version": "1.0.0",
+  "catalogs": [
+    {
+      "path": "catalog"
+    }
+  ],
+  "physical_root": {
+    "component": "rl",
+    "pose": {
+      "translation_m": [
+        0,
+        0,
+        0
+      ],
+      "rotation_quaternion_wxyz": [
+        1,
+        0,
+        0,
+        0
+      ]
+    },
+    "state_binding": null
+  },
+  "components": [
+    {
+      "id": "rl",
+      "instantiation": "test.rl_circuit.v1"
+    }
+  ],
+  "connections": [],
+  "actuators": [
+    {
+      "id": "voltage-input",
+      "source": "voltage",
+      "target": "rl.voltage",
+      "settings": {
+        "unit": "V",
+        "minimum": -1000,
+        "maximum": 1000,
+        "default": 0
+      },
+      "external": true
+    }
+  ],
+  "controllers": [],
+  "verifications": [
+    {
+      "id": "test_system.rl_circuit.physics",
+      "program": {
+        "path": "verification.verify",
+        "sha256": "sha256:674be473452fb9406cebc397c3fb7713c18703e3e505875db3b42f5767794547"
+      },
+      "inputs": {
+        "voltage": "rl.applied_voltage",
+        "inductor_current": "rl.inductor_current_observation",
+        "resistor_voltage": "rl.resistor_voltage",
+        "inductor_voltage": "rl.inductor_voltage"
+      }
+    }
+  ],
+  "environment": {},
+  "metadata": {
+    "fixture": true,
+    "dynamics_completeness": {
+      "schema": "contraption.dynamics-completeness/v1",
+      "status": "complete",
+      "modeled_scope": "declared_lumped_reference_system",
+      "parameter_basis": {
+        "kind": "exact_fixture_parameters"
+      },
+      "gates": []
+    }
+  }
+}

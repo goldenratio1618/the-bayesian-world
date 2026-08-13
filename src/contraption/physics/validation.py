@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .dsl import Call, Conditional, DSLParseError, Expression, ExpressionType, parse_expression
-from .specs import ComponentReferenceSpec, ContraptionSpec, ModelSpec, SpecError
+from .specs import ComponentReferenceSpec, ContraptionSpec, ModelSpec, PortRef, SpecError
 from .units import DIMENSIONLESS, TIME, Dimension, UnitError, parse_unit
 
 
@@ -154,6 +154,7 @@ def validate_model(model: ModelSpec, interfaces: Any = None) -> ValidationReport
         "stored_energy": [item.name for item in model.stored_energy], "dissipation": [item.name for item in model.dissipation],
         "sources": [item.name for item in model.sources], "modes": [item.name for item in model.modes],
         "fidelity_levels": [item.name for item in model.fidelity_levels], "properties": [item.name for item in model.properties],
+        "process_noise.channels": [item.name for item in model.process_noise.channels],
     }
     for group, names in named_groups.items():
         for duplicate in _duplicates(names):
@@ -165,6 +166,17 @@ def validate_model(model: ModelSpec, interfaces: Any = None) -> ValidationReport
     )
     for duplicate in _duplicates(scalar_names):
         issues.error("symbol.duplicate", "model", f"scalar symbol {duplicate!r} is declared more than once")
+    reserved_noise_symbols = {"t", "dt", "pi", "e"}
+    model_scalar_symbols = set(scalar_names) | {
+        state.derivative or f"{state.name}_dot" for state in model.states
+    }
+    for index, channel in enumerate(model.process_noise.channels):
+        if channel.name in reserved_noise_symbols or channel.name in model_scalar_symbols:
+            issues.error(
+                "process_noise.channel_collision",
+                f"model.process_noise.channels[{index}].name",
+                f"noise channel {channel.name!r} collides with a model or reserved symbol",
+            )
 
     for index, state in enumerate(model.states):
         _unit_dimension(state.unit, f"model.states[{index}].unit", issues)
@@ -234,6 +246,83 @@ def validate_model(model: ModelSpec, interfaces: Any = None) -> ValidationReport
     validate_named(model.dissipation, "dissipation", must_nonnegative=True)
     validate_named(model.sources, "sources")
 
+    noise_channels = {channel.name for channel in model.process_noise.channels}
+    noise_symbols = {
+        name: expression_type
+        for name, expression_type in symbols.items()
+        if name not in derivative_symbols
+    }
+    noise_symbols["dt"] = ExpressionType("real", TIME)
+    noise_symbols.update(
+        (name, ExpressionType("real", DIMENSIONLESS)) for name in noise_channels
+    )
+    state_dimensions: dict[str, Dimension] = {}
+    for state in model.states:
+        try:
+            state_dimensions[state.name] = parse_unit(state.unit).dimension
+        except UnitError:
+            pass
+    targeted_states: list[str] = []
+    used_channels: set[str] = set()
+    for index, increment in enumerate(model.process_noise.increments):
+        path = f"model.process_noise.increments[{index}]"
+        targeted_states.append(increment.target)
+        target_dimension = state_dimensions.get(increment.target)
+        if target_dimension is None:
+            issues.error(
+                "process_noise.target",
+                f"{path}.target",
+                f"increment target {increment.target!r} is not a differential state",
+            )
+        expression = _typed(
+            increment.expression,
+            noise_symbols,
+            f"{path}.expression",
+            issues,
+            "real",
+        )
+        if expression is None:
+            continue
+        variables = expression.variables()
+        used_channels.update(variables & noise_channels)
+        if "dt" not in variables:
+            issues.error(
+                "process_noise.dt",
+                f"{path}.expression",
+                "an accepted-step increment must explicitly depend on dt",
+            )
+        if not variables.intersection(noise_channels):
+            issues.error(
+                "process_noise.stochastic",
+                f"{path}.expression",
+                "an increment must depend on at least one declared stochastic channel",
+            )
+        if target_dimension is not None:
+            try:
+                inferred = expression.infer_type(noise_symbols).dimension
+                if inferred != target_dimension:
+                    issues.error(
+                        "process_noise.unit",
+                        path,
+                        "increment expression is "
+                        f"{inferred.describe()}, but target state {increment.target!r} "
+                        f"is {target_dimension.describe()}",
+                    )
+            except DSLParseError:
+                pass
+    for duplicate in _duplicates(targeted_states):
+        issues.error(
+            "process_noise.target_duplicate",
+            "model.process_noise.increments",
+            f"state {duplicate!r} has more than one process-noise increment",
+        )
+    for channel in sorted(noise_channels - used_channels):
+        issues.error(
+            "process_noise.channel_unused",
+            "model.process_noise.channels",
+            f"declared noise channel {channel!r} is not used by an increment",
+        )
+
     relation_names = set(named_groups["relations"])
     mode_names = set(named_groups["modes"])
     if model.modes and sum(mode.initial for mode in model.modes) != 1:
@@ -295,8 +384,8 @@ def _validate_contraption_structure(spec: ContraptionSpec, issues: _Issues) -> d
         issues.error("component.duplicate", "contraption.components", f"duplicate component id {duplicate!r}")
     for duplicate in _duplicates(connection.id for connection in spec.connections):
         issues.error("connection.duplicate", "contraption.connections", f"duplicate connection id {duplicate!r}")
-    for duplicate in _duplicates(control.id for control in spec.controls):
-        issues.error("control.duplicate", "contraption.controls", f"duplicate control id {duplicate!r}")
+    for duplicate in _duplicates(actuator.id for actuator in spec.actuators):
+        issues.error("actuator.duplicate", "contraption.actuators", f"duplicate actuator id {duplicate!r}")
 
     for index, connection in enumerate(spec.connections):
         path = f"contraption.connections[{index}]"
@@ -310,15 +399,49 @@ def _validate_contraption_structure(spec: ContraptionSpec, issues: _Issues) -> d
                     f"unknown component {endpoint.component!r}",
                 )
 
-    for index, control in enumerate(spec.controls):
-        if control.target.component not in components:
+    for index, actuator in enumerate(spec.actuators):
+        if actuator.target.component not in components:
             issues.error(
                 "reference.component",
-                f"contraption.controls[{index}].target",
-                f"unknown component {control.target.component!r}",
+                f"contraption.actuators[{index}].target",
+                f"unknown component {actuator.target.component!r}",
             )
-        if control.external and not control.source.startswith("external"):
-            issues.warning("control.external_name", f"contraption.controls[{index}].source", "external controls should use an 'external...' source namespace")
+        if isinstance(spec, ContraptionSpec) and not actuator.external:
+            issues.error(
+                "actuator.external",
+                f"contraption.actuators[{index}].external",
+                "top-level actuators must be external; controller outputs belong in controllers[].outputs",
+            )
+    for controller_index, controller in enumerate(spec.controllers):
+        for name, binding in controller.explicit_inputs.items():
+            if binding.signal is None:
+                continue
+            endpoint = PortRef.from_dict(binding.signal)
+            if endpoint.component not in components:
+                issues.error(
+                    "reference.component",
+                    f"contraption.controllers[{controller_index}].explicit_inputs.{name}",
+                    f"unknown component {endpoint.component!r}",
+                )
+        for name, binding in controller.outputs.items():
+            if binding.signal is None:
+                continue
+            endpoint = PortRef.from_dict(binding.signal)
+            if endpoint.component not in components:
+                issues.error(
+                    "reference.component",
+                    f"contraption.controllers[{controller_index}].outputs.{name}",
+                    f"unknown component {endpoint.component!r}",
+                )
+    for verification_index, verification in enumerate(spec.verifications):
+        for name, source in verification.inputs.items():
+            endpoint = PortRef.from_dict(source)
+            if endpoint.component not in components:
+                issues.error(
+                    "reference.component",
+                    f"contraption.verifications[{verification_index}].inputs.{name}",
+                    f"unknown component {endpoint.component!r}",
+                )
     return components
 
 

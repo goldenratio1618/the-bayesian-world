@@ -1,1 +1,1 @@
-"""Typed physical-model parsing, assembly, simulation, and compilation."""
+"""Typed physical-model parsing, validation, assembly, and simulation."""

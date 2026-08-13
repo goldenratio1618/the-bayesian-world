@@ -1,0 +1,59 @@
+{
+  "format": "agent-jobs-1",
+  "catalog": "../../model_catalog",
+  "constraints": "../../prompts/model_constraints.md",
+  "gold_templates": [
+    "../../model_catalog/electrical/resistors/fixed_resistors/resistor.pmdl",
+    "../../model_catalog/electrical/resistors/fixed_resistors/instantiations/generic-100ohm-resistor/static.part",
+    "../../model_catalog/electrical/resistors/fixed_resistors/instantiations/generic-100ohm-resistor/v1.model",
+    "../../model_catalog/mechanical/inert_objects/planar_rigid_bodies/rigid_body_planar.pmdl"
+  ],
+  "jobs": [
+    {
+      "id": "romi_drive",
+      "component_information": "component_inputs/romi_drive.json",
+      "direct_hierarchy": [
+        "../../model_catalog/electromechanical/motors/brushed_dc_motors/dc_motor.pmdl",
+        "../../model_catalog/mechanical/wheels/driven_wheels/wheel_contact.pmdl"
+      ]
+    },
+    {
+      "id": "romi_control",
+      "component_information": "component_inputs/romi_control.json",
+      "direct_hierarchy": [
+        "../../model_catalog/electrical/voltage_sources/voltage_source.pmdl"
+      ]
+    },
+    {
+      "id": "romi_encoders",
+      "component_information": "component_inputs/romi_encoders.json",
+      "direct_hierarchy": [
+        "../../model_catalog/mechanical/joints/revolute_joints/revolute_joint.pmdl",
+        "../../model_catalog/mechanical/wheels/driven_wheels/wheel_contact.pmdl"
+      ]
+    },
+    {
+      "id": "romi_arm",
+      "component_information": "component_inputs/romi_arm.json",
+      "direct_hierarchy": [
+        "../../model_catalog/electromechanical/motors/brushed_dc_motors/dc_motor.pmdl",
+        "../../model_catalog/mechanical/joints/revolute_joints/revolute_joint.pmdl"
+      ]
+    },
+    {
+      "id": "camera_compute",
+      "component_information": "component_inputs/camera_compute.json",
+      "direct_hierarchy": [
+        "../../model_catalog/mechanical/inert_objects/camera_masses/camera_mass.pmdl"
+      ]
+    },
+    {
+      "id": "power",
+      "component_information": "component_inputs/power.json",
+      "direct_hierarchy": [
+        "../../model_catalog/electrical/voltage_sources/voltage_source.pmdl",
+        "../../model_catalog/electrical/capacitors/ceramic_capacitors/capacitor.pmdl"
+      ]
+    }
+  ]
+}

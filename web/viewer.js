@@ -503,17 +503,24 @@
     const schema = await response.json();
     requireObject(schema, "live control schema");
     requireKeys(schema,
-      ["schema", "assembly_sha256", "controller", "inputs", "values"], [], "live control schema");
-    requireCondition(schema.schema === "contraption.live-controls/v1",
+      ["schema", "assembly_sha256", "controllers", "inputs", "values"], [], "live control schema");
+    requireCondition(schema.schema === "contraption.live-controls/v2",
       "live control schema has an unsupported schema identifier");
     requireCondition(schema.assembly_sha256 === payload.assembly_sha256,
       "live control schema assembly hash differs from the rendered assembly");
-    const controller = requireObject(schema.controller, "live control schema.controller");
-    requireKeys(controller, ["id", "version", "sha256"], [], "live control schema.controller");
-    requireString(controller.id, "live control schema.controller.id");
-    requireString(controller.version, "live control schema.controller.version");
-    requireCondition(HASH_PATTERN.test(controller.sha256),
-      "live control schema.controller.sha256 is not canonical");
+    const controllers = requireArray(schema.controllers, "live control schema.controllers", false);
+    const controllerIds = [];
+    controllers.forEach((controller, index) => {
+      const label = `live control schema.controllers[${index}]`;
+      requireObject(controller, label);
+      requireKeys(controller, ["id", "program_id", "version", "sha256"], [], label);
+      const id = requireString(controller.id, `${label}.id`);
+      requireCondition(!controllerIds.includes(id), `duplicate live controller ${JSON.stringify(id)}`);
+      controllerIds.push(id);
+      requireString(controller.program_id, `${label}.program_id`);
+      requireString(controller.version, `${label}.version`);
+      requireCondition(HASH_PATTERN.test(controller.sha256), `${label}.sha256 is not canonical`);
+    });
     const declarations = requireArray(schema.inputs, "live control schema.inputs", false);
     const values = requireObject(schema.values, "live control schema.values");
     const declaredNames = [];
@@ -521,19 +528,25 @@
 
     const heading = document.createElement("p");
     heading.className = "panel-kicker live-control-heading";
-    heading.textContent = `LIVE / ${controller.id}`;
+    heading.textContent = controllerIds.length > 0
+      ? `LIVE / ${controllerIds.join(" + ")}`
+      : "LIVE / OPEN LOOP";
     container.append(heading);
 
     declarations.forEach((declaration, index) => {
       const label = `live control schema.inputs[${index}]`;
       requireObject(declaration, label);
       requireKeys(declaration,
-        ["name", "type", "default", "minimum", "maximum", "unit", "description"], [], label);
+        ["name", "type", "default", "minimum", "maximum", "unit", "description", "consumers"], [], label);
       const name = requireString(declaration.name, `${label}.name`);
       requireCondition(!declaredNames.includes(name), `duplicate live input ${JSON.stringify(name)}`);
       declaredNames.push(name);
       requireString(declaration.unit, `${label}.unit`);
       requireCondition(typeof declaration.description === "string", `${label}.description must be a string`);
+      const consumers = requireArray(declaration.consumers, `${label}.consumers`, true);
+      consumers.forEach((consumer, consumerIndex) => {
+        requireString(consumer, `${label}.consumers[${consumerIndex}]`);
+      });
       requireCondition(Object.prototype.hasOwnProperty.call(values, name),
         `live control schema.values is missing ${name}`);
       if (declaration.type === "boolean") {

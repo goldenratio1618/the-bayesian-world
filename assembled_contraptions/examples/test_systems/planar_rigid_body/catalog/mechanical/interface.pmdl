@@ -1,0 +1,15 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "domain",
+  "abstract": true,
+  "id": "mechanical",
+  "name": "Mechanical",
+  "version": "1.0.0",
+  "requires_physics": [
+    "mechanical"
+  ],
+  "allowed_port_domains": [
+    "mechanical"
+  ],
+  "description": "Self-contained mechanical domain contract for declarative test systems."
+}

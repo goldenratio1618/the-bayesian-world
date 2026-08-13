@@ -1,0 +1,47 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "test-planar-rigid-body",
+  "name": "Planar rigid-body test system",
+  "version": "1.0.0",
+  "domains": [
+    "mechanical"
+  ],
+  "required_power_ports": [],
+  "required_signal_ports": [
+    {
+      "name": "force_x",
+      "direction": "input",
+      "unit": "N"
+    },
+    {
+      "name": "force_y",
+      "direction": "input",
+      "unit": "N"
+    },
+    {
+      "name": "torque",
+      "direction": "input",
+      "unit": "N*m"
+    },
+    {
+      "name": "y_observation",
+      "direction": "output",
+      "unit": "m"
+    },
+    {
+      "name": "yaw_observation",
+      "direction": "output",
+      "unit": "rad"
+    }
+  ],
+  "ideal_models": [
+    "test_system.planar_rigid_body"
+  ],
+  "constraints": [
+    "All dynamics and observations are declared in PMDL.",
+    "Fixture ports preserve the canonical reference-system names."
+  ],
+  "description": "Aggregate planar rigid-body test system reference-system contract."
+}

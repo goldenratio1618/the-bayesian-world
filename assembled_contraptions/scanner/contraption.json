@@ -1,0 +1,598 @@
+{
+  "format": "contraption-4",
+  "id": "apartment-scanner-robot",
+  "name": "Romi orbital 3D-scanning motion prototype",
+  "version": "0.3.0",
+  "catalogs": [
+    {
+      "path": "../../model_catalog"
+    }
+  ],
+  "physical_root": {
+    "component": "chassis",
+    "pose": {
+      "translation_m": [
+        0.85,
+        0.0,
+        0.0
+      ],
+      "rotation_quaternion_wxyz": [
+        0.7071067811865476,
+        0.0,
+        0.0,
+        0.7071067811865475
+      ]
+    },
+    "state_binding": {
+      "kind": "planar",
+      "x": "chassis.position_x",
+      "y": "chassis.position_y",
+      "yaw": "chassis.yaw"
+    }
+  },
+  "components": [
+    {
+      "id": "battery-pack",
+      "instantiation": "scanner.nimh_battery.v1"
+    },
+    {
+      "id": "chassis",
+      "instantiation": "scanner.romi_chassis.v1"
+    },
+    {
+      "id": "control-board",
+      "instantiation": "scanner.control_board.v1"
+    },
+    {
+      "id": "left-motor",
+      "instantiation": "scanner.gearmotor.v1"
+    },
+    {
+      "id": "right-motor",
+      "instantiation": "scanner.gearmotor.v1"
+    },
+    {
+      "id": "left-wheel",
+      "instantiation": "scanner.wheel.v1"
+    },
+    {
+      "id": "right-wheel",
+      "instantiation": "scanner.wheel.v1"
+    },
+    {
+      "id": "encoder-pair",
+      "instantiation": "scanner.encoder_pair.v1"
+    },
+    {
+      "id": "servo-regulator",
+      "instantiation": "scanner.servo_regulator.v1"
+    },
+    {
+      "id": "lift-servo",
+      "instantiation": "scanner.position_servo.v1"
+    },
+    {
+      "id": "tilt-servo",
+      "instantiation": "scanner.position_servo.v2"
+    },
+    {
+      "id": "arm-linkage",
+      "instantiation": "scanner.arm_linkage.v1"
+    },
+    {
+      "id": "camera",
+      "instantiation": "scanner.camera.v1"
+    },
+    {
+      "id": "compute",
+      "instantiation": "scanner.compute.v1"
+    },
+    {
+      "id": "electrical-reference",
+      "instantiation": "scanner.electrical_reference.v1"
+    }
+  ],
+  "connections": [
+    {
+      "id": "mount-battery",
+      "kind": "attachment",
+      "domain": "mechanical",
+      "endpoints": [
+        "chassis.battery_mount",
+        "battery-pack.mount"
+      ],
+      "joint": {
+        "kind": "fixed",
+        "behavior_binding": "kinematic_only",
+        "coordinate_bindings": []
+      }
+    },
+    {
+      "id": "mount-control-board",
+      "kind": "attachment",
+      "domain": "mechanical",
+      "endpoints": [
+        "chassis.controller_mount",
+        "control-board.mount"
+      ],
+      "joint": {
+        "kind": "fixed",
+        "behavior_binding": "kinematic_only",
+        "coordinate_bindings": []
+      }
+    },
+    {
+      "id": "mount-left-motor",
+      "kind": "attachment",
+      "domain": "mechanical",
+      "endpoints": [
+        "chassis.left_motor_mount",
+        "left-motor.case_mount"
+      ],
+      "joint": {
+        "kind": "fixed",
+        "behavior_binding": "kinematic_only",
+        "coordinate_bindings": []
+      }
+    },
+    {
+      "id": "mount-right-motor",
+      "kind": "attachment",
+      "domain": "mechanical",
+      "endpoints": [
+        "chassis.right_motor_mount",
+        "right-motor.case_mount"
+      ],
+      "joint": {
+        "kind": "fixed",
+        "behavior_binding": "kinematic_only",
+        "coordinate_bindings": []
+      }
+    },
+    {
+      "id": "mount-encoders",
+      "kind": "attachment",
+      "domain": "mechanical",
+      "endpoints": [
+        "chassis.encoder_mount",
+        "encoder-pair.mount"
+      ],
+      "joint": {
+        "kind": "fixed",
+        "behavior_binding": "kinematic_only",
+        "coordinate_bindings": []
+      }
+    },
+    {
+      "id": "mount-regulator",
+      "kind": "attachment",
+      "domain": "mechanical",
+      "endpoints": [
+        "chassis.regulator_mount",
+        "servo-regulator.mount"
+      ],
+      "joint": {
+        "kind": "fixed",
+        "behavior_binding": "kinematic_only",
+        "coordinate_bindings": []
+      }
+    },
+    {
+      "id": "mount-lift-servo",
+      "kind": "attachment",
+      "domain": "mechanical",
+      "endpoints": [
+        "chassis.lift_servo_mount",
+        "lift-servo.case_mount"
+      ],
+      "joint": {
+        "kind": "fixed",
+        "behavior_binding": "kinematic_only",
+        "coordinate_bindings": []
+      }
+    },
+    {
+      "id": "mount-compute",
+      "kind": "attachment",
+      "domain": "mechanical",
+      "endpoints": [
+        "chassis.compute_mount",
+        "compute.mount"
+      ],
+      "joint": {
+        "kind": "fixed",
+        "behavior_binding": "kinematic_only",
+        "coordinate_bindings": []
+      }
+    },
+    {
+      "id": "left-wheel-joint",
+      "kind": "attachment",
+      "domain": "mechanical",
+      "endpoints": [
+        "left-motor.shaft",
+        "left-wheel.hub"
+      ],
+      "joint": {
+        "kind": "revolute",
+        "behavior_binding": "pmdl",
+        "coordinate": "left-wheel.angle",
+        "zero_angle_rad": 0.0,
+        "coordinate_bindings": [
+          {
+            "state": "left-wheel.angle",
+            "joint_angle_at_state_zero_rad": 0.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "right-wheel-joint",
+      "kind": "attachment",
+      "domain": "mechanical",
+      "endpoints": [
+        "right-motor.shaft",
+        "right-wheel.hub"
+      ],
+      "joint": {
+        "kind": "revolute",
+        "behavior_binding": "pmdl",
+        "coordinate": "right-wheel.angle",
+        "zero_angle_rad": 0.0,
+        "coordinate_bindings": [
+          {
+            "state": "right-wheel.angle",
+            "joint_angle_at_state_zero_rad": 0.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "arm-lift-joint",
+      "kind": "attachment",
+      "domain": "mechanical",
+      "endpoints": [
+        "lift-servo.shaft",
+        "arm-linkage.base"
+      ],
+      "joint": {
+        "kind": "revolute",
+        "behavior_binding": "pmdl",
+        "coordinate": "arm-linkage.angle",
+        "zero_angle_rad": 0.0,
+        "coordinate_bindings": [
+          {
+            "state": "arm-linkage.angle",
+            "joint_angle_at_state_zero_rad": 0.0
+          },
+          {
+            "state": "lift-servo.angle",
+            "joint_angle_at_state_zero_rad": 0.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "mount-tilt-servo",
+      "kind": "attachment",
+      "domain": "mechanical",
+      "endpoints": [
+        "arm-linkage.tilt_servo_mount",
+        "tilt-servo.case_mount"
+      ],
+      "joint": {
+        "kind": "fixed",
+        "behavior_binding": "kinematic_only",
+        "coordinate_bindings": []
+      }
+    },
+    {
+      "id": "camera-tilt-joint",
+      "kind": "attachment",
+      "domain": "mechanical",
+      "endpoints": [
+        "tilt-servo.shaft",
+        "camera.mount"
+      ],
+      "joint": {
+        "kind": "revolute",
+        "behavior_binding": "pmdl",
+        "coordinate": "camera.angle",
+        "zero_angle_rad": 0.0,
+        "coordinate_bindings": [
+          {
+            "state": "camera.angle",
+            "joint_angle_at_state_zero_rad": 0.0
+          },
+          {
+            "state": "tilt-servo.angle",
+            "joint_angle_at_state_zero_rad": 0.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "battery-positive-bus",
+      "kind": "power",
+      "domain": "electrical",
+      "endpoints": [
+        "battery-pack.positive",
+        "control-board.supply_p",
+        "servo-regulator.vin_p"
+      ]
+    },
+    {
+      "id": "electrical-return-bus",
+      "kind": "power",
+      "domain": "electrical",
+      "endpoints": [
+        "battery-pack.negative",
+        "control-board.supply_n",
+        "control-board.logic_n",
+        "control-board.left_n",
+        "control-board.right_n",
+        "left-motor.n",
+        "right-motor.n",
+        "servo-regulator.vin_n",
+        "servo-regulator.out_n",
+        "lift-servo.supply_n",
+        "tilt-servo.supply_n",
+        "encoder-pair.supply_n",
+        "camera.supply_n",
+        "compute.n",
+        "electrical-reference.ground"
+      ]
+    },
+    {
+      "id": "logic-positive-bus",
+      "kind": "power",
+      "domain": "electrical",
+      "endpoints": [
+        "control-board.logic_p",
+        "encoder-pair.supply_p",
+        "camera.supply_p",
+        "compute.p"
+      ]
+    },
+    {
+      "id": "servo-positive-bus",
+      "kind": "power",
+      "domain": "electrical",
+      "endpoints": [
+        "servo-regulator.out_p",
+        "lift-servo.supply_p",
+        "tilt-servo.supply_p"
+      ]
+    },
+    {
+      "id": "left-motor-positive",
+      "kind": "power",
+      "domain": "electrical",
+      "endpoints": [
+        "control-board.left_p",
+        "left-motor.p"
+      ]
+    },
+    {
+      "id": "right-motor-positive",
+      "kind": "power",
+      "domain": "electrical",
+      "endpoints": [
+        "control-board.right_p",
+        "right-motor.p"
+      ]
+    },
+    {
+      "id": "left-floor-contact",
+      "kind": "power",
+      "domain": "mechanical",
+      "endpoints": [
+        "left-wheel.translation",
+        "chassis.left_drive"
+      ]
+    },
+    {
+      "id": "right-floor-contact",
+      "kind": "power",
+      "domain": "mechanical",
+      "endpoints": [
+        "right-wheel.translation",
+        "chassis.right_drive"
+      ]
+    },
+    {
+      "id": "left-wheel-sensing",
+      "kind": "signal",
+      "domain": "signal",
+      "endpoints": [
+        "left-wheel.angular_velocity_measurement",
+        "encoder-pair.left_rate"
+      ]
+    },
+    {
+      "id": "right-wheel-sensing",
+      "kind": "signal",
+      "domain": "signal",
+      "endpoints": [
+        "right-wheel.angular_velocity_measurement",
+        "encoder-pair.right_rate"
+      ]
+    },
+    {
+      "id": "left-encoder-feedback",
+      "kind": "signal",
+      "domain": "signal",
+      "endpoints": [
+        "encoder-pair.left_measurement",
+        "control-board.left_encoder"
+      ]
+    },
+    {
+      "id": "right-encoder-feedback",
+      "kind": "signal",
+      "domain": "signal",
+      "endpoints": [
+        "encoder-pair.right_measurement",
+        "control-board.right_encoder"
+      ]
+    },
+    {
+      "id": "lift-position-feedback",
+      "kind": "signal",
+      "domain": "signal",
+      "endpoints": [
+        "lift-servo.position_measurement",
+        "control-board.lift_position"
+      ]
+    },
+    {
+      "id": "tilt-position-feedback",
+      "kind": "signal",
+      "domain": "signal",
+      "endpoints": [
+        "tilt-servo.position_measurement",
+        "control-board.tilt_position"
+      ]
+    }
+  ],
+  "controllers": [
+    {
+      "id": "scanner_orbit_controller",
+      "program": {
+        "path": "controls/scanner.control",
+        "sha256": "sha256:0d226063f0f86e6f6fed1e3e370bdd7f6f7cb17c757294b4086d715ce5d1c4a5"
+      },
+      "explicit_inputs": {
+        "armed": {"external": "armed"},
+        "reset": {"external": "reset"},
+        "emergency_stop": {"external": "emergency_stop"},
+        "target_speed": {"external": "target_speed"},
+        "orbit_radius": {"external": "orbit_radius"},
+        "position_x": {"signal": "chassis.position_x_measurement"},
+        "position_y": {"signal": "chassis.position_y_measurement"},
+        "heading_x": {"signal": "chassis.heading_x_measurement"},
+        "heading_y": {"signal": "chassis.heading_y_measurement"},
+        "left_wheel_rate": {"signal": "encoder-pair.left_measurement"},
+        "right_wheel_rate": {"signal": "encoder-pair.right_measurement"},
+        "lift_feedback": {"signal": "lift-servo.position_measurement"},
+        "tilt_feedback": {"signal": "tilt-servo.position_measurement"}
+      },
+      "implicit_inputs": {
+        "forward_speed": "chassis.forward_speed"
+      },
+      "outputs": {
+        "left_voltage": {"signal": "control-board.left_command"},
+        "right_voltage": {"signal": "control-board.right_command"},
+        "lift_target": {"signal": "lift-servo.position_command"},
+        "tilt_target": {"signal": "tilt-servo.position_command"},
+        "record_video": {"external": "record_video"}
+      }
+    }
+  ],
+  "verifications": [
+    {
+      "id": "scanner.orbit_acceptance",
+      "program": {
+        "path": "verification/scanner.verify",
+        "sha256": "sha256:e51bc445961c2c3d0e9b970665b8fcb6d13ece6d59020d07cfb4f30b1855991a"
+      },
+      "inputs": {
+        "position_x": "chassis.position_x",
+        "position_y": "chassis.position_y",
+        "camera_angle": "camera.angle",
+        "lift_angle": "arm-linkage.angle"
+      }
+    }
+  ],
+  "environment": {
+    "gravity_m_s2": [
+      0.0,
+      0.0,
+      -9.80665
+    ],
+    "floor": {
+      "kind": "rough-planar",
+      "longitudinal_interaction": {
+        "kind": "component-effective-rolling-ratio",
+        "parameter": "rolling_ratio",
+        "uncertainty": "sampled-per-simulation-run"
+      },
+      "lateral_slip_simulated": false
+    },
+    "object_bounding_cube": {
+      "center_m": [
+        0.0,
+        0.0,
+        0.35
+      ],
+      "side_m": 0.4
+    },
+    "mission": {
+      "orbit_radius_m": 0.85,
+      "tangential_speed_m_s": 0.12,
+      "duration_s": 8.0,
+      "keep_out_radius_m": 0.5
+    }
+  },
+  "metadata": {
+    "coordinate_convention": "right-handed world: x/y floor, +z up; chassis +x forward, +y left",
+    "geometry_provenance": "Estimated connector locations are explicit in model_catalog static.part records and must be replaced by measured/CAD/scan evidence before construction.",
+    "optical_physics": false,
+    "dynamics_completeness": {
+      "schema": "contraption.dynamics-completeness/v1",
+      "status": "incomplete",
+      "modeled_scope": "bare_chassis_planar_plus_component_local_dynamics",
+      "parameter_basis": {
+        "component": "chassis",
+        "mass_parameter": "mass",
+        "mass_scope": "published_bare_chassis_without_batteries",
+        "yaw_inertia_parameter": "yaw_inertia",
+        "yaw_inertia_estimate": {
+          "kind": "uniform_box_about_center_z",
+          "part_body": "body",
+          "part_solid": "deck",
+          "formula": "mass * (length^2 + width^2) / 12",
+          "source": "Pololu Romi chassis catalog envelope and published 0.160 kg mass without batteries"
+        }
+      },
+      "gates": [
+        {
+          "id": "fixed_payload_mass_inertia",
+          "status": "open",
+          "reason": "Fixed battery, electronics, motor cases, servo cases, and compute payload mass, center of mass, and inertia are not included in planar chassis dynamics."
+        },
+        {
+          "id": "moving_arm_camera_inertial_derivation",
+          "status": "open",
+          "reason": "Arm and camera inertia and gravity terms are component-local estimates, not derived from downstream body mass properties, parent motion, or configuration."
+        },
+        {
+          "id": "servo_case_reaction_coupling",
+          "status": "open",
+          "reason": "One-port servo shaft models do not transmit actuator case-reaction torque through their fixed case attachments to the arm or chassis."
+        },
+        {
+          "id": "caster_floor_contact",
+          "status": "open",
+          "reason": "The physical ball caster and its floor contact, drag, load transfer, and lift constraints are not represented as a component interaction."
+        },
+        {
+          "id": "full_body_keepout",
+          "status": "open",
+          "reason": "The current keep-out evidence checks only the planar root position; it does not test canonical chassis, arm, camera, or payload solids against the object volume."
+        },
+        {
+          "id": "controller_sensor_observation_binding",
+          "status": "open",
+          "reason": "The controller now uses hash-bound encoder inference and explicit localization wires, but the localization channels are still ideal chassis outputs rather than a qualified physical sensor package."
+        },
+        {
+          "id": "electrical_supply_and_fault_coupling",
+          "status": "open",
+          "reason": "Actuator and sensor behavior is not supply-voltage-limited, and drive-fault and brownout generation are outside the current component PMDL fidelity."
+        }
+      ]
+    },
+    "condition": "unverified"
+  }
+}

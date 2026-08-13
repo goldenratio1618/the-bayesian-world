@@ -1,0 +1,394 @@
+{
+  "format": "pmdl-1",
+  "id": "test_system.planar_rigid_body",
+  "name": "Planar rigid-body reference system",
+  "version": "1.1.0",
+  "domains": [
+    "mechanical"
+  ],
+  "description": "Six-state planar rigid body with world-frame force, viscous drag, yaw torque, and optional stochastic pose roughness.",
+  "power_ports": [],
+  "signal_ports": [
+    {
+      "name": "force_x",
+      "direction": "input",
+      "unit": "N",
+      "dtype": "float64",
+      "shape": [],
+      "description": "World-frame x force."
+    },
+    {
+      "name": "force_y",
+      "direction": "input",
+      "unit": "N",
+      "dtype": "float64",
+      "shape": [],
+      "description": "World-frame y force."
+    },
+    {
+      "name": "torque",
+      "direction": "input",
+      "unit": "N*m",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Yaw torque."
+    },
+    {
+      "name": "y_observation",
+      "direction": "output",
+      "unit": "m",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Diagnostic observation of transverse position."
+    },
+    {
+      "name": "yaw_observation",
+      "direction": "output",
+      "unit": "rad",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Diagnostic observation of yaw."
+    }
+  ],
+  "states": [
+    {
+      "name": "x",
+      "unit": "m",
+      "initial": 0,
+      "derivative": "x_dot",
+      "description": "World x position."
+    },
+    {
+      "name": "y",
+      "unit": "m",
+      "initial": 0,
+      "derivative": "y_dot",
+      "description": "World y position."
+    },
+    {
+      "name": "yaw",
+      "unit": "rad",
+      "initial": 0,
+      "derivative": "yaw_dot",
+      "description": "Yaw angle."
+    },
+    {
+      "name": "velocity_x",
+      "unit": "m/s",
+      "initial": 0,
+      "derivative": "velocity_x_dot",
+      "description": "World x velocity."
+    },
+    {
+      "name": "velocity_y",
+      "unit": "m/s",
+      "initial": 0,
+      "derivative": "velocity_y_dot",
+      "description": "World y velocity."
+    },
+    {
+      "name": "angular_velocity",
+      "unit": "rad/s",
+      "initial": 0,
+      "derivative": "angular_velocity_dot",
+      "description": "Yaw rate."
+    }
+  ],
+  "parameters": [
+    {
+      "name": "mass",
+      "unit": "kg",
+      "default": 1,
+      "bounds": {
+        "lower": 1e-12,
+        "upper": 1000000000000
+      },
+      "uncertainty": {
+        "distribution": "fixed",
+        "parameters": {}
+      },
+      "learnable": true,
+      "description": "Mass."
+    },
+    {
+      "name": "moment_of_inertia",
+      "unit": "kg*m^2",
+      "default": 0.1,
+      "bounds": {
+        "lower": 1e-12,
+        "upper": 1000000000000
+      },
+      "uncertainty": {
+        "distribution": "fixed",
+        "parameters": {}
+      },
+      "learnable": true,
+      "description": "Planar moment of inertia."
+    },
+    {
+      "name": "linear_drag",
+      "unit": "N*s/m",
+      "default": 0,
+      "bounds": {
+        "lower": 0,
+        "upper": 1000000000000
+      },
+      "uncertainty": {
+        "distribution": "fixed",
+        "parameters": {}
+      },
+      "learnable": true,
+      "description": "Linear viscous drag."
+    },
+    {
+      "name": "angular_drag",
+      "unit": "N*m*s/rad",
+      "default": 0,
+      "bounds": {
+        "lower": 0,
+        "upper": 1000000000000
+      },
+      "uncertainty": {
+        "distribution": "fixed",
+        "parameters": {}
+      },
+      "learnable": true,
+      "description": "Angular viscous drag."
+    },
+    {
+      "name": "roughness_std",
+      "unit": "m/s^1/2",
+      "default": 0,
+      "bounds": {
+        "lower": 0,
+        "upper": 1000000000000
+      },
+      "uncertainty": {
+        "distribution": "fixed",
+        "parameters": {}
+      },
+      "learnable": true,
+      "description": "Translational accepted-step diffusion scale; multiplied by sqrt(dt)."
+    },
+    {
+      "name": "roughness_reference_length",
+      "unit": "m",
+      "default": 1,
+      "bounds": {
+        "lower": 1e-12,
+        "upper": 1000000000000
+      },
+      "uncertainty": {
+        "distribution": "fixed",
+        "parameters": {}
+      },
+      "learnable": true,
+      "description": "Reference length converting translational roughness into yaw roughness; 1 m preserves the former fixture's shared numeric scale."
+    }
+  ],
+  "relations": [
+    {
+      "name": "x_kinematics",
+      "expression": "x_dot - velocity_x",
+      "description": "World x kinematics."
+    },
+    {
+      "name": "y_kinematics",
+      "expression": "y_dot - velocity_y",
+      "description": "World y kinematics."
+    },
+    {
+      "name": "yaw_kinematics",
+      "expression": "yaw_dot - angular_velocity",
+      "description": "Yaw kinematics."
+    },
+    {
+      "name": "x_dynamics",
+      "expression": "velocity_x_dot - (force_x - linear_drag * velocity_x) / mass",
+      "description": "World x dynamics."
+    },
+    {
+      "name": "y_dynamics",
+      "expression": "velocity_y_dot - (force_y - linear_drag * velocity_y) / mass",
+      "description": "World y dynamics."
+    },
+    {
+      "name": "yaw_dynamics",
+      "expression": "angular_velocity_dot - (torque - angular_drag * angular_velocity) / moment_of_inertia",
+      "description": "Yaw dynamics."
+    },
+    {
+      "name": "y_output",
+      "expression": "y_observation - y",
+      "description": "Expose transverse position to verification programs."
+    },
+    {
+      "name": "yaw_output",
+      "expression": "yaw_observation - yaw",
+      "description": "Expose yaw to verification programs."
+    }
+  ],
+  "stored_energy": [
+    {
+      "name": "kinetic_energy",
+      "expression": "0.5 * mass * (velocity_x ** 2 + velocity_y ** 2) + 0.5 * moment_of_inertia * angular_velocity ** 2",
+      "unit": "J",
+      "nonnegative": true,
+      "description": "Planar kinetic energy."
+    }
+  ],
+  "dissipation": [
+    {
+      "name": "drag_loss",
+      "expression": "linear_drag * (velocity_x ** 2 + velocity_y ** 2) + angular_drag * angular_velocity ** 2",
+      "unit": "W",
+      "nonnegative": true,
+      "description": "Viscous drag loss."
+    }
+  ],
+  "sources": [],
+  "process_noise": {
+    "seed_policy": "simulation_seed",
+    "reproducibility": "same_backend_device",
+    "application": "accepted_step_increment",
+    "channels": [
+      {
+        "name": "roughness_x",
+        "distribution": "standard_normal",
+        "description": "Independent standard-normal x roughness draw."
+      },
+      {
+        "name": "roughness_y",
+        "distribution": "standard_normal",
+        "description": "Independent standard-normal y roughness draw."
+      },
+      {
+        "name": "roughness_yaw",
+        "distribution": "standard_normal",
+        "description": "Independent standard-normal yaw roughness draw."
+      }
+    ],
+    "increments": [
+      {
+        "target": "x",
+        "expression": "roughness_std * sqrt(dt) * roughness_x",
+        "description": "Translational diffusion increment in world x."
+      },
+      {
+        "target": "y",
+        "expression": "roughness_std * sqrt(dt) * roughness_y",
+        "description": "Translational diffusion increment in world y."
+      },
+      {
+        "target": "yaw",
+        "expression": "(roughness_std / roughness_reference_length) * sqrt(dt) * roughness_yaw",
+        "description": "Angular diffusion increment about world z."
+      }
+    ]
+  },
+  "modes": [],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [],
+    "required": [
+      "x",
+      "y",
+      "yaw",
+      "velocity_x",
+      "velocity_y",
+      "angular_velocity"
+    ]
+  },
+  "validity": {
+    "ranges": {
+      "mass": {
+        "lower": 1e-12,
+        "upper": 1000000000000
+      },
+      "moment_of_inertia": {
+        "lower": 1e-12,
+        "upper": 1000000000000
+      },
+      "linear_drag": {
+        "lower": 0,
+        "upper": 1000000000000
+      },
+      "angular_drag": {
+        "lower": 0,
+        "upper": 1000000000000
+      },
+      "roughness_std": {
+        "lower": 0,
+        "upper": 1000000000000
+      },
+      "roughness_reference_length": {
+        "lower": 1e-12,
+        "upper": 1000000000000
+      }
+    },
+    "assumptions": [
+      "Lumped reference system with optional accepted-step pose diffusion",
+      "Noise channels are independent standard-normal draws",
+      "Replay is guaranteed only for an unchanged closure, grid, sample count, backend, device, dtype, and seed",
+      "Parameters remain constant during one simulation sample"
+    ],
+    "max_timestep": 0.01
+  },
+  "fidelity_levels": [
+    {
+      "name": "reference",
+      "description": "Exact equations of the declared lumped test system.",
+      "active_relations": [
+        "x_kinematics",
+        "y_kinematics",
+        "yaw_kinematics",
+        "x_dynamics",
+        "y_dynamics",
+        "yaw_dynamics",
+        "y_output",
+        "yaw_output"
+      ],
+      "parameter_overrides": {},
+      "approximation_error": "Effects outside the declared lumped model are omitted.",
+      "relative_cost": 1
+    }
+  ],
+  "properties": [
+    {
+      "name": "nonnegative_kinetic_energy",
+      "kind": "nonnegative_energy",
+      "expression": "0.5 * mass * (velocity_x ** 2 + velocity_y ** 2) + 0.5 * moment_of_inertia * angular_velocity ** 2 >= 0 * (mass * velocity_x ** 2 + mass * velocity_y ** 2 + moment_of_inertia * angular_velocity ** 2)",
+      "expected": true,
+      "samples": 32,
+      "tolerance": 1e-12
+    },
+    {
+      "name": "nonnegative_drag_loss",
+      "kind": "nonnegative_dissipation",
+      "expression": "linear_drag * (velocity_x ** 2 + velocity_y ** 2) + angular_drag * angular_velocity ** 2 >= 0 * (linear_drag * velocity_x ** 2 + linear_drag * velocity_y ** 2 + angular_drag * angular_velocity ** 2)",
+      "expected": true,
+      "samples": 32,
+      "tolerance": 1e-12
+    }
+  ],
+  "trust": {
+    "structural": "tested",
+    "physical": "unverified",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": [
+      {
+        "kind": "textbook",
+        "reference": "Planar Newton-Euler equations",
+        "summary": "Canonical lumped reference equations used as an analytic simulator fixture."
+      }
+    ]
+  },
+  "metadata": {
+    "gold": false,
+    "test_fixture": true,
+    "causality": "causal aggregate expressed in descriptor form",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0"
+  },
+  "implements": "test-planar-rigid-body"
+}

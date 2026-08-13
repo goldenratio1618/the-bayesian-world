@@ -15,8 +15,7 @@ ASSET_ROOTS = (
     Path("docs"),
     Path("prompts"),
     Path("web"),
-    Path("examples/part_import_canary"),
-    Path("examples/scanner_robot"),
+    Path("assembled_contraptions"),
 )
 
 

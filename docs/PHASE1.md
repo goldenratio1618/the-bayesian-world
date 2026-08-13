@@ -16,9 +16,10 @@ simulation is E0/E1 engineering evidence only and does not qualify a part.
 
 ## Canonical representation contract
 
-The source of truth is a strict `contraption-3` assembly plus `model_catalog/`
-and its exact-hash controller. Components contain only an id and a model
-instantiation reference. Each catalog instantiation combines `static.part`
+The source of truth is a strict `contraption-4` bundle. Its manifest links the
+required catalog roots and exact-hash `control-1` and `verification-1`
+artifacts. Components contain only an id and a model instantiation reference.
+Each catalog instantiation combines `static.part`
 (bodies, connectors, geometry bindings, and provenance) with a `vN.model`
 (exact PMDL identity, initialized parameters, uncertainty, condition, and
 compute cost).
@@ -29,13 +30,14 @@ device types form the next two layers, and every layer owns an abstract
 layers and must implement the colocated contract. There is no parallel taxonomy
 or project-specific scanner domain.
 
-`resolve_assembly` validates and compiles that closure into:
+`load_contraption` validates and resolves that filesystem closure into:
 
 1. an assembled PMDL descriptor system;
 2. a physical attachment/joint graph and resolved body/connector poses; and
-3. one assembly SHA-256 shared by every downstream artifact.
+3. wired controller runtimes and verification programs; and
+4. one assembly SHA-256 shared by every downstream artifact.
 
-Every `contraption-3` source must also carry a strict, hash-bound
+Every `contraption-4` source must also carry a strict, hash-bound
 `metadata.dynamics_completeness` record. A `complete` record may have no open
 gates; an `incomplete` record must identify each known missing interaction as an
 open gate. Validation rejects an absent, malformed, or self-contradictory
@@ -56,10 +58,12 @@ The separation is a projection boundary, not a second representation:
 - The build planner accepts only `ResolvedAssembly`, derives placement and
   connector distances from resolved poses, and exposes missing fabrication
   facts as release gates.
-- The C99 compiler accepts the full `ResolvedAssembly`, derives its local
-  dynamics/estimator system directly from the assembled PMDL DAE, and embeds
-  assembly, PMDL, and controller provenance. Caller-authored online matrices
-  and bare PMDL-system projections are not canonical compilation inputs.
+- Each controller receives only explicit sensor wires and external pins. The
+  simulator extracts those signals by resolved state index and never exposes
+  the full PMDL state tensor to controller code.
+- The controller compiler accepts each resolved controller closure and emits the
+  same complete runtime semantics in C99 and fixed-point Verilog. Caller-authored
+  matrices, callbacks, and source fragments are not compilation inputs.
 
 The old scanner aggregate coverage sidecar and authored online-model JSON are
 not part of this architecture.
@@ -77,14 +81,22 @@ not part of this architecture.
 - Fail-closed assembly of electrical, mechanical, signal, control, and explicit
   kinematic-only connections, with equation counts and structural-rank checks.
 - Backward-Euler descriptor integration on NumPy and optional GPU-enabled
-  PyTorch, with consistent initialization and runtime network invariants.
+  PyTorch, with consistent initialization, runtime network invariants, and
+  declarative seeded process-noise increments followed by algebraic
+  reconciliation.
 - Batched uncertainty propagation, fitting, and approximate Bayesian
   candidate-model comparison.
-- A restricted onboard control format and a scanner controller that addresses
-  namespaced canonical assembly state/control variables.
-- DAE-derived, fixed-allocation C99 dynamics plus an uncertainty-aware
-  estimator for constrained onboard execution. Controller state-machine C99
-  emission is not implemented; the manifest says so explicitly.
+- A strict `control-1` DSL with explicit physical/external inputs, exact PMDL
+  bindings for latent implicit inputs, a coupled local-affine observer derived
+  from the assembled descriptor system, posterior uncertainty in expressions,
+  observability diagnostics, modes, registers, slew limiting, and emergency
+  behavior. Multiple heterogeneous-period controllers may be wired into one
+  assembly.
+- Complete allocation-free C99 and synthesizable fixed-point Verilog controller
+  generation from the same target-neutral IR used by the offline runtime.
+- A strict `verification-1` DSL for trajectory metrics, exact-time reducers,
+  conservative confidence-bounded posterior criteria, differentiability
+  classification, and automatic simulation acceptance reports.
 - Budgeted, staged classification/modeling agents whose artifacts are inert
   data until deterministic validation and explicit promotion.
 - A dependency-free, display-only browser viewer and a deterministic,
@@ -130,20 +142,30 @@ uncertainty; they are not automatic frequentist coverage guarantees. Model
 evidence uses documented approximations and still needs posterior-predictive
 checks and physical data.
 
-Generated floating-point C99 is a portable online reference, not a release-ready
-firmware image. Target execution, numerical equivalence, timing, range analysis,
-hardware-in-the-loop testing, fail-safe behavior, and independent safety
-controls remain release gates. FPGA deployment additionally needs fixed-point
-selection, synthesis, and timing closure.
+Generated C99 and fixed-point Verilog are portable controller references, not
+release-ready firmware or an FPGA bitstream. Target execution, numerical
+equivalence, timing, range and overflow analysis, quantization analysis,
+hardware-in-the-loop testing, fail-safe behavior, synthesis, and independent
+safety controls remain release gates.
 
 Compilation remains available for an incomplete assembly, but the generated
 source, model metadata, and manifest all carry the typed completeness status and
 open gates. The artifact therefore cannot truthfully be mistaken for a
 physically complete device model.
 
-The generated C99 does not execute the declarative `ControlProgram`. It accepts
-the resolved actuator-source vector and requires a separately qualified runtime
-for the exact controller id/version/hash recorded in its source and manifest.
+The implicit-input inference model is a coupled local-affine approximation. It
+is derived from the complete assembled PMDL descriptor system at a hash-bound
+operating point and uses exact sensor, actuator, and latent bindings. A
+nonlinear plant requires explicit local-approximation approval; the closure
+records the nonlinear relations, operating point, PMDL validity region,
+qualification radius, measured coupled local residual remainder, and
+current dynamics-completeness gates. This is not an EKF/UKF, an exhaustive
+error bound, or a claim of global nonlinear validity.
+
+PMDL expressions, the Python controller runtime, and C99 support allow-listed
+nonlinear functions such as `tanh`. The generic synthesizable Verilog target
+rejects transcendental functions until a qualified algebraic or lookup-table
+lowering exists.
 
 ## Run the scanner fixture
 
@@ -151,9 +173,12 @@ From the repository root in Linux/WSL:
 
 ```bash
 source .venv/bin/activate
-contraption validate
-contraption simulate --backend torch --device cuda --output outputs/scanner_demo
-contraption view --trajectory outputs/scanner_demo/trajectory.json \
+contraption validate --spec assembled_contraptions/scanner/contraption.json
+contraption simulate --spec assembled_contraptions/scanner/contraption.json \
+  --backend torch --device cuda --controller-input armed=true \
+  --output outputs/scanner_demo
+contraption view --spec assembled_contraptions/scanner/contraption.json \
+  --trajectory outputs/scanner_demo/trajectory.json \
   --output outputs/scanner_demo/viewer
 python -m http.server 8000 --directory outputs/scanner_demo/viewer
 ```
@@ -164,8 +189,9 @@ assembly hash. Viewer poses are reconstructed from that trajectory through the
 resolved assembly; the detached physical-scene artifact is diagnostic output,
 not another viewer input representation.
 
-For user-set external controls, run `contraption serve --backend torch
---device cuda`. Its same-origin loopback API derives the UI schema from the
+For user-set external controls, run `contraption serve --spec
+assembled_contraptions/scanner/contraption.json --backend torch --device cuda
+--controller-input armed=true`. Its same-origin loopback API derives the UI schema from the
 hash-bound declarative controller, validates every POST, reruns the Python
 assembly, and returns only a complete canonical physical scene. The JavaScript
 viewer never integrates dynamics or composes physical transforms.
@@ -173,8 +199,10 @@ viewer never integrates dynamics or composes physical transforms.
 Compile and inspect the build release gates with:
 
 ```bash
-contraption compile --output outputs/scanner_demo/online
-contraption build --output outputs/scanner_demo/build
+contraption compile --spec assembled_contraptions/scanner/contraption.json \
+  --output outputs/scanner_demo/online
+contraption build --spec assembled_contraptions/scanner/contraption.json \
+  --output outputs/scanner_demo/build
 ```
 
 ## Verification ladder
@@ -188,11 +216,13 @@ contraption build --output outputs/scanner_demo/build
    physical attachment boundary conditions.
 6. Generate pose frames from the physical resolver and reject missing, extra,
    or stale-hash viewer frames.
-7. Derive C99 from the assembled DAE, compile it with a host C99 compiler, and
-   retain both closure hashes in the manifest/source.
-8. Confirm every canonical component/connection appears in the build record and
+7. Run every wired controller using explicit inputs only and evaluate every
+   verification program over the posterior trajectory.
+8. Generate complete C99 and Verilog controllers, compile/execute C99 golden
+   traces, and retain source and controller hashes in their manifests.
+9. Confirm every canonical component/connection appears in the build record and
    that unknown fabrication facts remain unresolved.
-9. Treat all physical instances as `unverified` until independent dimensional,
+10. Treat all physical instances as `unverified` until independent dimensional,
    electrical, dynamic, and safety measurements are recorded.
 
 ## Safety boundary

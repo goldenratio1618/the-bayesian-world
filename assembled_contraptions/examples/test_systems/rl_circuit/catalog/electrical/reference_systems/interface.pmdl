@@ -1,0 +1,47 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "test-rl-circuit",
+  "name": "RL circuit test system",
+  "version": "1.0.0",
+  "domains": [
+    "electrical"
+  ],
+  "required_power_ports": [],
+  "required_signal_ports": [
+    {
+      "name": "voltage",
+      "direction": "input",
+      "unit": "V"
+    },
+    {
+      "name": "applied_voltage",
+      "direction": "output",
+      "unit": "V"
+    },
+    {
+      "name": "inductor_current_observation",
+      "direction": "output",
+      "unit": "A"
+    },
+    {
+      "name": "resistor_voltage",
+      "direction": "output",
+      "unit": "V"
+    },
+    {
+      "name": "inductor_voltage",
+      "direction": "output",
+      "unit": "V"
+    }
+  ],
+  "ideal_models": [
+    "test_system.rl_circuit"
+  ],
+  "constraints": [
+    "All dynamics and observations are declared in PMDL.",
+    "Fixture ports preserve the canonical reference-system names."
+  ],
+  "description": "Aggregate rl circuit test system reference-system contract."
+}

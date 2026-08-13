@@ -1,0 +1,17 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "domain",
+  "abstract": true,
+  "id": "electromechanical",
+  "name": "Electromechanical",
+  "version": "1.0.0",
+  "requires_physics": [
+    "electrical",
+    "mechanical"
+  ],
+  "allowed_port_domains": [
+    "electrical",
+    "mechanical"
+  ],
+  "description": "Self-contained electromechanical domain contract for declarative test systems."
+}

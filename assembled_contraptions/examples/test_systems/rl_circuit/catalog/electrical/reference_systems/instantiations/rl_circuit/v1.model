@@ -1,0 +1,34 @@
+{
+  "format": "model-instance-1",
+  "id": "test.rl_circuit.v1",
+  "variant": "v1",
+  "part": "test.rl_circuit",
+  "version": "1.0.0",
+  "model": {
+    "id": "test_system.rl_circuit",
+    "version": "1.0.0",
+    "sha256": "sha256:f21aaf308c537cc8b6f44b78c4c347bf497debffc196180bb1cc4cd44c4dc363"
+  },
+  "parameters": {
+    "resistance": 10,
+    "inductance": 0.1
+  },
+  "parameter_uncertainty": {
+    "resistance": {
+      "distribution": "normal",
+      "std": 0.1
+    },
+    "inductance": {
+      "distribution": "normal",
+      "std": 0.002
+    }
+  },
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1,
+    "notes": "Deterministic analytic test-system fixture."
+  },
+  "metadata": {
+    "fixture": true
+  }
+}

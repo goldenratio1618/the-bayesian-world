@@ -6,15 +6,26 @@ from .catalog.instantiations import (
     PartInstantiationRegistry,
     StaticPartSpec,
 )
+from .loading import ContraptionLoadError, load_contraption
 from .physics.assembly import AssembledPMDLSystem, AssemblyError, NetworkInvariantError
 from .physics.physical import PhysicalAssemblyError, ResolvedPhysicalAssembly, TransformSpec
-from .physics.resolved import ResolutionError, ResolvedAssembly, resolve_assembly
+from .physics.resolved import (
+    ResolutionError,
+    ResolvedAssembly,
+    ResolvedController,
+    ResolvedControllerOutputBinding,
+    ResolvedExplicitInputBinding,
+    ResolvedVerification,
+    ResolvedVerificationInputBinding,
+    resolve_assembly,
+)
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "AssembledPMDLSystem",
     "AssemblyError",
+    "ContraptionLoadError",
     "ModelInstantiationSpec",
     "NetworkInvariantError",
     "PartInstantiation",
@@ -22,8 +33,14 @@ __all__ = [
     "PhysicalAssemblyError",
     "ResolutionError",
     "ResolvedAssembly",
+    "ResolvedController",
+    "ResolvedControllerOutputBinding",
+    "ResolvedExplicitInputBinding",
     "ResolvedPhysicalAssembly",
+    "ResolvedVerification",
+    "ResolvedVerificationInputBinding",
     "StaticPartSpec",
     "TransformSpec",
+    "load_contraption",
     "resolve_assembly",
 ]

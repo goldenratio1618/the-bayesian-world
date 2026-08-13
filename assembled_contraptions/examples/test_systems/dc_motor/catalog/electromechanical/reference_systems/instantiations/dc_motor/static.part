@@ -1,0 +1,153 @@
+{
+  "format": "static-part-1",
+  "id": "test.dc_motor",
+  "name": "DC motor test system",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "body",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "envelope",
+          "geometry": {
+            "kind": "box",
+            "dimensions_m": [
+              0.08,
+              0.04,
+              0.04
+            ]
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "estimated",
+            "source": "synthetic test-fixture envelope"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "voltage",
+      "model_port": "voltage",
+      "body": "body",
+      "domain": "signal",
+      "interface": "test-signal-v1",
+      "local_pose": {
+        "translation_m": [
+          -0.04,
+          -0.01,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "synthetic test-fixture connector frame"
+      }
+    },
+    {
+      "id": "load_torque",
+      "model_port": "load_torque",
+      "body": "body",
+      "domain": "signal",
+      "interface": "test-signal-v1",
+      "local_pose": {
+        "translation_m": [
+          -0.04,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "synthetic test-fixture connector frame"
+      }
+    },
+    {
+      "id": "electromagnetic_torque",
+      "model_port": "electromagnetic_torque",
+      "body": "body",
+      "domain": "signal",
+      "interface": "test-signal-v1",
+      "local_pose": {
+        "translation_m": [
+          -0.04,
+          0.01,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "synthetic test-fixture connector frame"
+      }
+    },
+    {
+      "id": "armature_current_observation",
+      "model_port": "armature_current_observation",
+      "body": "body",
+      "domain": "signal",
+      "interface": "test-signal-v1",
+      "local_pose": {
+        "translation_m": [0.04, 0.01, 0],
+        "rotation_quaternion_wxyz": [1, 0, 0, 0]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "synthetic test-fixture diagnostic connector frame"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "estimated",
+    "source": "synthetic declarative reference-system fixture"
+  },
+  "purchasing": {},
+  "metadata": {
+    "fixture": true
+  }
+}

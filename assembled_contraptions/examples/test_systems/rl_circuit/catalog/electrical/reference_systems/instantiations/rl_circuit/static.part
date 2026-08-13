@@ -1,0 +1,168 @@
+{
+  "format": "static-part-1",
+  "id": "test.rl_circuit",
+  "name": "RL circuit test system",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "body",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "envelope",
+          "geometry": {
+            "kind": "box",
+            "dimensions_m": [
+              0.05,
+              0.03,
+              0.01
+            ]
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "estimated",
+            "source": "synthetic test-fixture envelope"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "voltage",
+      "model_port": "voltage",
+      "body": "body",
+      "domain": "signal",
+      "interface": "test-signal-v1",
+      "local_pose": {
+        "translation_m": [
+          -0.025,
+          -0.0075,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "synthetic test-fixture connector frame"
+      }
+    },
+    {
+      "id": "resistor_voltage",
+      "model_port": "resistor_voltage",
+      "body": "body",
+      "domain": "signal",
+      "interface": "test-signal-v1",
+      "local_pose": {
+        "translation_m": [
+          -0.025,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "synthetic test-fixture connector frame"
+      }
+    },
+    {
+      "id": "inductor_voltage",
+      "model_port": "inductor_voltage",
+      "body": "body",
+      "domain": "signal",
+      "interface": "test-signal-v1",
+      "local_pose": {
+        "translation_m": [
+          -0.025,
+          0.0075,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "synthetic test-fixture connector frame"
+      }
+    },
+    {
+      "id": "applied_voltage",
+      "model_port": "applied_voltage",
+      "body": "body",
+      "domain": "signal",
+      "interface": "test-signal-v1",
+      "local_pose": {
+        "translation_m": [0.025, -0.0075, 0],
+        "rotation_quaternion_wxyz": [1, 0, 0, 0]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "synthetic test-fixture diagnostic connector frame"
+      }
+    },
+    {
+      "id": "inductor_current_observation",
+      "model_port": "inductor_current_observation",
+      "body": "body",
+      "domain": "signal",
+      "interface": "test-signal-v1",
+      "local_pose": {
+        "translation_m": [0.025, 0.0075, 0],
+        "rotation_quaternion_wxyz": [1, 0, 0, 0]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "synthetic test-fixture diagnostic connector frame"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "estimated",
+    "source": "synthetic declarative reference-system fixture"
+  },
+  "purchasing": {},
+  "metadata": {
+    "fixture": true
+  }
+}

@@ -3,11 +3,11 @@
   "id": "scanner.romi_chassis.v1",
   "variant": "v1",
   "part": "scanner.romi_chassis",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "model": {
     "id": "mechanical.differential_drive_chassis.planar",
-    "version": "1.0.0",
-    "sha256": "sha256:6dfc9eb221aa660c21a53f79ea7aea7187bb7ea80ef710f629e2af96944a0f8f"
+    "version": "2.0.0",
+    "sha256": "sha256:6d6994e62fc15cde537d80703633f830181bc813df070a873b62e76944e8b9e0"
   },
   "parameters": {
     "mass": 0.16,

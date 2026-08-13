@@ -1,0 +1,69 @@
+{
+  "format": "verification-1",
+  "id": "test_system.rl_circuit.physics",
+  "name": "RL circuit physics verification",
+  "version": "1.1.0",
+  "description": "Physics identity checks for the declarative reference-system bundle.",
+  "inputs": [
+    {
+      "name": "voltage",
+      "unit": "V",
+      "description": "Applied voltage."
+    },
+    {
+      "name": "inductor_current",
+      "unit": "A",
+      "description": "Inductor current."
+    },
+    {
+      "name": "resistor_voltage",
+      "unit": "V",
+      "description": "Resistor drop."
+    },
+    {
+      "name": "inductor_voltage",
+      "unit": "V",
+      "description": "Inductor drop."
+    }
+  ],
+  "parameters": [
+    {
+      "name": "resistance",
+      "unit": "ohm",
+      "value": 10
+    },
+    {
+      "name": "law_tolerance",
+      "unit": "V",
+      "value": 1e-9
+    }
+  ],
+  "metrics": [
+    {
+      "name": "ohms_law_rmse",
+      "expression": "resistor_voltage - resistance * inductor_current",
+      "reducer": "rmse",
+      "unit": "V"
+    },
+    {
+      "name": "kvl_rmse",
+      "expression": "voltage - resistor_voltage - inductor_voltage",
+      "reducer": "rmse",
+      "unit": "V"
+    }
+  ],
+  "criteria": [
+    {
+      "name": "ohms_law",
+      "expression": "ohms_law_rmse <= law_tolerance",
+      "minimum_probability": 0.95,
+      "confidence_level": 0.95
+    },
+    {
+      "name": "kirchhoff_voltage_law",
+      "expression": "kvl_rmse <= law_tolerance",
+      "minimum_probability": 0.95,
+      "confidence_level": 0.95
+    }
+  ]
+}

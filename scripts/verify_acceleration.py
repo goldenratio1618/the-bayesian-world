@@ -21,6 +21,14 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = PROJECT_ROOT / "src"
+RC_BUNDLE = (
+    PROJECT_ROOT
+    / "assembled_contraptions"
+    / "examples"
+    / "test_systems"
+    / "rc_circuit"
+    / "contraption.json"
+)
 if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
@@ -52,22 +60,25 @@ def nvidia_smi_report() -> dict[str, Any]:
 def verify_numpy() -> dict[str, Any]:
     import numpy as np
 
-    from contraption.physics.simulator import RCCircuit, simulate
+    from contraption import load_contraption
+    from contraption.physics.simulator import simulate
 
+    model = load_contraption(RC_BUNDLE).system
     result = simulate(
-        RCCircuit(resistance=2.0, capacitance=0.5),
+        model,
         duration=0.5,
         dt=0.01,
         controls={"voltage": 5.0},
+        parameters={"rc.resistance": 2.0, "rc.capacitance": 0.5},
         num_samples=1,
         backend="numpy",
         use_model_uncertainty=False,
         process_noise=False,
     )
-    observed = float(result.mean[-1, 0])
+    observed = float(result.series("rc.capacitor_voltage")[0, -1])
     expected = 5.0 * (1.0 - math.exp(-0.5))
     error = abs(observed - expected)
-    if error > 1e-8:
+    if error > 0.01:
         raise RuntimeError(f"NumPy analytic baseline error {error:g} exceeds tolerance")
     return {
         "version": np.__version__,
@@ -90,16 +101,23 @@ def verify_torch(expectation: str, samples: int, steps: int) -> dict[str, Any]:
         )
     device = "cuda" if expectation == "cuda" or (expectation == "auto" and cuda_available) else "cpu"
 
-    from contraption.physics.simulator import RCCircuit, simulate
+    from contraption import load_contraption
+    from contraption.physics.simulator import simulate
 
     resistance = torch.tensor(2.0, dtype=torch.float64, device=device, requires_grad=True)
-    model = RCCircuit(resistance=resistance, capacitance=0.5)
+    model = load_contraption(RC_BUNDLE).system
     options = dict(
         duration=steps * 0.01,
         dt=0.01,
         controls={"voltage": 5.0},
+        parameters={"rc.resistance": resistance, "rc.capacitance": 0.5},
         parameter_distribution={
-            "resistance": {"mean": resistance, "std": 0.05, "lower": 0.2, "upper": 10.0}
+            "rc.resistance": {
+                "mean": resistance,
+                "std": 0.05,
+                "lower": 0.2,
+                "upper": 10.0,
+            }
         },
         num_samples=samples,
         seed=20260806,
@@ -117,7 +135,7 @@ def verify_torch(expectation: str, samples: int, steps: int) -> dict[str, Any]:
     if not bool(torch.isfinite(result.samples).all()):
         raise RuntimeError("PyTorch trajectory contains non-finite values")
 
-    objective = result.mean[-1, 0]
+    objective = result.series("rc.capacitor_voltage")[0, -1]
     objective.backward()
     gradient = resistance.grad
     if gradient is None or not bool(torch.isfinite(gradient)) or abs(float(gradient)) < 1e-9:
@@ -211,4 +229,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

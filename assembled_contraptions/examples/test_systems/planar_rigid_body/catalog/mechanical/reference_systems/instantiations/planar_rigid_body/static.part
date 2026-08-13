@@ -1,0 +1,168 @@
+{
+  "format": "static-part-1",
+  "id": "test.planar_rigid_body",
+  "name": "Planar rigid-body test system",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "body",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "envelope",
+          "geometry": {
+            "kind": "box",
+            "dimensions_m": [
+              1,
+              0.6,
+              0.1
+            ]
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "estimated",
+            "source": "synthetic test-fixture envelope"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "force_x",
+      "model_port": "force_x",
+      "body": "body",
+      "domain": "signal",
+      "interface": "test-signal-v1",
+      "local_pose": {
+        "translation_m": [
+          -0.5,
+          -0.15,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "synthetic test-fixture connector frame"
+      }
+    },
+    {
+      "id": "force_y",
+      "model_port": "force_y",
+      "body": "body",
+      "domain": "signal",
+      "interface": "test-signal-v1",
+      "local_pose": {
+        "translation_m": [
+          -0.5,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "synthetic test-fixture connector frame"
+      }
+    },
+    {
+      "id": "torque",
+      "model_port": "torque",
+      "body": "body",
+      "domain": "signal",
+      "interface": "test-signal-v1",
+      "local_pose": {
+        "translation_m": [
+          -0.5,
+          0.15,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "synthetic test-fixture connector frame"
+      }
+    },
+    {
+      "id": "y_observation",
+      "model_port": "y_observation",
+      "body": "body",
+      "domain": "signal",
+      "interface": "test-signal-v1",
+      "local_pose": {
+        "translation_m": [0.5, -0.1, 0],
+        "rotation_quaternion_wxyz": [1, 0, 0, 0]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "synthetic test-fixture diagnostic connector frame"
+      }
+    },
+    {
+      "id": "yaw_observation",
+      "model_port": "yaw_observation",
+      "body": "body",
+      "domain": "signal",
+      "interface": "test-signal-v1",
+      "local_pose": {
+        "translation_m": [0.5, 0.1, 0],
+        "rotation_quaternion_wxyz": [1, 0, 0, 0]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "synthetic test-fixture diagnostic connector frame"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "estimated",
+    "source": "synthetic declarative reference-system fixture"
+  },
+  "purchasing": {},
+  "metadata": {
+    "fixture": true
+  }
+}

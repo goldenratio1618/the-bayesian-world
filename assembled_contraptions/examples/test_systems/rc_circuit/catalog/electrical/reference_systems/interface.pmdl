@@ -1,0 +1,42 @@
+{
+  "format": "pmdl-interface-1",
+  "kind": "category",
+  "abstract": true,
+  "id": "test-rc-circuit",
+  "name": "RC circuit test system",
+  "version": "1.0.0",
+  "domains": [
+    "electrical"
+  ],
+  "required_power_ports": [],
+  "required_signal_ports": [
+    {
+      "name": "voltage",
+      "direction": "input",
+      "unit": "V"
+    },
+    {
+      "name": "applied_voltage",
+      "direction": "output",
+      "unit": "V"
+    },
+    {
+      "name": "capacitor_voltage_observation",
+      "direction": "output",
+      "unit": "V"
+    },
+    {
+      "name": "resistor_current",
+      "direction": "output",
+      "unit": "A"
+    }
+  ],
+  "ideal_models": [
+    "test_system.rc_circuit"
+  ],
+  "constraints": [
+    "All dynamics and observations are declared in PMDL.",
+    "Fixture ports preserve the canonical reference-system names."
+  ],
+  "description": "Aggregate rc circuit test system reference-system contract."
+}

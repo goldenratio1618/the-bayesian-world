@@ -122,6 +122,13 @@ class _LinearEquation:
 
 
 @dataclass(frozen=True, slots=True)
+class _ProcessNoiseIncrement:
+    target_index: int
+    target_name: str
+    expression: Expression
+
+
+@dataclass(frozen=True, slots=True)
 class _ComponentLayout:
     component: _ComponentInput
     model: ModelSpec
@@ -129,6 +136,8 @@ class _ComponentLayout:
     derivative_indices: Mapping[str, int]
     parameter_names: Mapping[str, str]
     relations: tuple[tuple[str, Expression], ...]
+    process_noise_channels: tuple[str, ...]
+    process_noise_increments: tuple[_ProcessNoiseIncrement, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -411,6 +420,16 @@ class AssembledPMDLSystem:
         self.control_bounds = MappingProxyType(dict(control_bounds))
         self.control_slew_rates = MappingProxyType(dict(control_slew_rates))
         self.validity = validity
+        self.process_noise_channel_names = tuple(
+            sorted(
+                _qualified(layout.component.id, channel)
+                for layout in self._layouts
+                for channel in layout.process_noise_channels
+            )
+        )
+        self.process_noise_seed_policy = "simulation_seed"
+        self.process_noise_reproducibility = "same_backend_device"
+        self.has_process_noise = bool(self.process_noise_channel_names)
         self.kinematic_connection_ids = tuple(kinematic_connection_ids)
         self.assembly_sha256 = assembly_sha256
         self.pmdl_sha256 = pmdl_sha256
@@ -433,6 +452,7 @@ class AssembledPMDLSystem:
                 "unknown_count": self.balance.unknown_count,
                 "equation_count": self.balance.equation_count,
                 "structural_rank": self.balance.structural_rank,
+                "process_noise_channels": self.process_noise_channel_names,
                 "kinematic_connection_ids": self.kinematic_connection_ids,
             }
         )
@@ -559,6 +579,57 @@ class AssembledPMDLSystem:
         if not values:
             return backend.zeros((batch_size, 0))
         return backend.stack(values, axis=-1)
+
+    def process_noise(
+        self,
+        t: Any,
+        state: Array,
+        parameters: Mapping[str, Array],
+        controls: Mapping[str, Array],
+        dt: Any,
+        rng: Any,
+        backend: Backend,
+    ) -> Array:
+        """Evaluate declarative accepted-step increments on the active backend."""
+
+        batch_size = int(state.shape[0])
+        if not self.has_process_noise:
+            return backend.zeros(tuple(state.shape))
+        draws = backend.normal(
+            (batch_size, len(self.process_noise_channel_names)), rng
+        )
+        channel_indices = {
+            name: index for index, name in enumerate(self.process_noise_channel_names)
+        }
+        increments: dict[int, Array] = {}
+        for layout in self._layouts:
+            if not layout.process_noise_channels:
+                continue
+            environment: dict[str, Any] = {"t": t, "dt": dt}
+            for name, index in layout.unknown_indices.items():
+                environment[name] = state[:, index]
+            for local_name, global_name in layout.parameter_names.items():
+                environment[local_name] = parameters.get(
+                    global_name, self.default_parameters[global_name]
+                )
+            for channel in layout.process_noise_channels:
+                qualified = _qualified(layout.component.id, channel)
+                environment[channel] = draws[:, channel_indices[qualified]]
+            for increment in layout.process_noise_increments:
+                value = self._residual_column(
+                    _evaluate_backend_expression(
+                        increment.expression, environment, backend
+                    ),
+                    backend,
+                    batch_size,
+                    f"process_noise.{increment.target_name}",
+                )
+                increments[increment.target_index] = value
+        zero = backend.zeros((batch_size,))
+        return backend.stack(
+            [increments.get(index, zero) for index in range(len(self.state_names))],
+            axis=-1,
+        )
 
     def backward_euler_jacobian(
         self,
@@ -894,13 +965,13 @@ def assemble_contraption(
 
     if all(
         hasattr(specification, name)
-        for name in ("components", "connections", "controls", "to_dict")
+        for name in ("components", "connections", "actuators", "to_dict")
     ):
         spec = specification
     else:
         raise TypeError(
             "specification must be a resolved contraption record with "
-            "components/connections/controls/to_dict"
+            "components/connections/actuators/to_dict"
         )
     structure = validate_contraption_structure(spec)
     if not structure.valid:
@@ -934,7 +1005,7 @@ def assemble_contraption(
             for connection in spec.connections
             for endpoint in connection.endpoints
         }
-        - {_connector_key(control.target) for control in spec.controls}
+        - {_connector_key(actuator.target) for actuator in spec.actuators}
     )
     if unknown_binding_keys:
         raise AssemblyError(
@@ -1077,8 +1148,26 @@ def assemble_contraption(
             (relation.name, parse_expression(relation.expression))
             for relation in model.relations
         )
+        noise_channels = tuple(
+            channel.name for channel in model.process_noise.channels
+        )
+        noise_increments = tuple(
+            _ProcessNoiseIncrement(
+                local_unknowns[increment.target],
+                _qualified(component.id, increment.target),
+                parse_expression(increment.expression),
+            )
+            for increment in model.process_noise.increments
+        )
         layout = _ComponentLayout(
-            component, model, local_unknowns, derivative_indices, local_parameters, relations
+            component,
+            model,
+            local_unknowns,
+            derivative_indices,
+            local_parameters,
+            relations,
+            noise_channels,
+            noise_increments,
         )
         layouts.append(layout)
         component_equation_count[component.id] = len(relations)
@@ -1371,7 +1460,7 @@ def assemble_contraption(
     control_bounds: dict[str, tuple[float | None, float | None]] = {}
     control_slew_rates: dict[str, float] = {}
     control_source_units: dict[str, tuple[Any, float]] = {}
-    for control in spec.controls:
+    for control in spec.actuators:
         endpoint = resolve_signal(control.target)
         if endpoint.port.direction != "input":
             raise AssemblyError(
@@ -1570,6 +1659,11 @@ def assemble_contraption(
         "control_names": control_names,
         "control_bounds": control_bounds,
         "control_slew_rates": control_slew_rates,
+        "process_noise_channels": sorted(
+            _qualified(layout.component.id, channel)
+            for layout in layouts
+            for channel in layout.process_noise_channels
+        ),
     }
     encoded = json.dumps(
         hash_payload, sort_keys=True, separators=(",", ":"), allow_nan=False

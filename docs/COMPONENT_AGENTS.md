@@ -112,19 +112,19 @@ These are paid, non-canary operations. They share
 `outputs/agent-budget.json`, whose lifetime ceiling remains `$100.00`:
 
 ```console
-contraption agent-run classification-all --env-file ../.env
-contraption agent-run modeling-one --target romi_drive --env-file ../.env
+contraption agent-run classification-all --job-file assembled_contraptions/scanner/agent_jobs.json --env-file ../.env
+contraption agent-run modeling-one --job-file assembled_contraptions/scanner/agent_jobs.json --target romi_drive --env-file ../.env
 ```
 
-`classification-all` processes the six records in
-`examples/scanner_robot/component_inputs` in deterministic filename order and
+`classification-all` processes the records declared by the supplied
+`agent-jobs-1` inventory in deterministic authored order and
 stops at the first provider or semantic-validation failure. Each completed
 record is atomically written to
 `outputs/agent-proposals/classification/<target>.json` with the validated
 proposal, exact input hash, reported usage, and charged dollars.
 
-`modeling-one` defaults to `romi_drive`; the other five component-input stems
-are accepted by `--target`. It atomically writes a receipt under
+`modeling-one` requires a `--target` declared by that same inventory. It
+atomically writes a receipt under
 `outputs/agent-proposals/modeling/` and leaves all generated, validated files in
 `outputs/agent-staging/`. It never calls `promote`.
 The proposal receipt includes validation-call telemetry so repeated repair

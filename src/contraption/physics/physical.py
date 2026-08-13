@@ -22,7 +22,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from .specs import FrozenDict, SpecError, StrictRecord
+from .specs import ConnectionSpec, FrozenDict, JointSpec, SpecError, StrictRecord
 from .units import UnitError, parse_unit
 
 
@@ -69,8 +69,6 @@ _PROVENANCE_KINDS = frozenset(
 )
 _PHYSICAL_ROLES = frozenset({"part", "boundary", "software"})
 _SOLID_KINDS = frozenset({"box", "cylinder", "sphere", "mesh"})
-_ATTACHMENT_KINDS = frozenset({"fixed", "revolute"})
-_BEHAVIOR_BINDINGS = frozenset({"kinematic_only", "pmdl"})
 _MECHANICAL_DOMAINS = frozenset({"mechanical", "rigid_mechanical"})
 
 
@@ -1257,6 +1255,100 @@ class PhysicalComponentInstance(StrictRecord):
 
 
 @dataclass(frozen=True, slots=True)
+class PhysicalAssemblySpec(StrictRecord):
+    """Typed projection consumed by the physical assembly resolver.
+
+    Connection and joint syntax is parsed exactly once by the canonical PMDL
+    schema records.  ``source`` retains the normalized resolved closure used
+    for hashing; it is provenance, not a second source of connection semantics.
+    """
+
+    id: str
+    components: tuple[PhysicalComponentInstance, ...]
+    connections: tuple[ConnectionSpec, ...]
+    physical_root: FrozenDict[Any]
+    source: FrozenDict[Any]
+
+    def __post_init__(self) -> None:
+        _identifier(self.id, "physical assembly id")
+        if not self.components:
+            raise PhysicalSpecError("physical assembly components must not be empty")
+        if any(
+            not isinstance(component, PhysicalComponentInstance)
+            for component in self.components
+        ):
+            raise TypeError(
+                "physical assembly components must be PhysicalComponentInstance values"
+            )
+        duplicate_components = _duplicates(
+            component.id for component in self.components
+        )
+        if duplicate_components:
+            raise PhysicalSpecError(
+                "physical assembly has duplicate component id(s): "
+                + ", ".join(duplicate_components)
+            )
+        if any(
+            not isinstance(connection, ConnectionSpec)
+            for connection in self.connections
+        ):
+            raise TypeError(
+                "physical assembly connections must be canonical ConnectionSpec values"
+            )
+        duplicate_connections = _duplicates(
+            connection.id for connection in self.connections
+        )
+        if duplicate_connections:
+            raise PhysicalSpecError(
+                "physical assembly has duplicate connection id(s): "
+                + ", ".join(duplicate_connections)
+            )
+        if not isinstance(self.physical_root, FrozenDict):
+            raise TypeError("physical assembly root must be a canonical FrozenDict")
+        if not isinstance(self.source, FrozenDict):
+            raise TypeError("physical assembly source must be a canonical FrozenDict")
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "PhysicalAssemblySpec":
+        data = _mapping(value, "physical assembly")
+        component_values = _sequence(
+            data.get("components"), "physical assembly.components"
+        )
+        connection_values = _sequence(
+            data.get("connections", ()), "physical assembly.connections"
+        )
+        connections = tuple(
+            ConnectionSpec.from_dict(
+                _mapping(item, f"physical assembly.connections[{index}]")
+            )
+            for index, item in enumerate(connection_values)
+        )
+        physical_root = _freeze_json(
+            _mapping(data.get("physical_root"), "physical assembly.physical_root"),
+            "physical assembly.physical_root",
+        )
+        canonical_source = dict(data)
+        canonical_source["connections"] = [
+            connection.to_dict() for connection in connections
+        ]
+        source = _freeze_json(canonical_source, "physical assembly source")
+        assert isinstance(physical_root, FrozenDict)
+        assert isinstance(source, FrozenDict)
+        return cls(
+            _identifier(data.get("id"), "physical assembly id"),
+            tuple(
+                PhysicalComponentInstance.from_dict(
+                    _mapping(item, f"physical assembly.components[{index}]")
+                )
+                for index, item in enumerate(component_values)
+            ),
+            connections,
+            physical_root,
+            source,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class ConnectorRef(StrictRecord):
     component: str
     connector: str
@@ -1296,203 +1388,47 @@ class ConnectorRef(StrictRecord):
 
 
 @dataclass(frozen=True, slots=True)
-class JointCoordinateBindingSpec(StrictRecord):
-    """Bind one PMDL angle state to a revolute joint's physical angle."""
-
-    state: str
-    joint_angle_at_state_zero_rad: float
-
-    def __post_init__(self) -> None:
-        object.__setattr__(
-            self, "state", _state_reference(self.state, "joint coordinate binding.state")
-        )
-        object.__setattr__(
-            self,
-            "joint_angle_at_state_zero_rad",
-            _number(
-                self.joint_angle_at_state_zero_rad,
-                "joint coordinate binding.joint_angle_at_state_zero_rad",
-            ),
-        )
-
-    @classmethod
-    def from_dict(cls, value: Mapping[str, Any]) -> "JointCoordinateBindingSpec":
-        data = _mapping(value, "joint coordinate binding")
-        names = ("state", "joint_angle_at_state_zero_rad")
-        _keys(data, names, "joint coordinate binding", names)
-        return cls(
-            _state_reference(data["state"], "joint coordinate binding.state"),
-            _number(
-                data["joint_angle_at_state_zero_rad"],
-                "joint coordinate binding.joint_angle_at_state_zero_rad",
-            ),
-        )
-
-
-@dataclass(frozen=True, slots=True)
 class MechanicalAttachmentSpec(StrictRecord):
+    """Physical projection of a canonical typed attachment connection."""
+
     id: str
     parent: ConnectorRef
     child: ConnectorRef
-    kind: str
-    behavior_binding: str
-    coordinate: str | None = None
-    zero_angle_rad: float = 0.0
-    coordinate_bindings: tuple[JointCoordinateBindingSpec, ...] = ()
+    joint: JointSpec
     domain: str | None = None
     metadata: FrozenDict[Any] = FrozenDict()
 
     def __post_init__(self) -> None:
         _identifier(self.id, "attachment.id")
-        if self.kind not in _ATTACHMENT_KINDS:
-            raise PhysicalSpecError(
-                f"attachment.kind must be one of {sorted(_ATTACHMENT_KINDS)}"
-            )
-        if self.behavior_binding not in _BEHAVIOR_BINDINGS:
-            raise PhysicalSpecError(
-                "attachment.behavior_binding must be one of "
-                f"{sorted(_BEHAVIOR_BINDINGS)}"
-            )
+        if not isinstance(self.parent, ConnectorRef) or not isinstance(
+            self.child, ConnectorRef
+        ):
+            raise TypeError("attachment endpoints must be ConnectorRef values")
+        if not isinstance(self.joint, JointSpec):
+            raise TypeError("attachment joint must be a canonical JointSpec")
         if self.parent.component == self.child.component:
             raise PhysicalSpecError(
                 f"attachment {self.id!r} may not connect a component to itself"
             )
-        coordinate_bindings = tuple(self.coordinate_bindings)
-        if any(
-            not isinstance(binding, JointCoordinateBindingSpec)
-            for binding in coordinate_bindings
-        ):
-            raise PhysicalSpecError(
-                "attachment.coordinate_bindings must contain only "
-                "JointCoordinateBindingSpec values"
-            )
-        duplicate_states = _duplicates(binding.state for binding in coordinate_bindings)
-        if duplicate_states:
-            raise PhysicalSpecError(
-                f"attachment {self.id!r} binds joint state(s) more than once: "
-                + ", ".join(duplicate_states)
-            )
-        if self.kind == "revolute":
-            if self.coordinate is None:
-                raise PhysicalSpecError(
-                    f"revolute attachment {self.id!r} requires a coordinate"
-                )
-            _identifier(self.coordinate, "attachment.coordinate")
-            if not coordinate_bindings:
-                raise PhysicalSpecError(
-                    f"revolute attachment {self.id!r} requires coordinate_bindings"
-                )
-            if coordinate_bindings[0].state != self.coordinate:
-                raise PhysicalSpecError(
-                    f"revolute attachment {self.id!r} primary coordinate "
-                    f"{self.coordinate!r} must equal first coordinate binding state "
-                    f"{coordinate_bindings[0].state!r}"
-                )
-            endpoint_components = {self.parent.component, self.child.component}
-            invalid_components = sorted(
-                {
-                    split_state_reference(binding.state)[0]
-                    for binding in coordinate_bindings
-                    if split_state_reference(binding.state)[0]
-                    not in endpoint_components
-                }
-            )
-            if invalid_components:
-                raise PhysicalSpecError(
-                    f"revolute attachment {self.id!r} coordinate bindings must "
-                    f"reference endpoint components; invalid={invalid_components}"
-                )
-        elif self.coordinate is not None:
-            raise PhysicalSpecError(
-                f"fixed attachment {self.id!r} may not declare a coordinate"
-            )
-        _number(self.zero_angle_rad, "attachment.zero_angle_rad")
-        if self.kind == "fixed" and self.zero_angle_rad != 0.0:
-            raise PhysicalSpecError(
-                f"fixed attachment {self.id!r} may not declare a nonzero zero_angle_rad"
-            )
-        if self.kind == "fixed" and coordinate_bindings:
-            raise PhysicalSpecError(
-                f"fixed attachment {self.id!r} requires coordinate_bindings: []"
-            )
-        if self.kind == "revolute" and not math.isclose(
-            coordinate_bindings[0].joint_angle_at_state_zero_rad,
-            self.zero_angle_rad,
-            rel_tol=0.0,
-            abs_tol=1e-12,
-        ):
-            raise PhysicalSpecError(
-                f"revolute attachment {self.id!r} zero_angle_rad must equal the "
-                "first coordinate binding's joint_angle_at_state_zero_rad"
-            )
         if self.domain is not None:
             _identifier(self.domain, "attachment.domain")
-        metadata = _freeze_json(self.metadata, "attachment.metadata")
-        if not isinstance(metadata, FrozenDict):
-            raise PhysicalSpecError("attachment.metadata must be an object")
-        object.__setattr__(self, "metadata", metadata)
-        object.__setattr__(self, "coordinate_bindings", coordinate_bindings)
+        if not isinstance(self.metadata, FrozenDict):
+            raise TypeError("attachment metadata must be a canonical FrozenDict")
 
     @classmethod
-    def from_connection(cls, value: Mapping[str, Any]) -> "MechanicalAttachmentSpec":
-        data = _mapping(value, "attachment connection")
-        outer_names = ("id", "kind", "endpoints", "joint", "domain", "metadata")
-        _keys(
-            data,
-            outer_names,
-            "attachment connection",
-            ("id", "kind", "endpoints", "joint"),
-        )
-        if data.get("kind") != "attachment":
-            raise PhysicalSpecError("mechanical attachment connection kind must be 'attachment'")
-        endpoints = _sequence(data["endpoints"], "attachment.endpoints")
-        if len(endpoints) != 2:
-            raise PhysicalSpecError(
-                f"attachment {data.get('id')!r} must have exactly two ordered endpoints; "
-                f"got {len(endpoints)}"
-            )
-        joint = _mapping(data["joint"], "attachment.joint")
-        names = (
-            "kind",
-            "behavior_binding",
-            "coordinate",
-            "zero_angle_rad",
-            "coordinate_bindings",
-        )
-        _keys(
-            joint,
-            names,
-            "attachment.joint",
-            ("kind", "behavior_binding", "coordinate_bindings"),
-        )
+    def from_connection(cls, value: ConnectionSpec) -> "MechanicalAttachmentSpec":
+        if not isinstance(value, ConnectionSpec):
+            raise TypeError("attachment projection requires a canonical ConnectionSpec")
+        if value.kind != "attachment" or value.joint is None:
+            raise ValueError("attachment projection requires kind='attachment' with a joint")
+        parent, child = value.endpoints
         return cls(
-            _identifier(data["id"], "attachment.id"),
-            ConnectorRef.from_value(endpoints[0]),
-            ConnectorRef.from_value(endpoints[1]),
-            _text(joint["kind"], "attachment.joint.kind"),
-            _text(joint["behavior_binding"], "attachment.joint.behavior_binding"),
-            None
-            if joint.get("coordinate") is None
-            else _identifier(joint["coordinate"], "attachment.joint.coordinate"),
-            _number(joint.get("zero_angle_rad", 0.0), "attachment.joint.zero_angle_rad"),
-            tuple(
-                JointCoordinateBindingSpec.from_dict(
-                    _mapping(item, f"attachment.joint.coordinate_bindings[{index}]")
-                )
-                for index, item in enumerate(
-                    _sequence(
-                        joint["coordinate_bindings"],
-                        "attachment.joint.coordinate_bindings",
-                    )
-                )
-            ),
-            None
-            if data.get("domain") is None
-            else _identifier(data["domain"], "attachment.domain"),
-            _freeze_json(
-                _mapping(data.get("metadata", {}), "attachment.metadata"),
-                "attachment.metadata",
-            ),
+            value.id,
+            ConnectorRef(parent.component, parent.port),
+            ConnectorRef(child.component, child.port),
+            value.joint,
+            value.domain,
+            value.metadata,
         )
 
 
@@ -1622,18 +1558,18 @@ def _validate_attachment_connectors(
             f"attachment {attachment.id!r} connects incompatible interfaces "
             f"{parent.interface!r} and {child.interface!r}"
         )
-    if attachment.kind == "revolute" and parent.interface != "rotational-shaft":
+    if attachment.joint.kind == "revolute" and parent.interface != "rotational-shaft":
         raise ConnectorCompatibilityError(
             f"revolute attachment {attachment.id!r} requires interface "
             f"'rotational-shaft', got {parent.interface!r}"
         )
     bound = (parent.model_port is not None, child.model_port is not None)
-    if attachment.behavior_binding == "pmdl" and bound != (True, True):
+    if attachment.joint.behavior_binding == "pmdl" and bound != (True, True):
         raise ConnectorCompatibilityError(
             f"behavior-bearing attachment {attachment.id!r} requires non-null model_port "
             "on both connectors"
         )
-    if attachment.behavior_binding == "kinematic_only" and bound != (False, False):
+    if attachment.joint.behavior_binding == "kinematic_only" and bound != (False, False):
         raise ConnectorCompatibilityError(
             f"kinematic-only attachment {attachment.id!r} requires model_port:null "
             "on both connectors"
@@ -1642,39 +1578,18 @@ def _validate_attachment_connectors(
 
 
 def _validate_and_canonicalize_connections(
-    connections: Sequence[Any],
-    attachments: Sequence[MechanicalAttachmentSpec],
+    connections: Sequence[ConnectionSpec],
     component_map: Mapping[str, PhysicalComponentInstance],
     parts: Mapping[str, ResolvedPartSpec],
 ) -> tuple[FrozenDict[Any], ...]:
-    attachment_map = {attachment.id: attachment for attachment in attachments}
     result: list[FrozenDict[Any]] = []
-    for index, raw in enumerate(connections):
-        connection = _mapping(raw, f"connections[{index}]")
-        kind = _text(connection.get("kind"), f"connections[{index}].kind")
-        if kind not in {"power", "signal", "attachment", "constraint"}:
-            raise PhysicalSpecError(
-                f"connections[{index}].kind has unsupported value {kind!r}"
-            )
-        allowed = {"id", "kind", "endpoints", "domain", "metadata"}
-        if kind == "attachment":
-            allowed.add("joint")
-        _keys(
-            connection,
-            allowed,
-            f"connections[{index}]",
-            ("id", "kind", "endpoints")
-            + (("joint",) if kind == "attachment" else ()),
+    for index, connection in enumerate(connections):
+        kind = connection.kind
+        connection_id = connection.id
+        endpoints = tuple(
+            ConnectorRef(endpoint.component, endpoint.port)
+            for endpoint in connection.endpoints
         )
-        connection_id = _identifier(connection["id"], f"connections[{index}].id")
-        endpoint_values = _sequence(
-            connection["endpoints"], f"connections[{index}].endpoints"
-        )
-        endpoints = tuple(ConnectorRef.from_value(value) for value in endpoint_values)
-        if len(endpoints) < 2:
-            raise ConnectorCompatibilityError(
-                f"{kind} connection {connection_id!r} requires at least two endpoints"
-            )
         duplicate_endpoints = _duplicates(endpoint.key for endpoint in endpoints)
         if duplicate_endpoints:
             raise ConnectorCompatibilityError(
@@ -1701,25 +1616,18 @@ def _validate_and_canonicalize_connections(
                 f"{kind} connection {connection_id!r} spans incompatible physical "
                 f"interfaces: {sorted(interfaces)}"
             )
-        declared_domain = connection.get("domain")
+        declared_domain = connection.domain
         if kind in {"power", "signal", "attachment"} and declared_domain is None:
             raise ConnectorCompatibilityError(
                 f"{kind} connection {connection_id!r} requires an explicit domain"
             )
         if declared_domain is not None:
-            declared_domain = _identifier(
-                declared_domain, f"connections[{index}].domain"
-            )
             if kind != "constraint" and domains != {declared_domain}:
                 raise ConnectorCompatibilityError(
                     f"{kind} connection {connection_id!r} declares domain "
                     f"{declared_domain!r}, but its connectors use {sorted(domains)}"
                 )
-        metadata = _canonical_json_value(
-            _mapping(connection.get("metadata", {}), f"connections[{index}].metadata"),
-            f"connections[{index}].metadata",
-        )
-        if metadata:
+        if connection.metadata:
             raise PhysicalSpecError(
                 f"connections[{index}].metadata must be empty; physical semantics "
                 "require typed connection fields rather than opaque metadata"
@@ -1729,25 +1637,11 @@ def _validate_and_canonicalize_connections(
             "kind": kind,
             "endpoints": [endpoint.to_dict() for endpoint in endpoints],
             "domain": declared_domain,
-            "metadata": metadata,
+            "metadata": {},
         }
         if kind == "attachment":
-            try:
-                attachment = attachment_map[connection_id]
-            except KeyError as exc:  # defensive: parsing and canonicalization must agree
-                raise PhysicalSpecError(
-                    f"attachment connection {connection_id!r} was not parsed"
-                ) from exc
-            normalized["joint"] = {
-                "kind": attachment.kind,
-                "behavior_binding": attachment.behavior_binding,
-                "coordinate": attachment.coordinate,
-                "zero_angle_rad": attachment.zero_angle_rad,
-                "coordinate_bindings": [
-                    binding.to_dict()
-                    for binding in attachment.coordinate_bindings
-                ],
-            }
+            assert connection.joint is not None
+            normalized["joint"] = connection.joint.to_dict()
         frozen = _freeze_json(normalized, f"connections[{index}]")
         assert isinstance(frozen, FrozenDict)
         result.append(frozen)
@@ -1769,19 +1663,20 @@ def _joint_transform(
     attachment: MechanicalAttachmentSpec,
     joint_coordinates: Mapping[str, float],
 ) -> TransformSpec:
-    if attachment.kind == "fixed":
+    if attachment.joint.kind == "fixed":
         return TransformSpec.identity()
-    assert attachment.coordinate is not None
-    if attachment.coordinate not in joint_coordinates:
+    coordinate = attachment.joint.coordinate
+    assert coordinate is not None
+    if coordinate not in joint_coordinates:
         raise AssemblyUnderconstrainedError(
             f"revolute attachment {attachment.id!r} requires joint coordinate "
-            f"{attachment.coordinate!r}"
+            f"{coordinate!r}"
         )
     angle = _number(
-        joint_coordinates[attachment.coordinate],
-        f"joint_coordinates.{attachment.coordinate}",
+        joint_coordinates[coordinate],
+        f"joint_coordinates.{coordinate}",
     )
-    return TransformSpec.rotation_about_z(attachment.zero_angle_rad + angle)
+    return TransformSpec.rotation_about_z(attachment.joint.zero_angle_rad + angle)
 
 
 def _validated_joint_coordinates(
@@ -1796,9 +1691,10 @@ def _validated_joint_coordinates(
         for name, value in source.items()
     }
     required = {
-        attachment.coordinate
+        attachment.joint.coordinate
         for attachment in attachments
-        if attachment.kind == "revolute" and attachment.coordinate is not None
+        if attachment.joint.kind == "revolute"
+        and attachment.joint.coordinate is not None
     }
     missing = sorted(required - set(coordinates))
     extra = sorted(set(coordinates) - required)
@@ -2307,9 +2203,9 @@ def _assembly_sha256(
 
 
 def _root_configuration(
-    contraption: Mapping[str, Any],
+    root_value: Mapping[str, Any],
 ) -> tuple[str, TransformSpec, PlanarRootStateBindingSpec | None]:
-    root = _mapping(contraption.get("physical_root"), "contraption.physical_root")
+    root = _mapping(root_value, "contraption.physical_root")
     _keys(
         root,
         ("component", "pose", "state_binding"),
@@ -2350,38 +2246,27 @@ def _root_configuration(
 
 
 def resolve_physical_assembly(
-    contraption: Mapping[str, Any] | Any,
+    specification: PhysicalAssemblySpec,
     parts: ResolvedPartRegistry,
     joint_coordinates: Mapping[str, float] | None = None,
     *,
     translation_tolerance_m: float = 1e-9,
     angular_tolerance_rad: float = 1e-9,
 ) -> ResolvedPhysicalAssembly:
-    """Resolve part geometry and pairwise attachments from JSON-compatible data.
+    """Resolve part geometry and pairwise canonical typed attachments.
 
     ``joint_coordinates`` maps each revolute attachment's declared coordinate
     name to its current angle in radians.  The values are configuration, not
     assembly identity, and therefore do not change ``assembly_sha256``.
     """
 
-    raw = contraption.to_dict() if hasattr(contraption, "to_dict") else contraption
-    spec = _mapping(raw, "contraption")
-    contraption_id = _identifier(spec.get("id"), "contraption.id")
-    component_values = _sequence(spec.get("components"), "contraption.components")
-    if not component_values:
-        raise PhysicalSpecError("contraption.components must not be empty")
-    components = tuple(
-        PhysicalComponentInstance.from_dict(
-            _mapping(value, f"contraption.components[{index}]")
-        )
-        for index, value in enumerate(component_values)
+    if not isinstance(specification, PhysicalAssemblySpec):
+        raise TypeError("specification must be a parsed PhysicalAssemblySpec")
+    contraption_id = specification.id
+    components = specification.components
+    component_values = _sequence(
+        specification.source.get("components"), "contraption.components"
     )
-    duplicate_components = _duplicates(component.id for component in components)
-    if duplicate_components:
-        raise PhysicalSpecError(
-            "contraption has duplicate component id(s): "
-            + ", ".join(duplicate_components)
-        )
     if not isinstance(parts, ResolvedPartRegistry):
         raise TypeError("parts must be a ResolvedPartRegistry")
     registry = parts
@@ -2398,40 +2283,19 @@ def resolve_physical_assembly(
     )
     component_map = {component.id: component for component in components}
 
-    connection_values = tuple(
-        _sequence(spec.get("connections", []), "contraption.connections")
-    )
-    connection_ids = tuple(
-        _identifier(
-            _mapping(connection, f"contraption.connections[{index}]").get("id"),
-            f"contraption.connections[{index}].id",
-        )
-        for index, connection in enumerate(connection_values)
-    )
-    duplicate_connections = _duplicates(connection_ids)
-    if duplicate_connections:
-        raise PhysicalSpecError(
-            "contraption has duplicate connection id(s): "
-            + ", ".join(duplicate_connections)
-        )
+    connection_specs = specification.connections
     attachments = tuple(
-        MechanicalAttachmentSpec.from_connection(
-            _mapping(connection, f"contraption.connections[{index}]")
-        )
-        for index, connection in enumerate(connection_values)
-        if isinstance(connection, Mapping) and connection.get("kind") == "attachment"
+        MechanicalAttachmentSpec.from_connection(connection)
+        for connection in connection_specs
+        if connection.kind == "attachment"
     )
-    duplicate_attachments = _duplicates(attachment.id for attachment in attachments)
-    if duplicate_attachments:
-        raise PhysicalSpecError(
-            "contraption has duplicate attachment id(s): "
-            + ", ".join(duplicate_attachments)
-        )
     connections = _validate_and_canonicalize_connections(
-        connection_values, attachments, component_map, registry
+        connection_specs, component_map, registry
     )
 
-    root_component, root_pose, root_state_binding = _root_configuration(spec)
+    root_component, root_pose, root_state_binding = _root_configuration(
+        specification.physical_root
+    )
     coordinates = _validated_joint_coordinates(
         attachments, {} if joint_coordinates is None else joint_coordinates
     )
@@ -2461,7 +2325,9 @@ def resolve_physical_assembly(
         translation_tolerance_m=translation_tolerance_m,
         angular_tolerance_rad=angular_tolerance_rad,
     )
-    digest = _assembly_sha256(spec, root_component, components, registry)
+    digest = _assembly_sha256(
+        specification.source, root_component, components, registry
+    )
     scene = _scene(
         digest,
         contraption_id,
@@ -2523,10 +2389,10 @@ __all__ = [
     "ConnectorRef",
     "CounterRotationKinematicsSpec",
     "GeometrySpec",
-    "JointCoordinateBindingSpec",
     "MechanicalAttachmentSpec",
     "ModelReferenceSpec",
     "PhysicalAssemblyError",
+    "PhysicalAssemblySpec",
     "PhysicalComponentInstance",
     "PhysicalConnectorSpec",
     "PhysicalParameterBindingSpec",

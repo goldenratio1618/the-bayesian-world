@@ -1,0 +1,317 @@
+{
+  "format": "pmdl-1",
+  "id": "test_system.dc_motor",
+  "name": "DC motor reference system",
+  "version": "1.0.0",
+  "domains": [
+    "electromechanical",
+    "electrical",
+    "mechanical"
+  ],
+  "description": "Armature-controlled permanent-magnet DC motor with shaft inertia, viscous friction, and angle.",
+  "power_ports": [],
+  "signal_ports": [
+    {
+      "name": "voltage",
+      "direction": "input",
+      "unit": "V",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Armature voltage."
+    },
+    {
+      "name": "load_torque",
+      "direction": "input",
+      "unit": "N*m",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Opposing shaft load torque."
+    },
+    {
+      "name": "electromagnetic_torque",
+      "direction": "output",
+      "unit": "N*m",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Electromagnetic torque."
+    },
+    {
+      "name": "armature_current_observation",
+      "direction": "output",
+      "unit": "A",
+      "dtype": "float64",
+      "shape": [],
+      "description": "Diagnostic observation of armature current."
+    }
+  ],
+  "states": [
+    {
+      "name": "armature_current",
+      "unit": "A",
+      "initial": 0,
+      "derivative": "armature_current_dot",
+      "description": "Armature current."
+    },
+    {
+      "name": "angular_velocity",
+      "unit": "rad/s",
+      "initial": 0,
+      "derivative": "angular_velocity_dot",
+      "description": "Shaft speed."
+    },
+    {
+      "name": "shaft_angle",
+      "unit": "rad",
+      "initial": 0,
+      "derivative": "shaft_angle_dot",
+      "description": "Shaft angle."
+    }
+  ],
+  "parameters": [
+    {
+      "name": "resistance",
+      "unit": "ohm",
+      "default": 2,
+      "bounds": {
+        "lower": 1e-15,
+        "upper": 1000000000
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.04
+        }
+      },
+      "learnable": true,
+      "description": "Armature resistance."
+    },
+    {
+      "name": "inductance",
+      "unit": "H",
+      "default": 0.01,
+      "bounds": {
+        "lower": 1e-15,
+        "upper": 1000000
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.0002
+        }
+      },
+      "learnable": true,
+      "description": "Armature inductance."
+    },
+    {
+      "name": "torque_constant",
+      "unit": "N*m/A",
+      "default": 0.08,
+      "bounds": {
+        "lower": 1e-15,
+        "upper": 1000000
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.0016
+        }
+      },
+      "learnable": true,
+      "description": "Torque constant."
+    },
+    {
+      "name": "back_emf_constant",
+      "unit": "V*s/rad",
+      "default": 0.08,
+      "bounds": {
+        "lower": 1e-15,
+        "upper": 1000000
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.0016
+        }
+      },
+      "learnable": true,
+      "description": "Back-EMF constant."
+    },
+    {
+      "name": "inertia",
+      "unit": "kg*m^2",
+      "default": 0.002,
+      "bounds": {
+        "lower": 1e-15,
+        "upper": 1000000
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.00004
+        }
+      },
+      "learnable": true,
+      "description": "Shaft inertia."
+    },
+    {
+      "name": "viscous_friction",
+      "unit": "N*m*s/rad",
+      "default": 0.001,
+      "bounds": {
+        "lower": 1e-15,
+        "upper": 1000000
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.00002
+        }
+      },
+      "learnable": true,
+      "description": "Viscous friction."
+    }
+  ],
+  "relations": [
+    {
+      "name": "armature_dynamics",
+      "expression": "armature_current_dot - (voltage - resistance * armature_current - back_emf_constant * angular_velocity) / inductance",
+      "description": "Armature electrical dynamics."
+    },
+    {
+      "name": "shaft_dynamics",
+      "expression": "angular_velocity_dot - (torque_constant * armature_current - viscous_friction * angular_velocity - load_torque) / inertia",
+      "description": "Shaft rotational dynamics."
+    },
+    {
+      "name": "shaft_kinematics",
+      "expression": "shaft_angle_dot - angular_velocity",
+      "description": "Angle kinematics."
+    },
+    {
+      "name": "torque_output",
+      "expression": "electromagnetic_torque - torque_constant * armature_current",
+      "description": "Torque observation."
+    },
+    {
+      "name": "armature_current_output",
+      "expression": "armature_current_observation - armature_current",
+      "description": "Expose the armature state to verification programs."
+    }
+  ],
+  "stored_energy": [
+    {
+      "name": "stored_energy",
+      "expression": "0.5 * inductance * armature_current ** 2 + 0.5 * inertia * angular_velocity ** 2",
+      "unit": "J",
+      "nonnegative": true,
+      "description": "Magnetic and rotational energy."
+    }
+  ],
+  "dissipation": [
+    {
+      "name": "loss",
+      "expression": "resistance * armature_current ** 2 + viscous_friction * angular_velocity ** 2",
+      "unit": "W",
+      "nonnegative": true,
+      "description": "Copper and viscous loss."
+    }
+  ],
+  "sources": [],
+  "modes": [],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [],
+    "required": [
+      "armature_current",
+      "angular_velocity",
+      "shaft_angle"
+    ]
+  },
+  "validity": {
+    "ranges": {
+      "resistance": {
+        "lower": 1e-15,
+        "upper": 1000000000
+      },
+      "inductance": {
+        "lower": 1e-15,
+        "upper": 1000000
+      },
+      "torque_constant": {
+        "lower": 1e-15,
+        "upper": 1000000
+      },
+      "back_emf_constant": {
+        "lower": 1e-15,
+        "upper": 1000000
+      },
+      "inertia": {
+        "lower": 1e-15,
+        "upper": 1000000
+      },
+      "viscous_friction": {
+        "lower": 1e-15,
+        "upper": 1000000
+      }
+    },
+    "assumptions": [
+      "Lumped deterministic reference system",
+      "Parameters remain constant during one simulation sample"
+    ],
+    "max_timestep": 0.01
+  },
+  "fidelity_levels": [
+    {
+      "name": "reference",
+      "description": "Exact equations of the declared lumped test system.",
+      "active_relations": [
+        "armature_dynamics",
+        "shaft_dynamics",
+        "shaft_kinematics",
+        "torque_output",
+        "armature_current_output"
+      ],
+      "parameter_overrides": {},
+      "approximation_error": "Effects outside the declared lumped model are omitted.",
+      "relative_cost": 1
+    }
+  ],
+  "properties": [
+    {
+      "name": "nonnegative_stored_energy",
+      "kind": "nonnegative_energy",
+      "expression": "0.5 * inductance * armature_current ** 2 + 0.5 * inertia * angular_velocity ** 2 >= 0 * (inductance * armature_current ** 2 + inertia * angular_velocity ** 2)",
+      "expected": true,
+      "samples": 32,
+      "tolerance": 1e-12
+    },
+    {
+      "name": "nonnegative_loss",
+      "kind": "nonnegative_dissipation",
+      "expression": "resistance * armature_current ** 2 + viscous_friction * angular_velocity ** 2 >= 0 * (resistance * armature_current ** 2 + viscous_friction * angular_velocity ** 2)",
+      "expected": true,
+      "samples": 32,
+      "tolerance": 1e-12
+    }
+  ],
+  "trust": {
+    "structural": "tested",
+    "physical": "unverified",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": [
+      {
+        "kind": "textbook",
+        "reference": "Linear permanent-magnet DC motor",
+        "summary": "Canonical lumped reference equations used as an analytic simulator fixture."
+      }
+    ]
+  },
+  "metadata": {
+    "gold": false,
+    "test_fixture": true,
+    "causality": "causal aggregate expressed in descriptor form",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0"
+  },
+  "implements": "test-dc-motor"
+}

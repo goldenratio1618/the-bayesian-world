@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import importlib.util
 import json
 import os
@@ -13,13 +14,10 @@ from typing import Any, Mapping
 
 import numpy as np
 
-from .applications.scanner import (
-    ScannerMission,
-    scanner_metrics,
-    simulate_scanner_robot,
-)
-from .catalog.instantiations import PartInstantiationRegistry
 from .catalog.interfaces import interface_paths, load_interface_catalog
+from .control import compile_resolved_controller, control_digest
+from .live import LiveApplication, scene_from_result
+from .loading import load_contraption
 from .manufacturing.build import generate_build_instructions
 from .part_import.agents import (
     ClassificationAgent,
@@ -33,14 +31,10 @@ from .part_import.agents import (
 from .part_import.budget import BudgetLedger
 from .paths import asset_root, source_root
 from .physics.backend import infer_backend
-from .physics.compiler import compile_resolved_assembly, syntax_check
-from .physics.controls import ControlProgram
-from .physics.dsl import ModelRegistry
-from .physics.resolved import ResolvedAssembly, resolve_assembly
-from .physics.simulator import SimulationResult
+from .physics.resolved import ResolvedAssembly
+from .physics.simulator import SimulationResult, controller_time_step, simulate
 from .physics.uq import summarize_samples
-from .visualization.scanner_scene import scanner_physical_scene
-from .visualization.server import LiveScannerApplication, serve_live_scanner
+from .visualization.server import serve_live
 from .visualization.viewer import generate_viewer
 
 
@@ -50,39 +44,68 @@ WORK_ROOT = SOURCE_ROOT if PROJECT_ROOT == SOURCE_ROOT else Path.cwd().resolve()
 OUTPUT_ROOT = Path(
     os.environ.get("CONTRAPTION_OUTPUT_ROOT", str(WORK_ROOT / "outputs"))
 ).expanduser().resolve()
-SCANNER_ROOT = PROJECT_ROOT / "examples" / "scanner_robot"
-PART_IMPORT_CANARY_ROOT = PROJECT_ROOT / "examples" / "part_import_canary"
-DEFAULT_SPEC = SCANNER_ROOT / "contraption.json"
+PART_IMPORT_CANARY_ROOT = (
+    PROJECT_ROOT / "assembled_contraptions" / "examples" / "part_import_canary"
+)
 DEFAULT_CATALOG = PROJECT_ROOT / "model_catalog"
-DEFAULT_CONTROLLER_ROOT = SCANNER_ROOT / "controls"
-DEFAULT_OUTPUT = OUTPUT_ROOT / "scanner_demo"
+DEFAULT_OUTPUT = OUTPUT_ROOT / "contraption_run"
 AGENT_PROPOSALS = OUTPUT_ROOT / "agent-proposals"
 AGENT_STAGING = OUTPUT_ROOT / "agent-staging"
-SCANNER_AGENT_TARGETS = (
-    "camera_compute",
-    "power",
-    "romi_arm",
-    "romi_control",
-    "romi_drive",
-    "romi_encoders",
-)
-
-_MODELING_CONTEXT: dict[str, tuple[str, ...]] = {
-    "camera_compute": ("mechanical/inert_objects/camera_masses/camera_mass.pmdl",),
-    "power": ("electrical/voltage_sources/voltage_source.pmdl", "electrical/capacitors/ceramic_capacitors/capacitor.pmdl"),
-    "romi_arm": ("electromechanical/motors/brushed_dc_motors/dc_motor.pmdl", "mechanical/joints/revolute_joints/revolute_joint.pmdl"),
-    "romi_control": ("electrical/voltage_sources/voltage_source.pmdl",),
-    "romi_drive": ("electromechanical/motors/brushed_dc_motors/dc_motor.pmdl", "mechanical/wheels/driven_wheels/wheel_contact.pmdl"),
-    "romi_encoders": ("mechanical/joints/revolute_joints/revolute_joint.pmdl", "mechanical/wheels/driven_wheels/wheel_contact.pmdl"),
-}
 
 
-def _controller_identity(assembly: ResolvedAssembly) -> dict[str, str] | None:
-    reference = assembly.specification.controller
-    if reference is None:
-        return None
+def _controller_identities(assembly: ResolvedAssembly) -> list[dict[str, str]]:
+    return [
+        {
+            "id": controller.id,
+            "program_id": controller.spec.id,
+            "version": controller.spec.version,
+            "sha256": control_digest(controller.spec),
+        }
+        for _name, controller in sorted(assembly.controllers.items())
+    ]
+
+
+def _compilation_report(bundle: Any) -> dict[str, Any]:
+    target_suffixes = {"c99": {".c", ".h"}, "verilog": {".v"}}
+    target_digests: dict[str, dict[str, str]] = {}
+    for target in bundle.targets:
+        suffixes = target_suffixes[target]
+        artifacts = {
+            artifact.path: artifact.sha256
+            for artifact in bundle.artifacts
+            if Path(artifact.path).suffix in suffixes
+        }
+        if not artifacts:
+            raise RuntimeError(
+                f"controller compiler produced no {target!r} artifacts"
+            )
+        target_digests[target] = artifacts
     return {
-        name: str(reference[name]) for name in ("id", "version", "sha256")
+        "source_digest": bundle.source_digest,
+        "targets": list(bundle.targets),
+        "target_digests": target_digests,
+        # CompilationBundle.manifest is the canonical recursively-plain
+        # projection of its deeply immutable closure.  A shallow dict() here
+        # leaves nested FrozenDict values that json.dumps cannot serialize.
+        "closure": bundle.manifest["closure"],
+    }
+
+
+def _validate_controller_compilation(
+    assembly: ResolvedAssembly,
+) -> dict[str, dict[str, Any]]:
+    """Lower every resolved controller in memory as an admission requirement."""
+
+    return {
+        controller_id: _compilation_report(
+            compile_resolved_controller(
+                assembly,
+                controller_id,
+                identifier=controller_id,
+                targets=("c99", "verilog"),
+            )
+        )
+        for controller_id in sorted(assembly.controllers)
     }
 
 
@@ -124,58 +147,64 @@ def _load_json(path: str | Path) -> dict[str, Any]:
     return value
 
 
+def _controller_input_scalar(value: Any, context: str) -> bool | float:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        result = float(value)
+        if np.isfinite(result):
+            return result
+    raise ValueError(f"{context} must be a finite JSON number or boolean")
+
+
+def _controller_inputs_from_args(args: argparse.Namespace) -> dict[str, bool | float]:
+    """Decode unambiguous external controller-pin values from CLI arguments."""
+
+    result: dict[str, bool | float] = {}
+    input_file = args.controller_input_file
+    if input_file is not None:
+        for name, value in _load_json(Path(input_file).expanduser().resolve()).items():
+            result[name] = _controller_input_scalar(
+                value, f"controller input file value {name!r}"
+            )
+    for assignment in args.controller_input:
+        if "=" not in assignment:
+            raise ValueError(
+                f"controller input {assignment!r} must use NAME=JSON syntax"
+            )
+        name, encoded = assignment.split("=", 1)
+        if not name or name.strip() != name:
+            raise ValueError(
+                f"controller input name {name!r} must be non-empty and unpadded"
+            )
+        if name in result:
+            raise ValueError(f"controller input {name!r} was supplied more than once")
+        try:
+            value = json.loads(encoded, parse_constant=_reject_json_constant)
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise ValueError(
+                f"controller input {name!r} must contain one valid JSON scalar: {exc}"
+            ) from exc
+        result[name] = _controller_input_scalar(
+            value, f"controller input {name!r}"
+        )
+    return result
+
+
 def _write_json(path: str | Path, value: Any) -> Path:
     return write_json_atomic(path, value)
 
 
 def _load_resolved_assembly(
-    specification_path: str | Path = DEFAULT_SPEC,
-    catalog_path: str | Path = DEFAULT_CATALOG,
-    controller_paths: list[str | Path] | tuple[str | Path, ...] | None = None,
+    specification_path: str | Path,
 ) -> ResolvedAssembly:
-    """Load and verify one canonical contraption/catalog/PMDL closure."""
+    """Load exactly one canonical ``contraption-4`` filesystem closure."""
 
-    catalog_root = Path(catalog_path).expanduser().resolve()
-    interfaces = load_interface_catalog(catalog_root)
-    registry = ModelRegistry()
-    registry.load_directory(catalog_root, interfaces=interfaces)
-    instantiations = PartInstantiationRegistry.load_catalog(catalog_root, models=registry)
-    controller_roots = tuple(
-        Path(path).expanduser().resolve()
-        for path in (controller_paths or (DEFAULT_CONTROLLER_ROOT,))
-    )
-    controllers: dict[str, ControlProgram] = {}
-    for root in controller_roots:
-        if root.is_dir():
-            paths = sorted(root.rglob("*.json"))
-        elif root.is_file() and root.suffix == ".json":
-            paths = [root]
-        else:
-            raise FileNotFoundError(f"controller path does not exist: {root}")
-        if not paths:
-            raise FileNotFoundError(f"controller path contains no JSON files: {root}")
-        for path in paths:
-            program = ControlProgram.from_dict(_load_json(path))
-            if program.name in controllers:
-                raise ValueError(
-                    f"controller id {program.name!r} is duplicated in the controller registry"
-                )
-            controllers[program.name] = program
-    specification = _load_json(Path(specification_path).expanduser().resolve())
-    return resolve_assembly(
-        specification,
-        instantiations,
-        registry,
-        control_programs=controllers,
-    )
+    return load_contraption(Path(specification_path).expanduser().resolve())
 
 
 def _assembly_from_args(args: argparse.Namespace) -> ResolvedAssembly:
-    return _load_resolved_assembly(
-        args.spec,
-        args.catalog,
-        args.controller_root,
-    )
+    return _load_resolved_assembly(args.spec)
 
 
 def _torch_diagnostics() -> dict[str, Any]:
@@ -239,6 +268,9 @@ def command_doctor(_args: argparse.Namespace) -> int:
             (shutil.which(name) for name in ("cc", "gcc", "clang") if shutil.which(name)),
             None,
         ),
+        "iverilog": shutil.which("iverilog"),
+        "verilator": shutil.which("verilator"),
+        "yosys": shutil.which("yosys"),
         "budget_limit_usd": 100.0,
     }
     print(json.dumps(result, indent=2, sort_keys=True))
@@ -246,20 +278,20 @@ def command_doctor(_args: argparse.Namespace) -> int:
 
 
 def command_validate(args: argparse.Namespace) -> int:
-    interfaces = load_interface_catalog(args.catalog)
     assembly = _assembly_from_args(args)
+    controller_compilation = _validate_controller_compilation(assembly)
     dynamics_completeness = assembly.dynamics_completeness
     report = {
         "valid": True,
-        "scope": "canonical_catalog_instantiation_physical_and_pmdl_closure",
-        "interfaces": {
-            "domains": len(interfaces.domains),
-            "categories": len(interfaces.categories),
-            "devices": len(interfaces.devices),
-        },
+        "scope": "contraption-4_filesystem_closure",
         "assembly": assembly.diagnostics(),
-        "controller": _controller_identity(assembly),
-        "dynamics_completeness": dynamics_completeness.to_dict(),
+        "controllers": _controller_identities(assembly),
+        "controller_compilation": controller_compilation,
+        "dynamics_completeness": (
+            None
+            if dynamics_completeness is None
+            else dynamics_completeness.to_dict()
+        ),
         "parts": {
             "registered": len(assembly.parts),
             "used": len({item.part for item in assembly.specification.components}),
@@ -408,45 +440,64 @@ def _simulate_and_write(
     assembly: ResolvedAssembly,
     args: argparse.Namespace,
     output: Path,
-) -> tuple[Any, ScannerMission, Mapping[str, Any], Path, Path, Mapping[str, Any]]:
-    mission = ScannerMission.from_assembly(assembly)
-    result = simulate_scanner_robot(
+) -> tuple[SimulationResult, Mapping[str, Any], Path, Path, Mapping[str, Any]]:
+    result = simulate(
         assembly,
-        mission,
         duration=args.duration,
-        dt=float(args.dt),
+        dt=_simulation_dt(assembly, args.dt),
         num_samples=int(args.samples),
         seed=int(args.seed),
         backend=args.backend,
         device=args.device,
         use_model_uncertainty=bool(args.model_uncertainty),
         process_noise=bool(args.process_noise),
+        controller_inputs=_controller_inputs_from_args(args),
     )
-    metrics = scanner_metrics(assembly, result)
+    metrics = {
+        "duration_s": float(result.time[-1] - result.time[0]),
+        "sample_count": int(result.samples.shape[0]),
+        "state_count": len(result.state_names),
+        "output_count": len(result.output_names),
+        "controllers": list(result.controller_traces),
+        "verifications": {
+            name: report.to_dict()
+            for name, report in result.verification_reports.items()
+        },
+        "dynamics_completeness": (
+            None
+            if assembly.dynamics_completeness is None
+            else assembly.dynamics_completeness.to_dict()
+        ),
+    }
     trajectory_path = _write_json(
         output / "trajectory.json", _trajectory_payload(result, metrics)
     )
-    scene = scanner_physical_scene(assembly, result)
-    if scene.get("assembly_sha256") != assembly.assembly_sha256:
-        raise RuntimeError("scanner scene is not bound to the resolved assembly hash")
+    scene = scene_from_result(assembly, result)
     scene_path = _write_json(output / "physical-scene.json", scene)
-    return result, mission, metrics, trajectory_path, scene_path, scene
+    return result, metrics, trajectory_path, scene_path, scene
+
+
+def _simulation_dt(
+    assembly: ResolvedAssembly, requested: float | None
+) -> float:
+    return controller_time_step(
+        (item.spec.period_s for item in assembly.controllers.values()),
+        requested,
+    )
 
 
 def command_simulate(args: argparse.Namespace) -> int:
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     assembly = _assembly_from_args(args)
-    _result, _mission, metrics, trajectory_path, scene_path, _scene = _simulate_and_write(
+    _result, metrics, trajectory_path, scene_path, _scene = _simulate_and_write(
         assembly, args, output
     )
     report = {
         "schema": "contraption.simulation-report/v2",
         "assembly_sha256": assembly.assembly_sha256,
         "pmdl_sha256": assembly.system.pmdl_sha256,
-        "controller": _controller_identity(assembly),
-        "accepted": bool(metrics.get("accepted", False)),
-        "acceptance_scope": "in_silico_component_assembly_only",
+        "controllers": _controller_identities(assembly),
         "dynamics_completeness": metrics.get("dynamics_completeness"),
         "metrics": metrics,
         "artifacts": {
@@ -483,7 +534,7 @@ def command_view(args: argparse.Namespace) -> int:
         json.dumps(
             {
                 "assembly_sha256": assembly.assembly_sha256,
-                "controller": _controller_identity(assembly),
+                "controllers": _controller_identities(assembly),
                 "viewer": str(paths["index.html"]),
             },
             indent=2,
@@ -493,40 +544,39 @@ def command_view(args: argparse.Namespace) -> int:
     return 0
 
 
+def _compile_controllers(
+    assembly: ResolvedAssembly, output: Path
+) -> dict[str, Any]:
+    """Compile every resolved controller into its own deterministic directory."""
+
+    output.mkdir(parents=True, exist_ok=True)
+    compiled: dict[str, Any] = {}
+    for controller_id in sorted(assembly.controllers):
+        bundle = compile_resolved_controller(
+            assembly,
+            controller_id,
+            identifier=controller_id,
+            targets=("c99", "verilog"),
+        )
+        paths = bundle.write(output / controller_id)
+        compiled[controller_id] = {
+            **_compilation_report(bundle),
+            "files": [str(path) for path in paths],
+        }
+    return compiled
+
+
 def command_compile(args: argparse.Namespace) -> int:
     assembly = _assembly_from_args(args)
     output = Path(args.output).resolve()
-    artifact = compile_resolved_assembly(
-        assembly,
-        model_name=args.model_name,
-        nominal_dt=float(args.nominal_dt),
-        expected_assembly_sha256=assembly.assembly_sha256,
-        expected_pmdl_sha256=assembly.system.pmdl_sha256,
-        check_syntax=not args.skip_syntax_check,
-        compiler=args.compiler,
-    )
-    paths = artifact.write(output)
-    check = (
-        syntax_check(artifact, args.compiler)
-        if not args.skip_syntax_check
-        else None
-    )
+    compiled = _compile_controllers(assembly, output)
     print(
         json.dumps(
             {
                 "assembly_sha256": assembly.assembly_sha256,
                 "pmdl_sha256": assembly.system.pmdl_sha256,
-                "controller": _controller_identity(assembly),
-                "dynamics_completeness": artifact.manifest[
-                    "dynamics_completeness"
-                ],
-                "files": {name: str(path) for name, path in paths.items()},
-                "syntax": {
-                    "checked": check is not None and check.compiler is not None,
-                    "ok": None if check is None else check.ok,
-                    "compiler": None if check is None else check.compiler,
-                    "stderr": "" if check is None else check.stderr,
-                },
+                "controllers": _controller_identities(assembly),
+                "compiled": compiled,
             },
             indent=2,
             sort_keys=True,
@@ -544,7 +594,7 @@ def command_build(args: argparse.Namespace) -> int:
             {
                 "assembly_sha256": plan.assembly_sha256,
                 "pmdl_sha256": plan.pmdl_sha256,
-                "controller": None if plan.controller is None else dict(plan.controller),
+                "controllers": [dict(item) for item in plan.controllers],
                 "build_ready": plan.build_ready,
                 "unresolved_count": len(plan.unresolved),
                 "output": str(output),
@@ -558,20 +608,21 @@ def command_build(args: argparse.Namespace) -> int:
 
 def command_serve(args: argparse.Namespace) -> int:
     assembly = _assembly_from_args(args)
-    application = LiveScannerApplication(
+    application = LiveApplication(
         assembly,
         duration=args.duration,
-        dt=float(args.dt),
+        dt=args.dt,
         backend=args.backend,
         device=args.device,
         seed=int(args.seed),
+        initial_inputs=_controller_inputs_from_args(args),
     )
     address = f"http://{args.host}:{args.port}"
     print(
         json.dumps(
             {
                 "assembly_sha256": assembly.assembly_sha256,
-                "controller": _controller_identity(assembly),
+                "controllers": _controller_identities(assembly),
                 "viewer": address,
                 "simulation_endpoint": address + "/api/simulate",
             },
@@ -580,7 +631,7 @@ def command_serve(args: argparse.Namespace) -> int:
         ),
         flush=True,
     )
-    serve_live_scanner(application, host=args.host, port=args.port)
+    serve_live(application, host=args.host, port=args.port)
     return 0
 
 
@@ -588,7 +639,7 @@ def command_demo(args: argparse.Namespace) -> int:
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     assembly = _assembly_from_args(args)
-    result, _mission, metrics, trajectory_path, scene_path, _scene = _simulate_and_write(
+    result, metrics, trajectory_path, scene_path, _scene = _simulate_and_write(
         assembly, args, output
     )
     generate_viewer(
@@ -596,47 +647,25 @@ def command_demo(args: argparse.Namespace) -> int:
         result,
         sample_index=result.metadata.get("pose_frame_sample_index", 0),
         output=output / "viewer",
-        title="Apartment scanner robot — component-assembly simulation",
+        title=assembly.specification.name,
     )
     build_plan = generate_build_instructions(assembly, output / "build")
-    compiled = compile_resolved_assembly(
-        assembly,
-        output / "online",
-        model_name="scanner_online",
-        nominal_dt=float(args.dt),
-        expected_assembly_sha256=assembly.assembly_sha256,
-        expected_pmdl_sha256=assembly.system.pmdl_sha256,
-        check_syntax=not args.skip_syntax_check,
-        compiler=args.compiler,
-    )
-    syntax = (
-        syntax_check(compiled, args.compiler)
-        if not args.skip_syntax_check
-        else None
-    )
+    compiled = _compile_controllers(assembly, output / "controllers")
     report = {
         "schema": "contraption.demo-report/v2",
         "assembly_sha256": assembly.assembly_sha256,
         "pmdl_sha256": assembly.system.pmdl_sha256,
-        "controller": _controller_identity(assembly),
-        "accepted": bool(metrics.get("accepted", False)),
+        "controllers": _controller_identities(assembly),
         "physical_build_ready": build_plan.build_ready,
         "deployment_ready": False,
         "metrics": metrics,
-        "online_compiler": {
-            "model": compiled.model_name,
-            "c99_syntax_checked": syntax is not None and syntax.compiler is not None,
-            "c99_syntax_ok": None if syntax is None else syntax.ok,
-            "compiler": None if syntax is None else syntax.compiler,
-        },
+        "compiled_controllers": compiled,
         "artifacts": {
             "trajectory": str(trajectory_path),
             "physical_scene": str(scene_path),
             "viewer": str(output / "viewer" / "index.html"),
             "build_plan": str(output / "build" / "BUILD_INSTRUCTIONS.md"),
-            "online_manifest": str(
-                output / "online" / f"{compiled.model_name}.manifest.json"
-            ),
+            "compiled_controllers": str(output / "controllers"),
         },
     }
     report_path = _write_json(output / "report.json", report)
@@ -739,21 +768,115 @@ def _agent_failure_reason(exc: Exception, key: str | None) -> str:
     return message.replace(key, "[REDACTED_OPENAI_API_KEY]") if key else message
 
 
-def _full_modeling_inputs(target: str) -> ModelingInputs:
-    if target not in SCANNER_AGENT_TARGETS:
-        raise ValueError(f"unknown scanner agent target {target!r}")
-    model_root = DEFAULT_CATALOG
+@dataclass(frozen=True, slots=True)
+class _AgentJob:
+    id: str
+    component_information: Path
+    direct_hierarchy: tuple[Path, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _AgentJobBundle:
+    catalog: Path
+    constraints: Path
+    gold_templates: tuple[Path, ...]
+    jobs: tuple[_AgentJob, ...]
+
+    def job(self, identifier: str) -> _AgentJob:
+        for job in self.jobs:
+            if job.id == identifier:
+                return job
+        raise ValueError(
+            f"unknown agent target {identifier!r}; declared targets are "
+            f"{[job.id for job in self.jobs]}"
+        )
+
+
+def _job_path(root: Path, value: Any, context: str, *, directory: bool = False) -> Path:
+    if not isinstance(value, str) or not value or Path(value).is_absolute():
+        raise ValueError(f"{context} must be a non-empty relative path")
+    result = (root / value).resolve()
+    exists = result.is_dir() if directory else result.is_file()
+    if not exists:
+        kind = "directory" if directory else "file"
+        raise ValueError(f"{context} does not resolve to an existing {kind}: {result}")
+    return result
+
+
+def _load_agent_job_bundle(path: str | Path) -> _AgentJobBundle:
+    source = Path(path).expanduser().resolve()
+    data = _load_json(source)
+    expected = {"format", "catalog", "constraints", "gold_templates", "jobs"}
+    if set(data) != expected or data.get("format") != "agent-jobs-1":
+        raise ValueError(
+            "agent job file must be an exact agent-jobs-1 object with catalog, "
+            "constraints, gold_templates, and jobs"
+        )
+    root = source.parent
+    catalog = _job_path(root, data["catalog"], "agent jobs catalog", directory=True)
+    constraints = _job_path(root, data["constraints"], "agent jobs constraints")
+    raw_templates = data["gold_templates"]
+    if not isinstance(raw_templates, list) or not raw_templates:
+        raise ValueError("agent jobs gold_templates must be a non-empty list")
+    templates = tuple(
+        _job_path(root, value, f"agent jobs gold_templates[{index}]")
+        for index, value in enumerate(raw_templates)
+    )
+    raw_jobs = data["jobs"]
+    if not isinstance(raw_jobs, list) or not raw_jobs:
+        raise ValueError("agent jobs jobs must be a non-empty list")
+    jobs: list[_AgentJob] = []
+    identifiers: set[str] = set()
+    for index, raw in enumerate(raw_jobs):
+        if not isinstance(raw, dict) or set(raw) != {
+            "id",
+            "component_information",
+            "direct_hierarchy",
+        }:
+            raise ValueError(
+                f"agent jobs jobs[{index}] must contain exactly id, "
+                "component_information, and direct_hierarchy"
+            )
+        identifier = raw["id"]
+        if not isinstance(identifier, str) or not identifier:
+            raise ValueError(f"agent jobs jobs[{index}].id must be a non-empty string")
+        if identifier in identifiers:
+            raise ValueError(f"duplicate agent job id {identifier!r}")
+        identifiers.add(identifier)
+        hierarchy = raw["direct_hierarchy"]
+        if not isinstance(hierarchy, list):
+            raise ValueError(
+                f"agent jobs jobs[{index}].direct_hierarchy must be a list"
+            )
+        jobs.append(
+            _AgentJob(
+                identifier,
+                _job_path(
+                    root,
+                    raw["component_information"],
+                    f"agent jobs jobs[{index}].component_information",
+                ),
+                tuple(
+                    _job_path(
+                        root,
+                        value,
+                        f"agent jobs jobs[{index}].direct_hierarchy[{item_index}]",
+                    )
+                    for item_index, value in enumerate(hierarchy)
+                ),
+            )
+        )
+    return _AgentJobBundle(catalog, constraints, templates, tuple(jobs))
+
+
+def _full_modeling_inputs(bundle: _AgentJobBundle, target: str) -> ModelingInputs:
+    job = bundle.job(target)
     return ModelingInputs(
-        constraints=PROJECT_ROOT / "prompts" / "model_constraints.md",
-        gold_templates=(
-            model_root / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl",
-            model_root / "electrical" / "resistors" / "fixed_resistors" / "instantiations" / "generic-100ohm-resistor" / "static.part",
-            model_root / "electrical" / "resistors" / "fixed_resistors" / "instantiations" / "generic-100ohm-resistor" / "v1.model",
-            model_root / "mechanical" / "inert_objects" / "planar_rigid_bodies" / "rigid_body_planar.pmdl",
-        ),
-        interfaces=interface_paths(DEFAULT_CATALOG),
-        direct_hierarchy=tuple(model_root / relative for relative in _MODELING_CONTEXT[target]),
-        component_information=SCANNER_ROOT / "component_inputs" / f"{target}.json",
+        constraints=bundle.constraints,
+        gold_templates=bundle.gold_templates,
+        interfaces=interface_paths(bundle.catalog),
+        direct_hierarchy=job.direct_hierarchy,
+        component_information=job.component_information,
     )
 
 
@@ -763,6 +886,7 @@ def command_agent_run(args: argparse.Namespace) -> int:
     ledger = _agent_ledger(args.ledger)
     key, dotenv = _agent_key(args.env_file)
     proposal_root = Path(args.output_root).resolve()
+    jobs = _load_agent_job_bundle(args.job_file)
     try:
         if args.agent_job == "classification-all":
             if not key:
@@ -770,14 +894,11 @@ def command_agent_run(args: argparse.Namespace) -> int:
                     f"OPENAI_API_KEY is absent and {dotenv} has no key; "
                     "classification-all was not dispatched"
                 )
-            component_paths = tuple(
-                SCANNER_ROOT / "component_inputs" / f"{target}.json"
-                for target in SCANNER_AGENT_TARGETS
-            )
+            component_paths = tuple(job.component_information for job in jobs.jobs)
             results = run_classification_batch(
                 ClassificationAgent(ledger, api_key=key),
                 component_paths,
-                DEFAULT_CATALOG,
+                jobs.catalog,
                 proposal_root / "classification",
                 force=args.force,
             )
@@ -795,7 +916,7 @@ def command_agent_run(args: argparse.Namespace) -> int:
             )
             result = run_modeling_proposal(
                 agent,
-                _full_modeling_inputs(args.target),
+                _full_modeling_inputs(jobs, args.target),
                 args.target,
                 proposal_root / "modeling",
                 force=args.force,
@@ -818,22 +939,37 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     def assembly_inputs(command: argparse.ArgumentParser) -> None:
-        command.add_argument("--spec", default=str(DEFAULT_SPEC))
         command.add_argument(
-            "--catalog",
-            default=str(DEFAULT_CATALOG),
-            help="model_catalog root containing interfaces, PMDLs, and instantiations",
+            "--spec",
+            required=True,
+            help="path to a self-contained contraption-4 manifest",
+        )
+
+    def controller_input_options(command: argparse.ArgumentParser) -> None:
+        command.add_argument(
+            "--controller-input",
+            action="append",
+            default=[],
+            metavar="NAME=JSON",
+            help=(
+                "set one declared external controller pin to a JSON number or boolean; "
+                "repeat for multiple pins"
+            ),
         )
         command.add_argument(
-            "--controller-root",
-            action="append",
-            help="controller JSON/directory (repeatable; defaults to scanner controls)",
+            "--controller-input-file",
+            metavar="PATH",
+            help="strict JSON object containing external controller pin values",
         )
 
     def simulation_options(command: argparse.ArgumentParser) -> None:
-        command.add_argument("--duration", type=float)
+        command.add_argument("--duration", type=float, default=1.0)
         command.add_argument("--samples", type=int, default=1)
-        command.add_argument("--dt", type=float, default=0.05)
+        command.add_argument(
+            "--dt",
+            type=float,
+            help="physics step; defaults to the greatest common controller subdivision",
+        )
         command.add_argument("--seed", type=int, default=20260806)
         command.add_argument(
             "--backend", choices=("numpy", "torch", "auto"), default="numpy"
@@ -841,14 +977,7 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--device")
         command.add_argument("--model-uncertainty", action="store_true")
         command.add_argument("--process-noise", action="store_true")
-
-    def compiler_options(command: argparse.ArgumentParser) -> None:
-        command.add_argument("--compiler")
-        command.add_argument(
-            "--skip-syntax-check",
-            action="store_true",
-            help="emit C99 without requiring a local host compiler check",
-        )
+        controller_input_options(command)
 
     commands.add_parser("doctor", help="report optional runtime/tool availability").set_defaults(
         handler=command_doctor
@@ -861,7 +990,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate.set_defaults(handler=command_validate)
 
     simulate_command = commands.add_parser(
-        "simulate", help="simulate the canonical scanner component assembly"
+        "simulate", help="simulate one canonical resolved contraption"
     )
     assembly_inputs(simulate_command)
     simulation_options(simulate_command)
@@ -882,13 +1011,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     compile_command = commands.add_parser(
         "compile",
-        help="derive and syntax-check dynamics/estimator C99 from the resolved assembly",
+        help="compile every resolved controller to complete C99 and fixed-point Verilog",
     )
     assembly_inputs(compile_command)
-    compiler_options(compile_command)
-    compile_command.add_argument("--output", default=str(DEFAULT_OUTPUT / "online"))
-    compile_command.add_argument("--model-name", default="scanner_online")
-    compile_command.add_argument("--nominal-dt", type=float, default=0.05)
+    compile_command.add_argument(
+        "--output", default=str(DEFAULT_OUTPUT / "controllers")
+    )
     compile_command.set_defaults(handler=command_compile)
 
     build_command = commands.add_parser(
@@ -905,19 +1033,23 @@ def build_parser() -> argparse.ArgumentParser:
     assembly_inputs(serve)
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
-    serve.add_argument("--duration", type=float, default=2.0)
-    serve.add_argument("--dt", type=float, default=0.05)
+    serve.add_argument("--duration", type=float, default=1.0)
+    serve.add_argument(
+        "--dt",
+        type=float,
+        help="physics step; defaults to the greatest common controller subdivision",
+    )
     serve.add_argument("--seed", type=int, default=20260806)
     serve.add_argument("--backend", choices=("numpy", "torch"), default="numpy")
     serve.add_argument("--device")
+    controller_input_options(serve)
     serve.set_defaults(handler=command_serve)
 
     demo = commands.add_parser(
-        "demo", help="simulate, view, compile, and plan the canonical scanner assembly"
+        "demo", help="simulate, view, compile controllers, and plan one contraption"
     )
     assembly_inputs(demo)
     simulation_options(demo)
-    compiler_options(demo)
     demo.add_argument("--output", default=str(DEFAULT_OUTPUT))
     demo.set_defaults(handler=command_demo)
     budget = commands.add_parser("budget", help="show the hard agent-dollar ledger")
@@ -937,6 +1069,11 @@ def build_parser() -> argparse.ArgumentParser:
     def actual_common(command: argparse.ArgumentParser) -> None:
         command.add_argument("--ledger")
         command.add_argument("--env-file")
+        command.add_argument(
+            "--job-file",
+            required=True,
+            help="path to a portable agent-jobs-1 inventory",
+        )
         command.add_argument("--output-root", default=str(AGENT_PROPOSALS))
         command.add_argument(
             "--force",
@@ -946,14 +1083,14 @@ def build_parser() -> argparse.ArgumentParser:
         command.set_defaults(handler=command_agent_run)
 
     classify_all = actual_jobs.add_parser(
-        "classification-all", help="classify all six scanner component input records"
+        "classification-all", help="classify every component record in an agent job file"
     )
     actual_common(classify_all)
     modeling_one = actual_jobs.add_parser(
         "modeling-one", help="stage one full modeling proposal without promoting it"
     )
     actual_common(modeling_one)
-    modeling_one.add_argument("--target", choices=SCANNER_AGENT_TARGETS, default="romi_drive")
+    modeling_one.add_argument("--target", required=True)
     modeling_one.add_argument("--staging-root", default=str(AGENT_STAGING))
     return parser
 
