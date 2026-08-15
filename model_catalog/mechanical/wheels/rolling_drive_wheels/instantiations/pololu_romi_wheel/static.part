@@ -24,12 +24,15 @@
         {
           "id": "tire",
           "geometry": {
-            "kind": "cylinder",
+            "kind": "shape",
             "dimensions_m": [
               0.07,
               0.07,
               0.008
-            ]
+            ],
+            "shape_uri": "shape/tire/shape.artifact.json",
+            "shape_sha256": "sha256:530746e21faddc7310962f7a6b9f73ab87236e76d4ca4fc1d3c8feb2313a7829",
+            "surface_id": "canonical"
           },
           "local_pose": {
             "translation_m": [

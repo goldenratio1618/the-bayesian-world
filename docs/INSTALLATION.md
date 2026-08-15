@@ -123,18 +123,18 @@ contraption simulate \
   --spec assembled_contraptions/scanner/contraption.json \
   --backend torch --device cuda \
   --controller-input armed=true \
+  --optical-capture \
   --output outputs/scanner_demo
-
-contraption view \
-  --spec assembled_contraptions/scanner/contraption.json \
-  --trajectory outputs/scanner_demo/trajectory.json \
-  --output outputs/scanner_demo/viewer
 
 python -m http.server 8000 --directory outputs/scanner_demo/viewer
 ```
 
 Open <http://127.0.0.1:8000>. The simulator and viewer resolve the same
 contraption/catalog-instantiation/PMDL/controller closure and require the same assembly hash.
+For the scanner, omitted `--duration` and `--optical-frame-count` use the
+hash-bound mission values: one complete orbit and twelve evenly spaced camera
+views. `simulate --optical-capture` writes the combined full-trajectory and
+camera-angle viewer directly to `outputs/scanner_demo/viewer`.
 The browser is display-only: it does not infer placement or execute a second
 model. The CLI reconstructs poses from the trajectory's exact per-sample states
 through that resolved assembly; detached scene JSON is not an admitted input.

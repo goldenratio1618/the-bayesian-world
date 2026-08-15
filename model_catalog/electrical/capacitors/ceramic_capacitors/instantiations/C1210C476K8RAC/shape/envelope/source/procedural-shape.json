@@ -1,0 +1,26 @@
+{
+  "body": "body",
+  "builder": "scripts/build_part_shapes.py",
+  "features": [
+    "ceramic dielectric body",
+    "two metallized end terminations"
+  ],
+  "format": "contraption.procedural-shape/v1",
+  "input_dimensions_m": [
+    0.0032,
+    0.0025,
+    0.0025
+  ],
+  "optical_material_ids": [
+    "dark-polymer",
+    "metal",
+    "pcb-green",
+    "rubber",
+    "optical-glass",
+    "copper",
+    "ceramic",
+    "battery-wrap"
+  ],
+  "part": "C1210C476K8RAC",
+  "solid": "envelope"
+}

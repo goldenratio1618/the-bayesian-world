@@ -1,8 +1,8 @@
 {
   "format": "contraption-4",
   "id": "apartment-scanner-robot",
-  "name": "Romi orbital 3D-scanning motion prototype",
-  "version": "0.3.0",
+  "name": "Romi full-revolution 3D scanner with fixed icosahedron target",
+  "version": "0.4.0",
   "catalogs": [
     {
       "path": "../../model_catalog"
@@ -460,7 +460,7 @@
       "id": "scanner_orbit_controller",
       "program": {
         "path": "controls/scanner.control",
-        "sha256": "sha256:0d226063f0f86e6f6fed1e3e370bdd7f6f7cb17c757294b4086d715ce5d1c4a5"
+        "sha256": "sha256:bf8fcf4431d100a318c4018fb8819b9bb17bf22e7b38b039b0548f71926f9317"
       },
       "explicit_inputs": {
         "armed": {"external": "armed"},
@@ -525,19 +525,39 @@
         0.0,
         0.35
       ],
-      "side_m": 0.4
+      "side_m": 0.12
     },
+    "world_objects": [
+      {
+        "id": "scan-target",
+        "instantiation": "scanner.icosahedron.v1",
+        "pose": {
+          "translation_m": [
+            0.0,
+            0.0,
+            0.35
+          ],
+          "rotation_quaternion_wxyz": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    ],
     "mission": {
       "orbit_radius_m": 0.85,
       "tangential_speed_m_s": 0.12,
-      "duration_s": 8.0,
+      "duration_s": 43.5,
+      "revolution_angle_rad": 6.283185307179586,
+      "camera_frame_count": 12,
       "keep_out_radius_m": 0.5
     }
   },
   "metadata": {
     "coordinate_convention": "right-handed world: x/y floor, +z up; chassis +x forward, +y left",
     "geometry_provenance": "Estimated connector locations are explicit in model_catalog static.part records and must be replaced by measured/CAD/scan evidence before construction.",
-    "optical_physics": false,
     "dynamics_completeness": {
       "schema": "contraption.dynamics-completeness/v1",
       "status": "incomplete",

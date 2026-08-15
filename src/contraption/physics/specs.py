@@ -384,6 +384,58 @@ class SignalPortSpec(StrictRecord):
 
 
 @dataclass(frozen=True, slots=True)
+class ArtifactPortSpec(StrictRecord):
+    """A typed non-scalar artifact stream kept outside the equation symbol table.
+
+    Artifact ports carry hash-bound records such as images, depth maps, point
+    clouds, and reconstruction deltas.  ``controller_stream`` is a bounded wire
+    contract for future controller/FPGA bridges; this release does not implement
+    such a bridge.
+    """
+
+    name: str
+    direction: str
+    artifact_type: str
+    timing: str = "event"
+    transport: str = "content_addressed"
+    sample_period_s: float | None = None
+    max_payload_bytes: int | None = None
+    description: str = ""
+
+    def __post_init__(self) -> None:
+        _identifier(self.name, "artifact_port.name", symbol=True)
+        if self.direction not in {"input", "output"}:
+            raise SpecError("artifact_port.direction must be 'input' or 'output'")
+        if re.fullmatch(r"[a-z][a-z0-9.-]*/[a-z][a-z0-9.-]*@[1-9][0-9]*", self.artifact_type) is None:
+            raise SpecError("artifact_port.artifact_type must be a versioned type such as 'contraption/optical-observation@1'")
+        if self.timing not in {"sampled", "event"}:
+            raise SpecError("artifact_port.timing must be 'sampled' or 'event'")
+        if self.transport not in {"in_process", "content_addressed", "shared_memory", "network", "controller_stream"}:
+            raise SpecError(f"unsupported artifact transport {self.transport!r}")
+        if self.sample_period_s is not None and _number(self.sample_period_s, "artifact_port.sample_period_s") <= 0.0:
+            raise SpecError("artifact_port.sample_period_s must be positive")
+        if self.timing == "sampled" and self.sample_period_s is None:
+            raise SpecError("sampled artifact ports require sample_period_s")
+        if self.max_payload_bytes is not None and (isinstance(self.max_payload_bytes, bool) or not isinstance(self.max_payload_bytes, int) or self.max_payload_bytes <= 0):
+            raise SpecError("artifact_port.max_payload_bytes must be a positive integer")
+        if self.transport == "controller_stream" and self.max_payload_bytes is None:
+            raise SpecError("controller_stream artifact ports require max_payload_bytes")
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "ArtifactPortSpec":
+        data = _object(data, "artifact_port")
+        names = ("name", "direction", "artifact_type", "timing", "transport", "sample_period_s", "max_payload_bytes", "description")
+        _keys(data, names, "artifact_port", names[:3])
+        return cls(
+            _identifier(data["name"], "artifact_port.name", symbol=True), _string(data["direction"], "artifact_port.direction"),
+            _string(data["artifact_type"], "artifact_port.artifact_type"), _string(data.get("timing", "event"), "artifact_port.timing"),
+            _string(data.get("transport", "content_addressed"), "artifact_port.transport"),
+            None if data.get("sample_period_s") is None else _number(data["sample_period_s"], "artifact_port.sample_period_s"),
+            data.get("max_payload_bytes"), _string(data.get("description", ""), "artifact_port.description"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class RelationSpec(StrictRecord):
     name: str
     expression: str
@@ -726,6 +778,7 @@ class ModelSpec(StrictRecord):
     description: str = ""
     power_ports: tuple[PowerPortSpec, ...] = ()
     signal_ports: tuple[SignalPortSpec, ...] = ()
+    artifact_ports: tuple[ArtifactPortSpec, ...] = ()
     states: tuple[StateSpec, ...] = ()
     algebraics: tuple[AlgebraicSpec, ...] = ()
     parameters: tuple[ParameterSpec, ...] = ()
@@ -788,13 +841,15 @@ class ModelSpec(StrictRecord):
         result = StrictRecord.to_dict(self)
         if not self.process_noise.enabled:
             result.pop("process_noise", None)
+        if not self.artifact_ports:
+            result.pop("artifact_ports", None)
         return result
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "ModelSpec":
         data = _object(data, "model")
         names = (
-            "format", "id", "name", "version", "domains", "implements", "description", "power_ports", "signal_ports",
+            "format", "id", "name", "version", "domains", "implements", "description", "power_ports", "signal_ports", "artifact_ports",
             "states", "algebraics", "parameters", "relations", "stored_energy", "dissipation", "sources", "process_noise", "modes",
             "initialization", "validity", "fidelity_levels", "properties", "trust", "metadata",
         )
@@ -807,6 +862,7 @@ class ModelSpec(StrictRecord):
             _identifier(data["implements"], "model.implements"), _string(data.get("description", ""), "model.description"),
             tuple(PowerPortSpec.from_dict(item) for item in seq("power_ports")),
             tuple(SignalPortSpec.from_dict(item) for item in seq("signal_ports")),
+            tuple(ArtifactPortSpec.from_dict(item) for item in seq("artifact_ports")),
             tuple(StateSpec.from_dict(item) for item in seq("states")),
             tuple(AlgebraicSpec.from_dict(item) for item in seq("algebraics")),
             tuple(ParameterSpec.from_dict(item) for item in seq("parameters")),

@@ -59,16 +59,36 @@ Every run copies, preserves the catalog-relative source label, then instructs
 the model to read fully:
 
 1. `prompts/model_constraints.md`;
-2. representative concrete PMDL, `static.part`, and `vN.model` gold records;
-3. all current domain/category/device `interface.pmdl` contracts;
-4. only the direct ancestor and concrete-model hierarchy relevant to the item;
-5. the full component information record.
+2. every authoritative guide in `docs/structured_formats/`, including PMDL,
+   physical assembly, shape, optical, control, verification, and derived
+   viewer records;
+3. representative concrete PMDL, `static.part`, and `vN.model` gold records;
+4. all current domain/category/device `interface.pmdl` contracts;
+5. only the direct ancestor and concrete-model hierarchy relevant to the item;
+6. the full component information record.
 
 The numbered canonical copies and a SHA-256 context manifest live beside the
 writable `workspace/`, not inside it. The agent receives their complete text in
 `AGENTS.md`; it may write only below `workspace/candidate/`. The host verifies
 the protected input/control hashes before dispatch, immediately after Codex
 exits, and on error paths.
+
+The guides make the modeler aware of optical power/signal abstractions,
+`artifact_ports`, sensor timing, uncertainty, and the standardized artifact
+types. Geometry and optical source ingestion remain host-owned. The modeler is
+explicitly forbidden to inspect, convert, infer from, or emit CAD, mesh,
+texture, image, scan, shape, optical, observation, or reconstruction payloads.
+
+This ownership rule is enforced before ordinary bundle validation. Both the
+structured response's artifact list and candidate-file recovery reject
+agent-authored `deterministic-part-ingestion-1`,
+`deterministic-part-ingestion-staged-1`, `shape-artifact-1`,
+`optical-material-1`,
+`optical-sensor-1`, `optical-scene-1`, `optical-observation-1`,
+`reconstruction-state-1`, CTMESH, and triangle-mesh schema markers. After that
+boundary, trusted deterministic host code may append hash-bound shape/optical
+outputs; the generic validator deliberately accepts and verifies those
+host-owned files.
 
 The modeler is instructed to validate the complete catalog bundle iteratively
 with:
@@ -82,7 +102,9 @@ files, and anything outside `candidate/`. It overlays the proposed files on the
 current catalog and validates the full domain/category/device interface tree,
 every concrete PMDL contract, every `static.part`, and every `vN.model` hash and
 parameter set. Each instantiation must sit below a declared category/device
-interface and its referenced PMDL must implement that exact contract. It checks
+interface. Its referenced PMDL must implement that exact contract or, for a
+device instantiation, the parent category contract when that model is explicitly
+listed by the device interface. It checks
 protected hashes before and after parsing and never
 imports or executes generated host code. Isolated Python mode plus a
 trusted-interpreter-first `PATH` prevents workspace modules from shadowing the

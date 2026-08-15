@@ -201,8 +201,8 @@ class ResolvedControllerSimulationTests(unittest.TestCase):
     def test_controller_runs_inside_offline_simulation_and_verification_is_automatic(self) -> None:
         result = simulate(
             self.assembly,
-            duration=0.02,
-            dt=0.01,
+            duration=0.1,
+            dt=0.05,
             num_samples=2,
             use_model_uncertainty=False,
             process_noise=False,
@@ -230,7 +230,7 @@ class ResolvedControllerSimulationTests(unittest.TestCase):
         self.assertEqual(trace.active_modes[0], ("idle", "idle"))
         self.assertEqual(trace.active_modes[1], ("idle", "idle"))
         self.assertEqual(trace.tick_mask, (False, True, True))
-        self.assertEqual(trace.frame_times_s, (0.0, 0.01, 0.02))
+        self.assertEqual(trace.frame_times_s, (0.0, 0.05, 0.1))
         self.assertEqual(tuple(result.verification_reports), ("scanner.orbit_acceptance",))
         report = result.verification_reports["scanner.orbit_acceptance"]
         self.assertEqual(report.sample_count, 2)
@@ -544,8 +544,8 @@ class ResolvedControllerSimulationTests(unittest.TestCase):
         with self.assertRaisesRegex(KeyError, "Unknown external controller input"):
             simulate(
                 self.assembly,
-                duration=0.01,
-                dt=0.01,
+                duration=0.05,
+                dt=0.05,
                 num_samples=1,
                 use_model_uncertainty=False,
                 process_noise=False,

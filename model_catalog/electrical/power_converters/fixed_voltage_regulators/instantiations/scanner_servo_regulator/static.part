@@ -24,12 +24,15 @@
         {
           "id": "regulator_board",
           "geometry": {
-            "kind": "box",
+            "kind": "shape",
             "dimensions_m": [
               0.023,
               0.023,
-              0.01
-            ]
+              0.006500000000000001
+            ],
+            "shape_uri": "shape/regulator_board/shape.artifact.json",
+            "shape_sha256": "sha256:b4614e4606479c8bc97ce6f7dcff6cd2e29df75bdee93215507dfcca243a5e6e",
+            "surface_id": "canonical"
           },
           "local_pose": {
             "translation_m": [

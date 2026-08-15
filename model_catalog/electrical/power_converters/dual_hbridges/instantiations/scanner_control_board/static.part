@@ -24,12 +24,15 @@
         {
           "id": "pcb",
           "geometry": {
-            "kind": "box",
+            "kind": "shape",
             "dimensions_m": [
               0.112,
               0.084,
-              0.01
-            ]
+              0.006500000000000001
+            ],
+            "shape_uri": "shape/pcb/shape.artifact.json",
+            "shape_sha256": "sha256:ebfcd1b440446304c0dda09f1c43e6a1b70575b423f7f1cc8b2014daeed41b7f",
+            "surface_id": "canonical"
           },
           "local_pose": {
             "translation_m": [

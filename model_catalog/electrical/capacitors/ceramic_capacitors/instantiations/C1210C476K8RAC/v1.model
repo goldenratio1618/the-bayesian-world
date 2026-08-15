@@ -7,7 +7,7 @@
   "model": {
     "id": "electrical.capacitor.ideal",
     "version": "1.0.0",
-    "sha256": "sha256:611af2c6e3cffc7e2cf7468aae1ab22b59922035fbfbf13e4515681ea6ef8279"
+    "sha256": "sha256:200b203b16bc6a21421e38aca5c37483d62264028b5908a7e5b6c24b01a1df1a"
   },
   "parameters": {
     "capacitance": 4.7e-05

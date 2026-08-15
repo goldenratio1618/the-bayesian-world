@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import replace
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 
@@ -230,7 +231,9 @@ def test_c99_matches_python_for_one_second_and_holds_state_on_fault(
         values["right_wheel_rate"] = 1.7
         frame = runtime.step(values)
         records.append((values, frame))
-    assert records[-1][1].time == pytest.approx(1.0)
+    assert records[-1][1].time == pytest.approx(
+        100 * controller.spec.period_s
+    )
     assert np.isfinite(records[-1][1].implicit_inputs["forward_speed"].variance)
 
     bundle = compile_resolved_controller(
@@ -360,6 +363,9 @@ int main(void) {{
 def test_verilog_is_vector_observer_with_fault_hold_and_no_unbounded_time_state(
     scanner_assembly,
 ) -> None:
+    observer = scanner_assembly.controllers["scanner_orbit_controller"].observer
+    assert observer is not None
+    observer_size = len(observer.state_names)
     source = compile_resolved_controller(
         scanner_assembly, "scanner_orbit_controller", targets=("verilog",)
     ).files["scanner_orbit_controller.v"]
@@ -372,6 +378,41 @@ def test_verilog_is_vector_observer_with_fault_hold_and_no_unbounded_time_state(
     assert "time_q" not in source
     assert "q_sign" not in source
     assert " real " not in source
+    clocked_block = source.split("always @(posedge clk) begin", maxsplit=1)[1]
+    assert "for (" not in clocked_block
+    assert "observer_reset_i" not in source
+    assert "observer_reset_j" not in source
+    nonblocking_array_lvalues = re.findall(
+        r"^\s*([A-Za-z_][A-Za-z0-9_]*\[[^\]\n]+\])\s*<=",
+        source,
+        flags=re.MULTILINE,
+    )
+    expected_lvalues = [f"observer_state[{index}]" for index in range(observer_size)]
+    expected_lvalues.extend(
+        f"observer_covariance[{index}]" for index in range(observer_size**2)
+    )
+    assert sorted(nonblocking_array_lvalues) == sorted(expected_lvalues * 2)
+    assert "observer_state[0] <= obs_initial_state(0);" in source
+    assert (
+        f"observer_state[{observer_size - 1}] "
+        f"<= obs_initial_state({observer_size - 1});" in source
+    )
+    last_covariance = observer_size**2 - 1
+    last_covariance_reset = (
+        f"observer_covariance[{last_covariance}] "
+        f"<= obs_initial_covariance({last_covariance});"
+    )
+    assert last_covariance_reset in source
+    assert "observer_state[0] <= observer_state_next[0];" in source
+    assert (
+        f"observer_state[{observer_size - 1}] "
+        f"<= observer_state_next[{observer_size - 1}];" in source
+    )
+    last_covariance_update = (
+        f"observer_covariance[{last_covariance}] "
+        f"<= observer_covariance_next[{last_covariance}];"
+    )
+    assert last_covariance_update in source
 
 
 def test_verilog_executable_trace_matches_quantized_runtime(
@@ -736,7 +777,10 @@ def test_fixed_point_constants_and_noise_modes_are_range_checked(scanner_assembl
     assert fixed.quantize(1.5) == 24
     with pytest.raises(ControlCompilerError, match="does not fit"):
         fixed.quantize(100.0)
-    with pytest.raises(ControlCompilerError, match="covariance|quantizes to zero|does not fit"):
+    with pytest.raises(
+        ControlCompilerError,
+        match="covariance|quantizes to zero|does not fit|reserved fixed-point rail",
+    ):
         compile_resolved_controller(
             scanner_assembly,
             "scanner_orbit_controller",

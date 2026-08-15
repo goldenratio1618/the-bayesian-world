@@ -1,0 +1,29 @@
+{
+  "body": "board",
+  "builder": "scripts/build_part_shapes.py",
+  "features": [
+    "PCB substrate",
+    "controller IC",
+    "edge connector",
+    "terminal header",
+    "passive components"
+  ],
+  "format": "contraption.procedural-shape/v1",
+  "input_dimensions_m": [
+    0.065,
+    0.03,
+    0.005
+  ],
+  "optical_material_ids": [
+    "dark-polymer",
+    "metal",
+    "pcb-green",
+    "rubber",
+    "optical-glass",
+    "copper",
+    "ceramic",
+    "battery-wrap"
+  ],
+  "part": "scanner.compute",
+  "solid": "compute_board"
+}

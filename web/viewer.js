@@ -1,8 +1,10 @@
 (function () {
   "use strict";
 
-  const VIEWER_SCHEMA = "contraption.viewer/v2";
+  const VIEWER_SCHEMA = "contraption.viewer/v3";
   const SCENE_SCHEMA = "contraption.physical-scene/v1";
+  const RENDER_BUNDLE_SCHEMA = "contraption.render-bundle/v1";
+  const TRIANGLE_SURFACE_SCHEMA = "contraption.triangle-surface/v1";
   const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/;
   const byId = (id) => document.getElementById(id);
 
@@ -45,6 +47,12 @@
     return value;
   }
 
+  function requireInteger(value, label, nonnegative) {
+    requireCondition(Number.isInteger(value), `${label} must be an integer`);
+    if (nonnegative) requireCondition(value >= 0, `${label} must be non-negative`);
+    return value;
+  }
+
   function requireVector(value, label, length) {
     const result = requireArray(value, label, false);
     requireCondition(result.length === length, `${label} must contain exactly ${length} numbers`);
@@ -65,20 +73,320 @@
     return pose;
   }
 
+  function matrixFromPose(pose) {
+    const [tx, ty, tz] = pose.translation_m;
+    const [w, x, y, z] = pose.rotation_quaternion_wxyz;
+    return [
+      1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w), tx,
+      2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w), ty,
+      2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y), tz,
+      0, 0, 0, 1,
+    ];
+  }
+
   function validateGeometry(geometry, label) {
     requireObject(geometry, label);
     const kind = requireString(geometry.kind, `${label}.kind`);
+    const fields = ["kind", "dimensions_m", "shape_uri", "shape_sha256", "surface_id"];
     if (kind === "box" || kind === "sphere" || kind === "cylinder") {
-      requireKeys(geometry, ["kind", "dimensions_m", "mesh_uri"], [], label);
+      requireKeys(geometry, fields, [], label);
       requireVector(geometry.dimensions_m, `${label}.dimensions_m`, 3).forEach((item, index) => {
         requireCondition(item > 0, `${label}.dimensions_m[${index}] must be greater than zero`);
       });
-      requireCondition(geometry.mesh_uri === null, `${label}.mesh_uri must be null for ${kind}`);
-    } else if (kind === "mesh") {
-      fail(`${label} uses mesh geometry whose exact data is not embedded; refusing a bounding-box substitute`);
+      ["shape_uri", "shape_sha256", "surface_id"].forEach((field) => {
+        requireCondition(geometry[field] === null, `${label}.${field} must be null for ${kind}`);
+      });
+    } else if (kind === "shape") {
+      requireKeys(geometry, fields, [], label);
+      requireVector(geometry.dimensions_m, `${label}.dimensions_m`, 3).forEach((item, index) => {
+        requireCondition(item > 0, `${label}.dimensions_m[${index}] must be greater than zero`);
+      });
+      const uri = requireString(geometry.shape_uri, `${label}.shape_uri`);
+      requireCondition(!uri.startsWith("/") && !uri.includes("\\") &&
+        uri.split("/").every((part) => part.length > 0 && part !== "." && part !== ".."),
+      `${label}.shape_uri must remain below its static.part directory`);
+      requireCondition(HASH_PATTERN.test(geometry.shape_sha256),
+        `${label}.shape_sha256 is not canonical`);
+      requireString(geometry.surface_id, `${label}.surface_id`);
     } else {
       fail(`${label}.kind ${JSON.stringify(kind)} is unsupported`);
     }
+  }
+
+  function validateRenderBundle(bundle, assemblySha256, frames, solidGeometry, opticalConnectorKeys, assemblyId) {
+    requireObject(bundle, "payload.render_bundle");
+    requireKeys(bundle,
+      ["schema", "sha256", "assembly_sha256", "surfaces", "solid_bindings", "sensors", "observations"],
+      [], "payload.render_bundle");
+    requireCondition(bundle.schema === RENDER_BUNDLE_SCHEMA,
+      `payload.render_bundle.schema must be ${RENDER_BUNDLE_SCHEMA}`);
+    requireCondition(HASH_PATTERN.test(bundle.sha256), "payload.render_bundle.sha256 is not canonical");
+    requireCondition(bundle.assembly_sha256 === assemblySha256,
+      "payload.render_bundle is bound to another assembly");
+
+    const surfaces = requireObject(bundle.surfaces, "payload.render_bundle.surfaces");
+    const materialized = new Map();
+    Object.entries(surfaces).forEach(([digest, surface]) => {
+      const label = `payload.render_bundle.surfaces[${JSON.stringify(digest)}]`;
+      requireCondition(HASH_PATTERN.test(digest), `${label} key is not a canonical hash`);
+      requireObject(surface, label);
+      requireKeys(surface,
+        ["schema", "sha256", "shape_manifest_sha256", "shape_artifact_sha256", "shape_id", "surface_id",
+          "source_surface_sha256", "vertices_m", "triangles", "vertex_normals",
+          "vertex_rgba_linear", "materials", "triangle_materials", "vertex_uncertainty_m"], [], label);
+      requireCondition(surface.schema === TRIANGLE_SURFACE_SCHEMA,
+        `${label}.schema must be ${TRIANGLE_SURFACE_SCHEMA}`);
+      requireCondition(surface.sha256 === digest, `${label}.sha256 does not match its map key`);
+      requireCondition(HASH_PATTERN.test(surface.shape_manifest_sha256),
+        `${label}.shape_manifest_sha256 is not canonical`);
+      requireCondition(HASH_PATTERN.test(surface.shape_artifact_sha256),
+        `${label}.shape_artifact_sha256 is not canonical`);
+      requireString(surface.shape_id, `${label}.shape_id`);
+      requireString(surface.surface_id, `${label}.surface_id`);
+      requireCondition(HASH_PATTERN.test(surface.source_surface_sha256),
+        `${label}.source_surface_sha256 is not canonical`);
+      const vertices = requireArray(surface.vertices_m, `${label}.vertices_m`, true);
+      requireCondition(vertices.length >= 3, `${label}.vertices_m must contain at least three vertices`);
+      vertices.forEach((vertex, index) => requireVector(vertex, `${label}.vertices_m[${index}]`, 3));
+      const triangles = requireArray(surface.triangles, `${label}.triangles`, true);
+      triangles.forEach((triangle, triangleIndex) => {
+        const triangleLabel = `${label}.triangles[${triangleIndex}]`;
+        requireCondition(requireArray(triangle, triangleLabel, false).length === 3,
+          `${triangleLabel} must contain exactly three indices`);
+        triangle.forEach((item, index) => {
+          requireInteger(item, `${triangleLabel}[${index}]`, true);
+          requireCondition(item < vertices.length, `${triangleLabel}[${index}] is out of range`);
+        });
+        requireCondition(new Set(triangle).size === 3, `${triangleLabel} repeats a vertex`);
+      });
+      if (surface.vertex_normals !== null) {
+        const normals = requireArray(surface.vertex_normals, `${label}.vertex_normals`, false);
+        requireCondition(normals.length === vertices.length,
+          `${label}.vertex_normals must match vertices_m in length`);
+        normals.forEach((normal, index) => requireVector(normal, `${label}.vertex_normals[${index}]`, 3));
+      }
+      if (surface.vertex_rgba_linear !== null) {
+        const colors = requireArray(surface.vertex_rgba_linear, `${label}.vertex_rgba_linear`, false);
+        requireCondition(colors.length === vertices.length,
+          `${label}.vertex_rgba_linear must match vertices_m in length`);
+        colors.forEach((color, index) => requireVector(color,
+          `${label}.vertex_rgba_linear[${index}]`, 4).forEach((item) => requireCondition(
+          item >= 0 && item <= 1, `${label}.vertex_rgba_linear values must be in [0, 1]`)));
+      }
+      const materials = requireArray(surface.materials, `${label}.materials`, true);
+      const materialIds = new Set();
+      materials.forEach((material, index) => {
+        const materialLabel = `${label}.materials[${index}]`;
+        requireObject(material, materialLabel);
+        requireKeys(material, ["id", "base_color_linear_rgba", "optical_material_sha256"], [], materialLabel);
+        const id = requireString(material.id, `${materialLabel}.id`);
+        requireCondition(!materialIds.has(id), `${label}.materials repeats id ${JSON.stringify(id)}`);
+        materialIds.add(id);
+        requireVector(material.base_color_linear_rgba, `${materialLabel}.base_color_linear_rgba`, 4)
+          .forEach((item) => requireCondition(item >= 0 && item <= 1,
+            `${materialLabel}.base_color_linear_rgba values must be in [0, 1]`));
+        if (material.optical_material_sha256 !== null) {
+          requireCondition(HASH_PATTERN.test(material.optical_material_sha256),
+            `${materialLabel}.optical_material_sha256 is not canonical`);
+        }
+      });
+      const triangleMaterials = requireArray(surface.triangle_materials,
+        `${label}.triangle_materials`, false);
+      requireCondition(triangleMaterials.length === triangles.length,
+        `${label}.triangle_materials must match triangles in length`);
+      triangleMaterials.forEach((item, index) => {
+        requireInteger(item, `${label}.triangle_materials[${index}]`, true);
+        requireCondition(item < materials.length,
+          `${label}.triangle_materials[${index}] references an unknown material`);
+      });
+      if (surface.vertex_uncertainty_m !== null) {
+        const uncertainty = requireArray(surface.vertex_uncertainty_m,
+          `${label}.vertex_uncertainty_m`, false);
+        requireCondition(uncertainty.length === vertices.length,
+          `${label}.vertex_uncertainty_m must match vertices_m in length`);
+        uncertainty.forEach((item, index) => {
+          requireNumber(item, `${label}.vertex_uncertainty_m[${index}]`, false);
+          requireCondition(item >= 0, `${label}.vertex_uncertainty_m[${index}] must be non-negative`);
+        });
+      }
+      materialized.set(digest, surface);
+    });
+
+    const usedSurfaces = new Set();
+    const boundSolids = new Set();
+    requireArray(bundle.solid_bindings, "payload.render_bundle.solid_bindings", true)
+      .forEach((binding, index) => {
+        const label = `payload.render_bundle.solid_bindings[${index}]`;
+        requireObject(binding, label);
+        requireKeys(binding, ["component", "body", "solid", "surface_sha256"], [], label);
+        const solidKey = `${requireString(binding.component, `${label}.component`)}/` +
+          `${requireString(binding.body, `${label}.body`)}/${requireString(binding.solid, `${label}.solid`)}`;
+        requireCondition(solidGeometry.has(solidKey), `${label} references unknown solid ${solidKey}`);
+        requireCondition(!boundSolids.has(solidKey), `${label} repeats solid ${solidKey}`);
+        requireCondition(materialized.has(binding.surface_sha256),
+          `${label}.surface_sha256 references an absent surface`);
+        const geometry = solidGeometry.get(solidKey);
+        const surface = materialized.get(binding.surface_sha256);
+        requireCondition(geometry.kind === "shape", `${label} binds non-shape geometry`);
+        requireCondition(surface.shape_manifest_sha256 === geometry.shape_sha256,
+          `${label} is not bound to the solid's exact shape manifest`);
+        requireCondition(surface.surface_id === geometry.surface_id,
+          `${label} differs from the solid's authored surface_id`);
+        boundSolids.add(solidKey);
+        usedSurfaces.add(binding.surface_sha256);
+      });
+    const missingBindings = Array.from(solidGeometry.keys()).filter((key) => !boundSolids.has(key));
+    requireCondition(missingBindings.length === 0,
+      `payload.render_bundle does not bind every solid; missing=${missingBindings.join(", ")}`);
+
+    const sensors = new Map();
+    requireArray(bundle.sensors, "payload.render_bundle.sensors", false).forEach((sensor, index) => {
+      const label = `payload.render_bundle.sensors[${index}]`;
+      requireObject(sensor, label);
+      requireKeys(sensor, ["id", "display_name", "connector", "projection", "descriptor_sha256"], [], label);
+      const id = requireString(sensor.id, `${label}.id`);
+      requireCondition(!sensors.has(id), `${label} repeats sensor ${JSON.stringify(id)}`);
+      requireString(sensor.display_name, `${label}.display_name`);
+      requireCondition(opticalConnectorKeys.has(sensor.connector),
+        `${label}.connector is not a spatial optical connector`);
+      requireCondition(HASH_PATTERN.test(sensor.descriptor_sha256),
+        `${label}.descriptor_sha256 is not canonical`);
+      const projection = requireObject(sensor.projection, `${label}.projection`);
+      requireKeys(projection,
+        ["kind", "resolution_px", "focal_length_px", "principal_point_px", "clipping_m"], [],
+        `${label}.projection`);
+      requireCondition(projection.kind === "pinhole", `${label}.projection.kind must be pinhole`);
+      const resolution = requireArray(projection.resolution_px, `${label}.projection.resolution_px`, false);
+      requireCondition(resolution.length === 2, `${label}.projection.resolution_px must contain two values`);
+      resolution.forEach((item, itemIndex) => {
+        requireInteger(item, `${label}.projection.resolution_px[${itemIndex}]`, true);
+        requireCondition(item > 0, `${label}.projection.resolution_px values must be positive`);
+      });
+      requireVector(projection.focal_length_px, `${label}.projection.focal_length_px`, 2)
+        .forEach((item) => requireCondition(item > 0, `${label}.projection focal lengths must be positive`));
+      requireVector(projection.principal_point_px, `${label}.projection.principal_point_px`, 2);
+      const clipping = requireVector(projection.clipping_m, `${label}.projection.clipping_m`, 2);
+      requireCondition(clipping[0] > 0 && clipping[1] > clipping[0],
+        `${label}.projection.clipping_m must be positive and increasing`);
+      sensors.set(id, sensor);
+    });
+
+    const observationKeys = new Set();
+    requireArray(bundle.observations, "payload.render_bundle.observations", false)
+      .forEach((observation, index) => {
+        const label = `payload.render_bundle.observations[${index}]`;
+        requireObject(observation, label);
+        requireKeys(observation,
+          ["id", "artifact_sha256", "frame_index", "sensor", "sensor_descriptor_sha256",
+            "optical_scene_sha256", "assembly_id", "assembly_sha256", "assembly_frame",
+            "mount_connector", "mount_transform_sha256", "pose_world_from_sensor_row_major", "layers"],
+          [], label);
+        requireString(observation.id, `${label}.id`);
+        requireCondition(HASH_PATTERN.test(observation.artifact_sha256),
+          `${label}.artifact_sha256 is not canonical`);
+        const frameIndex = requireInteger(observation.frame_index, `${label}.frame_index`, true);
+        requireCondition(frameIndex < frames.length, `${label}.frame_index is outside the scene frame range`);
+        requireCondition(sensors.has(observation.sensor), `${label}.sensor is unknown`);
+        const sensor = sensors.get(observation.sensor);
+        requireCondition(observation.sensor_descriptor_sha256 === sensor.descriptor_sha256,
+          `${label}.sensor_descriptor_sha256 differs from its sensor declaration`);
+        requireCondition(HASH_PATTERN.test(observation.optical_scene_sha256),
+          `${label}.optical_scene_sha256 is not canonical`);
+        requireCondition(observation.assembly_id === assemblyId,
+          `${label}.assembly_id differs from the rendered assembly`);
+        requireCondition(observation.assembly_sha256 === assemblySha256,
+          `${label}.assembly_sha256 differs from the rendered assembly`);
+        requireCondition(observation.assembly_frame === "world",
+          `${label}.assembly_frame must be world`);
+        requireCondition(observation.mount_connector === sensor.connector,
+          `${label}.mount_connector differs from its sensor declaration`);
+        requireCondition(HASH_PATTERN.test(observation.mount_transform_sha256),
+          `${label}.mount_transform_sha256 is not canonical`);
+        const poseMatrix = requireVector(observation.pose_world_from_sensor_row_major,
+          `${label}.pose_world_from_sensor_row_major`, 16);
+        const physicalMatrix = matrixFromPose(frames[frameIndex].connector_poses[sensor.connector]);
+        requireCondition(poseMatrix.every((item, itemIndex) =>
+          Math.abs(item - physicalMatrix[itemIndex]) <= 1e-9),
+        `${label} pose differs from the exact physical connector pose at its frame`);
+        const observationKey = `${frameIndex}/${observation.sensor}`;
+        requireCondition(!observationKeys.has(observationKey), `${label} duplicates ${observationKey}`);
+        observationKeys.add(observationKey);
+        const layers = requireObject(observation.layers, `${label}.layers`);
+        requireCondition(Object.keys(layers).length > 0, `${label}.layers must not be empty`);
+        const allowedModes = new Set(["rgb", "depth", "segmentation", "uncertainty", "reconstruction"]);
+        Object.entries(layers).forEach(([mode, layer]) => {
+          const layerLabel = `${label}.layers.${mode}`;
+          requireCondition(allowedModes.has(mode), `${layerLabel} has an unsupported mode`);
+          requireObject(layer, layerLabel);
+          if (layer.kind === "raster") {
+            requireKeys(layer,
+              ["kind", "sha256", "source_observation_sha256", "source_output_sha256",
+                "source_output_media_type", "source_output_dtype", "source_output_shape",
+                "display_transform", "display_range", "media_type", "width_px", "height_px", "data_base64"],
+              [], layerLabel);
+            requireCondition(HASH_PATTERN.test(layer.sha256), `${layerLabel}.sha256 is not canonical`);
+            requireCondition(layer.source_observation_sha256 === observation.artifact_sha256,
+              `${layerLabel}.source_observation_sha256 differs from its observation`);
+            requireCondition(HASH_PATTERN.test(layer.source_output_sha256),
+              `${layerLabel}.source_output_sha256 is not canonical`);
+            requireCondition(layer.source_output_media_type === "application/vnd.numpy.npy",
+              `${layerLabel}.source_output_media_type is unsupported`);
+            const expectedDtype = mode === "segmentation" ? "int32" : "float32";
+            requireCondition(layer.source_output_dtype === expectedDtype,
+              `${layerLabel}.source_output_dtype must be ${expectedDtype}`);
+            requireCondition(layer.media_type === "image/png", `${layerLabel}.media_type must be image/png`);
+            requireInteger(layer.width_px, `${layerLabel}.width_px`, true);
+            requireInteger(layer.height_px, `${layerLabel}.height_px`, true);
+            requireCondition(layer.width_px > 0 && layer.height_px > 0,
+              `${layerLabel} dimensions must be positive`);
+            requireCondition(layer.width_px === sensor.projection.resolution_px[0] &&
+              layer.height_px === sensor.projection.resolution_px[1],
+            `${layerLabel} dimensions differ from the sensor resolution`);
+            const expectedShape = mode === "rgb"
+              ? [layer.height_px, layer.width_px, 3] : [layer.height_px, layer.width_px];
+            requireCondition(JSON.stringify(layer.source_output_shape) === JSON.stringify(expectedShape),
+              `${layerLabel}.source_output_shape differs from the sensor resolution`);
+            const transforms = {
+              rgb: "linear-rgb-clamped-to-srgb8",
+              depth: "depth-near-white-far-black",
+              segmentation: "stable-integer-label-colors",
+              uncertainty: "uncertainty-log-blue-yellow-infinite-magenta",
+            };
+            requireCondition(layer.display_transform === transforms[mode],
+              `${layerLabel}.display_transform is not canonical`);
+            if (mode === "rgb" || mode === "segmentation") {
+              requireCondition(layer.display_range === null,
+                `${layerLabel}.display_range must be null`);
+            } else {
+              requireVector(layer.display_range, `${layerLabel}.display_range`, 2);
+            }
+            requireString(layer.data_base64, `${layerLabel}.data_base64`);
+            try {
+              requireCondition(btoa(atob(layer.data_base64)) === layer.data_base64,
+                `${layerLabel}.data_base64 must be canonical padded base64`);
+            } catch (_error) {
+              fail(`${layerLabel}.data_base64 is invalid`);
+            }
+          } else if (layer.kind === "surface") {
+            requireCondition(mode === "reconstruction",
+              `${layerLabel} surface layers are valid only for reconstruction`);
+            requireKeys(layer,
+              ["kind", "source_observation_sha256", "surface_sha256", "world_pose"], [], layerLabel);
+            requireCondition(HASH_PATTERN.test(layer.source_observation_sha256),
+              `${layerLabel}.source_observation_sha256 is not canonical`);
+            requireCondition(materialized.has(layer.surface_sha256),
+              `${layerLabel}.surface_sha256 references an absent surface`);
+            requirePose(layer.world_pose, `${layerLabel}.world_pose`);
+            usedSurfaces.add(layer.surface_sha256);
+          } else {
+            fail(`${layerLabel}.kind must be raster or surface`);
+          }
+        });
+      });
+    const unusedSurfaces = Array.from(materialized.keys()).filter((key) => !usedSurfaces.has(key));
+    requireCondition(unusedSurfaces.length === 0,
+      `payload.render_bundle contains unreferenced surfaces: ${unusedSurfaces.join(", ")}`);
+    return bundle;
   }
 
   function validatedPayload(candidate) {
@@ -93,7 +401,7 @@
       }
     }
     requireObject(payload, "payload");
-    requireKeys(payload, ["schema", "title", "assembly_sha256", "scene"], ["live"], "payload");
+    requireKeys(payload, ["schema", "title", "assembly_sha256", "scene"], ["live", "render_bundle"], "payload");
     requireString(payload.title, "payload.title");
     requireCondition(payload.schema === VIEWER_SCHEMA, `payload.schema must be ${VIEWER_SCHEMA}`);
     requireCondition(HASH_PATTERN.test(payload.assembly_sha256), "payload.assembly_sha256 is not canonical");
@@ -120,8 +428,11 @@
     const components = requireArray(scene.components, "scene.components", true);
     const instanceIds = new Set();
     const bodyKeys = new Set();
+    const solidKeys = new Set();
+    const solidGeometry = new Map();
     const connectorKeys = new Set();
     const spatialConnectorKeys = new Set();
+    const opticalConnectorKeys = new Set();
     let solidCount = 0;
     components.forEach((component, componentIndex) => {
       const componentLabel = `scene.components[${componentIndex}]`;
@@ -157,6 +468,8 @@
           const solidId = requireString(solid.id, `${solidLabel}.id`);
           requireCondition(!solidIds.has(solidId), `${bodyLabel} has duplicate solid_id ${JSON.stringify(solidId)}`);
           solidIds.add(solidId);
+          solidKeys.add(`${instanceId}/${bodyId}/${solidId}`);
+          solidGeometry.set(`${instanceId}/${bodyId}/${solidId}`, solid.geometry);
           validateGeometry(solid.geometry, `${solidLabel}.geometry`);
           requirePose(solid.local_pose, `${solidLabel}.local_pose`);
           const provenance = requireObject(solid.provenance, `${solidLabel}.provenance`);
@@ -202,6 +515,7 @@
           requireCondition(component.physical_role === "part",
             `${connectorLabel} on a nonspatial component cannot be spatial`);
           spatialConnectorKeys.add(`${instanceId}.${connectorId}`);
+          if (connector.domain === "optical") opticalConnectorKeys.add(`${instanceId}.${connectorId}`);
         }
         const provenance = requireObject(connector.provenance, `${connectorLabel}.provenance`);
         requireKeys(provenance, ["kind", "source", "reference"], [], `${connectorLabel}.provenance`);
@@ -339,6 +653,16 @@
       requireCondition(JSON.stringify(frames[0].connector_poses) === JSON.stringify(staticConnectorPoses),
         "scene.connector_poses must equal the first hash-bound connector pose frame");
     }
+    if (payload.render_bundle !== undefined) {
+      validateRenderBundle(payload.render_bundle, payload.assembly_sha256, frames,
+        solidGeometry, opticalConnectorKeys, scene.contraption_id);
+    } else {
+      const shapeSolids = components.flatMap((component) => component.bodies.flatMap((body) =>
+        body.solids.filter((solid) => solid.geometry.kind === "shape")
+          .map((solid) => `${component.id}/${body.id}/${solid.id}`)));
+      requireCondition(shapeSolids.length === 0,
+        `shape geometry requires exact render-bundle bindings; missing=${shapeSolids.join(", ")}`);
+    }
     return payload;
   }
 
@@ -414,10 +738,24 @@
     return { vertices, faces };
   }
 
-  function meshFor(geometry) {
+  function meshFor(geometry, surface) {
+    if (surface !== undefined) {
+      return {
+        vertices: surface.vertices_m,
+        faces: surface.triangles,
+        materials: surface.materials,
+        faceMaterials: surface.triangle_materials,
+        vertexColors: surface.vertex_rgba_linear,
+        vertexUncertainty: surface.vertex_uncertainty_m,
+        surfaceSha256: surface.sha256,
+      };
+    }
     if (geometry.kind === "box") return boxMesh(geometry.dimensions_m);
     if (geometry.kind === "sphere") return sphereMesh(geometry.dimensions_m);
     if (geometry.kind === "cylinder") return cylinderMesh(geometry.dimensions_m);
+    if (geometry.kind === "shape") {
+      fail("shape geometry has no exact canonical surface binding; refusing a bounding-box substitute");
+    }
     fail(`unsupported geometry kind ${JSON.stringify(geometry.kind)}`);
   }
 
@@ -437,6 +775,30 @@
   function transformPose(point, pose) {
     const rotated = rotateQuaternion(point, pose.rotation_quaternion_wxyz);
     return rotated.map((value, index) => value + pose.translation_m[index]);
+  }
+
+  function inverseTransformPose(point, pose) {
+    const relative = point.map((value, index) => value - pose.translation_m[index]);
+    const [w, x, y, z] = pose.rotation_quaternion_wxyz;
+    return rotateQuaternion(relative, [w, -x, -y, -z]);
+  }
+
+  function materialColor(material) {
+    const values = material.base_color_linear_rgba.slice(0, 3)
+      .map((item) => item <= 0.0031308 ? 12.92 * item : 1.055 * Math.pow(item, 1 / 2.4) - 0.055)
+      .map((item) => Math.round(Math.max(0, Math.min(1, item)) * 255));
+    return `rgb(${values[0]},${values[1]},${values[2]})`;
+  }
+
+  function vertexColor(mesh, face) {
+    if (!mesh.vertexColors) return null;
+    const linear = [0, 1, 2, 3].map((channel) =>
+      face.reduce((sum, vertexIndex) => sum + mesh.vertexColors[vertexIndex][channel], 0) /
+        face.length);
+    const values = linear.slice(0, 3)
+      .map((item) => item <= 0.0031308 ? 12.92 * item : 1.055 * Math.pow(item, 1 / 2.4) - 0.055)
+      .map((item) => Math.round(Math.max(0, Math.min(1, item)) * 255));
+    return { color: `rgb(${values[0]},${values[1]},${values[2]})`, alpha: linear[3] };
   }
 
   function rotateX(point, angle) {
@@ -633,6 +995,19 @@
       : [{ time_s: 0, body_poses: scene.body_poses, connector_poses: scene.connector_poses }];
     timeline.max = String(frames.length - 1);
 
+    const renderBundle = payload.render_bundle;
+    const surfaceByHash = renderBundle ? renderBundle.surfaces : {};
+    const surfaceBinding = new Map(renderBundle ? renderBundle.solid_bindings.map((binding) => [
+      `${binding.component}/${binding.body}/${binding.solid}`,
+      surfaceByHash[binding.surface_sha256],
+    ]) : []);
+    const sensors = renderBundle ? renderBundle.sensors : [];
+    const sensorById = new Map(sensors.map((sensor) => [sensor.id, sensor]));
+    const observationByKey = new Map(renderBundle ? renderBundle.observations.map((observation) => [
+      `${observation.frame_index}/${observation.sensor}`, observation,
+    ]) : []);
+    const rasterImages = new Map();
+
     const solids = [];
     const connectors = [];
     const connectorByKey = new Map();
@@ -640,12 +1015,13 @@
       component.bodies.forEach((body) => {
         body.solids.forEach((solid) => {
           const key = `${component.id}/${body.id}`;
+          const surface = surfaceBinding.get(`${key}/${solid.id}`);
           solids.push({
             component,
             body,
             solid,
             bodyKey: key,
-            mesh: meshFor(solid.geometry),
+            mesh: meshFor(solid.geometry, surface),
             color: colorFor(`${key}/${solid.id}`),
           });
         });
@@ -703,6 +1079,66 @@
     let lastAnimation = 0;
     let hitRegions = [];
     let connectorHitRegions = [];
+    let viewpoint = "orbit";
+    let viewMode = "scene";
+    const viewpointSelect = byId("viewpoint");
+    const viewModeSelect = byId("view-mode");
+    const opticalSummary = byId("optical-view-summary");
+    sensors.forEach((sensor) => {
+      const option = document.createElement("option");
+      option.value = sensor.id;
+      option.textContent = sensor.display_name;
+      viewpointSelect.append(option);
+    });
+
+    function currentObservation() {
+      if (viewpoint === "orbit") return undefined;
+      return observationByKey.get(`${frame}/${viewpoint}`);
+    }
+
+    function updateViewModes() {
+      const selected = viewMode;
+      viewModeSelect.replaceChildren();
+      const spatial = document.createElement("option");
+      spatial.value = "scene";
+      spatial.textContent = "Spatial scene";
+      viewModeSelect.append(spatial);
+      if (viewpoint !== "orbit") {
+        const modes = new Set();
+        (renderBundle ? renderBundle.observations : [])
+          .filter((observation) => observation.sensor === viewpoint)
+          .forEach((observation) => Object.keys(observation.layers).forEach((mode) => modes.add(mode)));
+        ["rgb", "depth", "segmentation", "uncertainty", "reconstruction"]
+          .filter((mode) => modes.has(mode)).forEach((mode) => {
+            const option = document.createElement("option");
+            option.value = mode;
+            option.textContent = mode[0].toUpperCase() + mode.slice(1);
+            viewModeSelect.append(option);
+          });
+      }
+      viewMode = Array.from(viewModeSelect.options).some((option) => option.value === selected)
+        ? selected : "scene";
+      viewModeSelect.value = viewMode;
+      const sensor = sensorById.get(viewpoint);
+      opticalSummary.textContent = sensor
+        ? `${sensor.connector} · ${sensor.projection.resolution_px[0]}×${sensor.projection.resolution_px[1]} px · ${sensor.descriptor_sha256}`
+        : sensors.length
+          ? `${sensors.length} calibrated optical POV${sensors.length === 1 ? "" : "s"} available.`
+          : "No calibrated optical POV is supplied.";
+    }
+    viewpointSelect.addEventListener("change", () => {
+      viewpoint = viewpointSelect.value;
+      viewMode = "scene";
+      updateViewModes();
+      tooltip.hidden = true;
+      render();
+    });
+    viewModeSelect.addEventListener("change", () => {
+      viewMode = viewModeSelect.value;
+      tooltip.hidden = true;
+      render();
+    });
+    updateViewModes();
 
     function canvasSize() {
       const rectangle = canvas.getBoundingClientRect();
@@ -726,6 +1162,26 @@
         item,
         vertices: item.mesh.vertices.map((point) => transformPose(transformPose(point, item.solid.local_pose), bodyPose)),
         faces: item.mesh.faces,
+        mesh: item.mesh,
+      };
+    }
+
+    function reconstructionWorld(layer) {
+      const surface = surfaceByHash[layer.surface_sha256];
+      const mesh = meshFor({ kind: "shape" }, surface);
+      const item = {
+        component: { id: "reconstruction" },
+        body: { id: "world" },
+        solid: { id: "posterior-surface" },
+        mesh,
+        color: "#65a9ff",
+        reconstruction: true,
+      };
+      return {
+        item,
+        vertices: mesh.vertices.map((point) => transformPose(point, layer.world_pose)),
+        faces: mesh.faces,
+        mesh,
       };
     }
 
@@ -766,6 +1222,48 @@
       }
     }
 
+    function drawRasterLayer(layer, width, height) {
+      drawGrid(width, height, 1);
+      let image = rasterImages.get(layer.sha256);
+      if (!image) {
+        image = new Image();
+        image.decoding = "async";
+        image.addEventListener("load", () => render(), { once: true });
+        image.addEventListener("error", () => render(), { once: true });
+        image.src = `data:${layer.media_type};base64,${layer.data_base64}`;
+        rasterImages.set(layer.sha256, image);
+      }
+      if (image.complete && image.naturalWidth > 0) {
+        const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+        const targetWidth = image.naturalWidth * scale;
+        const targetHeight = image.naturalHeight * scale;
+        const x = (width - targetWidth) / 2;
+        const y = (height - targetHeight) / 2;
+        context.imageSmoothingEnabled = false;
+        context.drawImage(image, x, y, targetWidth, targetHeight);
+        context.fillStyle = "rgba(7,16,20,0.82)";
+        context.fillRect(10, height - 31, Math.min(width - 20, 530), 21);
+        context.fillStyle = "#eaf1f4";
+        context.font = "12px ui-monospace, monospace";
+        context.textAlign = "left";
+        context.fillText(`${viewMode.toUpperCase()} · ${layer.sha256}`, 18, height - 16);
+      } else {
+        context.fillStyle = "#8da1aa";
+        context.font = "14px system-ui";
+        context.textAlign = "center";
+        context.fillText("Loading verified optical raster…", width / 2, height / 2);
+      }
+    }
+
+    function drawUnavailableLayer(width, height, sensor) {
+      drawGrid(width, height, 1);
+      context.fillStyle = "#ffbd66";
+      context.font = "15px system-ui";
+      context.textAlign = "center";
+      context.fillText(`No hash-bound ${viewMode} layer for ${sensor.display_name} at frame ${frame + 1}`,
+        width / 2, height / 2);
+    }
+
     function connectorColor(domain) {
       if (domain === "electrical") return "#ffbd66";
       if (domain === "signal") return "#65a9ff";
@@ -775,8 +1273,33 @@
 
     render = function renderScene() {
       const { width, height, ratio } = canvasSize();
+      const selectedSensor = sensorById.get(viewpoint);
+      const observation = currentObservation();
+      const opticalLayer = viewMode === "scene" || !observation
+        ? undefined : observation.layers[viewMode];
+      if (viewMode !== "scene" && !opticalLayer) {
+        drawUnavailableLayer(width, height, selectedSensor);
+        hitRegions = [];
+        connectorHitRegions = [];
+        timeline.value = String(frame);
+        byId("time-value").textContent = `${frames[frame].time_s.toFixed(3)} s`;
+        byId("frame-value").textContent = `frame ${frame + 1} / ${frames.length}`;
+        statusText.textContent = `Unavailable ${viewMode} observation · no fallback rendered`;
+        return;
+      }
+      if (opticalLayer && opticalLayer.kind === "raster") {
+        drawRasterLayer(opticalLayer, width, height);
+        hitRegions = [];
+        connectorHitRegions = [];
+        timeline.value = String(frame);
+        byId("time-value").textContent = `${frames[frame].time_s.toFixed(3)} s`;
+        byId("frame-value").textContent = `frame ${frame + 1} / ${frames.length}`;
+        statusText.textContent = `${viewMode.toUpperCase()} observation verified · ${opticalLayer.source_observation_sha256.slice(7, 19)}`;
+        return;
+      }
       drawGrid(width, height, ratio);
-      const world = solids.map(solidWorld);
+      const world = opticalLayer && opticalLayer.kind === "surface"
+        ? [reconstructionWorld(opticalLayer)] : solids.map(solidWorld);
       const allPoints = world.flatMap((item) => item.vertices).map(transformed);
       requireCondition(allPoints.length > 0, "no geometry points are available for rendering");
       const bounds = allPoints.reduce((result, point) => ({
@@ -790,7 +1313,7 @@
           Math.abs(point[1] - center[1]), Math.abs(point[2] - center[2]) * 0.6);
       });
       const scale = Math.min(width, height) * 0.39 * view.zoom / extent;
-      const project = (point) => {
+      const orbitProject = (point) => {
         const rotated = transformed(point);
         const relative = rotated.map((value, index) => value - center[index]);
         const perspective = 1 / Math.max(0.55, 1 + relative[2] / (extent * 5));
@@ -798,33 +1321,75 @@
           width / 2 + view.panX * ratio + relative[0] * scale * perspective,
           height / 2 + view.panY * ratio - relative[1] * scale * perspective,
           relative[2],
+          true,
         ];
       };
+      let project = orbitProject;
+      if (selectedSensor) {
+        const sensorPose = frames[frame].connector_poses[selectedSensor.connector];
+        const projection = selectedSensor.projection;
+        const viewportScale = Math.min(
+          width / projection.resolution_px[0], height / projection.resolution_px[1]
+        );
+        const offsetX = (width - projection.resolution_px[0] * viewportScale) / 2;
+        const offsetY = (height - projection.resolution_px[1] * viewportScale) / 2;
+        project = (point) => {
+          const camera = inverseTransformPose(point, sensorPose);
+          const depth = camera[2];
+          const visible = depth >= projection.clipping_m[0] && depth <= projection.clipping_m[1];
+          const safeDepth = Math.max(depth, projection.clipping_m[0]);
+          const pixelX = projection.focal_length_px[0] * camera[0] / safeDepth +
+            projection.principal_point_px[0];
+          const pixelY = projection.principal_point_px[1] +
+            projection.focal_length_px[1] * camera[1] / safeDepth;
+          return [
+            offsetX + pixelX * viewportScale,
+            offsetY + pixelY * viewportScale,
+            depth,
+            visible,
+          ];
+        };
+      }
       const faces = [];
       world.forEach((worldSolid) => {
         const projected = worldSolid.vertices.map(project);
         worldSolid.faces.forEach((face, faceIndex) => {
           const points = face.map((index) => projected[index]);
+          if (selectedSensor && points.some((point) => !point[3])) return;
+          const materialIndex = worldSolid.mesh.faceMaterials
+            ? worldSolid.mesh.faceMaterials[faceIndex] : null;
+          const material = materialIndex === null
+            ? null : worldSolid.mesh.materials[materialIndex];
+          const vertexAppearance = vertexColor(worldSolid.mesh, face);
           faces.push({
             item: worldSolid.item,
             points,
             depth: points.reduce((sum, point) => sum + point[2], 0) / points.length,
             shade: 0.72 + (faceIndex % 4) * 0.09,
+            color: vertexAppearance
+              ? vertexAppearance.color
+              : material ? materialColor(material) : worldSolid.item.color,
+            materialAlpha: vertexAppearance
+              ? vertexAppearance.alpha
+              : material ? material.base_color_linear_rgba[3] : 1,
           });
         });
       });
-      faces.sort((left, right) => left.depth - right.depth);
+      faces.sort(selectedSensor
+        ? (left, right) => right.depth - left.depth
+        : (left, right) => left.depth - right.depth);
       hitRegions = [];
       faces.forEach((face) => {
         const alpha = Math.max(0.01, Math.min(1,
-          globalAlpha * alphaValues[face.item.component.id]));
+          globalAlpha * (alphaValues[face.item.component.id] === undefined
+            ? 1 : alphaValues[face.item.component.id]) * face.materialAlpha));
         context.save();
         context.beginPath();
         context.moveTo(face.points[0][0], face.points[0][1]);
         face.points.slice(1).forEach((point) => context.lineTo(point[0], point[1]));
         context.closePath();
         context.globalAlpha = alpha * 0.82;
-        context.fillStyle = rgba(face.item.color, 1, face.shade);
+        context.fillStyle = rgba(face.color, 1, face.shade);
         context.fill();
         context.globalAlpha = Math.min(0.7, alpha + 0.12);
         context.strokeStyle = "rgb(225,245,247)";
@@ -834,7 +1399,7 @@
         hitRegions.push({ item: face.item, points: face.points });
       });
       connectorHitRegions = [];
-      if (showConnectors) {
+      if (showConnectors && viewpoint === "orbit") {
         connectors.map((item) => connectorWorld(item, extent * 0.055)).forEach((worldConnector) => {
           const origin = project(worldConnector.origin);
           const axis = project(worldConnector.axis);
@@ -859,10 +1424,47 @@
             radius: Math.max(7, 7 * ratio),
           });
         });
+        sensors.forEach((sensor) => {
+          const pose = frames[frame].connector_poses[sensor.connector];
+          const projection = sensor.projection;
+          const distance = extent * 0.18;
+          const pixelCorners = [
+            [0, 0], [projection.resolution_px[0], 0],
+            [projection.resolution_px[0], projection.resolution_px[1]],
+            [0, projection.resolution_px[1]],
+          ];
+          const worldCorners = pixelCorners.map(([pixelX, pixelY]) => transformPose([
+            (pixelX - projection.principal_point_px[0]) * distance / projection.focal_length_px[0],
+            (pixelY - projection.principal_point_px[1]) * distance / projection.focal_length_px[1],
+            distance,
+          ], pose));
+          const origin = project(pose.translation_m);
+          const projectedCorners = worldCorners.map(project);
+          context.save();
+          context.strokeStyle = "rgba(101,169,255,0.72)";
+          context.lineWidth = Math.max(0.9, ratio);
+          projectedCorners.forEach((corner) => {
+            context.beginPath();
+            context.moveTo(origin[0], origin[1]);
+            context.lineTo(corner[0], corner[1]);
+            context.stroke();
+          });
+          context.beginPath();
+          context.moveTo(projectedCorners[0][0], projectedCorners[0][1]);
+          projectedCorners.slice(1).forEach((corner) => context.lineTo(corner[0], corner[1]));
+          context.closePath();
+          context.stroke();
+          context.restore();
+        });
       }
       timeline.value = String(frame);
       byId("time-value").textContent = `${frames[frame].time_s.toFixed(3)} s`;
       byId("frame-value").textContent = `frame ${frame + 1} / ${frames.length}`;
+      statusText.textContent = selectedSensor
+        ? `${selectedSensor.display_name} POV · exact connector frame ${selectedSensor.connector}`
+        : opticalLayer && opticalLayer.kind === "surface"
+          ? `Reconstruction surface verified · ${opticalLayer.source_observation_sha256.slice(7, 19)}`
+          : `Canonical assembly verified · ${scene.assembly_sha256.slice(7, 19)}`;
     };
 
     function pointInPolygon(x, y, points) {
@@ -878,6 +1480,7 @@
     }
 
     canvas.addEventListener("pointerdown", (event) => {
+      if (viewpoint !== "orbit" || viewMode !== "scene") return;
       if (event.button !== 0 && event.button !== 2) return;
       event.preventDefault();
       view.dragMode = event.button === 2 ? "rotate" : "pan";
@@ -934,6 +1537,7 @@
     canvas.addEventListener("contextmenu", (event) => event.preventDefault());
     canvas.addEventListener("wheel", (event) => {
       event.preventDefault();
+      if (viewpoint !== "orbit" || viewMode !== "scene") return;
       view.zoom = Math.max(0.2, Math.min(8, view.zoom * Math.exp(-event.deltaY * 0.0012)));
       render();
     }, { passive: false });
@@ -1048,7 +1652,7 @@
       byId("electrical-summary").textContent = `${ids.length} nodes \u00b7 ${electrical.length} nets`;
     }
 
-    byId("model-summary").textContent = `${scene.components.length} components \u00b7 ${solids.length} solids \u00b7 ${connectors.length} spatial connectors \u00b7 ${frames.length} pose frames`;
+    byId("model-summary").textContent = `${scene.components.length} components \u00b7 ${solids.length} solids \u00b7 ${connectors.length} spatial connectors \u00b7 ${sensors.length} optical POVs \u00b7 ${frames.length} pose frames`;
     byId("assembly-hash").textContent = scene.assembly_sha256;
     statusText.textContent = `Canonical assembly verified \u00b7 ${scene.assembly_sha256.slice(7, 19)}`;
     drawElectrical();

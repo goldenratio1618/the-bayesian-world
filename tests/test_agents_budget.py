@@ -38,6 +38,10 @@ from contraption.part_import.model_validation_tool import (
     validation_activity,
     write_validation_context,
 )
+from contraption.part_import.reference_docs import (
+    STRUCTURED_FORMAT_GUIDES,
+    structured_format_guides,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -105,10 +109,11 @@ def _modeling_value(
 
 
 def _canary_modeling_value() -> dict:
+    model = Path("electrical/resistors/resistor.pmdl")
     device = Path("electrical/resistors/fixed_resistors")
     instance = device / "instantiations/generic-100ohm-resistor"
     paths = (
-        device / "resistor.pmdl",
+        model,
         instance / "static.part",
         instance / "v1.model",
     )
@@ -182,7 +187,7 @@ def _real_modeling_inputs() -> ModelingInputs:
     return ModelingInputs(
         constraints=PROJECT_ROOT / "prompts" / "model_constraints.md",
         gold_templates=(
-            CATALOG_ROOT / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl",
+            CATALOG_ROOT / "electrical" / "resistors" / "resistor.pmdl",
             CATALOG_ROOT / "mechanical" / "inert_objects" / "planar_rigid_bodies" / "rigid_body_planar.pmdl",
         ),
         interfaces=interface_paths(CATALOG_ROOT),
@@ -279,6 +284,82 @@ class BudgetTests(unittest.TestCase):
         self.assertIn("never candidate/model_catalog/", prompt)
         self.assertIn("omit both candidate/ and model_catalog/", prompt)
         self.assertIn("static.part and .model files as exact record-shape examples", prompt)
+        self.assertIn("optical abstractions", prompt)
+        self.assertIn("Geometry and optical source-asset ingestion are outside your trust boundary", prompt)
+        self.assertIn("deterministic host ingestion pipeline", prompt)
+        self.assertIn("deterministic-part-ingestion-1", prompt)
+        self.assertIn("never fabricate or edit such references", prompt)
+
+    def test_all_structured_format_guides_exist_in_declared_order(self):
+        paths = structured_format_guides(PROJECT_ROOT)
+        self.assertEqual(
+            tuple(path.relative_to(PROJECT_ROOT).as_posix() for path in paths),
+            STRUCTURED_FORMAT_GUIDES,
+        )
+        texts = [path.read_text(encoding="utf-8") for path in paths]
+        self.assertTrue(all(text.startswith("# ") for text in texts))
+        self.assertTrue(all(len(text.splitlines()) >= 20 for text in texts))
+        by_name = {path.name: text for path, text in zip(paths, texts, strict=True)}
+        self.assertIn("`artifact_type`", by_name["PMDL.md"])
+        self.assertIn("`controller_stream`", by_name["PMDL.md"])
+        self.assertIn("`deterministic-part-ingestion-staged-1`", by_name["DETERMINISTIC_INGESTION.md"])
+        self.assertIn("`optical_sensors`", by_name["DETERMINISTIC_INGESTION.md"])
+        self.assertIn("Luna must understand this contract", by_name["DETERMINISTIC_INGESTION.md"])
+        self.assertIn("`shape_uri`", by_name["STATIC_PART.md"])
+        self.assertIn("`optical_sensors`", by_name["STATIC_PART.md"])
+        self.assertNotIn('"mesh_uri"', by_name["STATIC_PART.md"])
+        self.assertIn("DifferentiableConstraint", by_name["OPTICAL_OBSERVATION.md"])
+        self.assertIn("<4sBBHQQII", by_name["OPTICAL_SENSOR.md"])
+        self.assertIn("`observation_manifest`", by_name["OPTICAL_SENSOR.md"])
+        self.assertIn("`occupied_probability`", by_name["RECONSTRUCTION_STATE.md"])
+        workflow = by_name["OPTICAL_WORKFLOWS.md"]
+        self.assertIn("contraption simulate", workflow)
+        self.assertIn("--optical-capture", workflow)
+        self.assertIn("contraption optical-reconstruct", workflow)
+        self.assertIn("assembly-optical-capture-1", workflow)
+        self.assertIn("optical-reconstruction-run-1", workflow)
+        self.assertIn("shape.artifact.json", workflow)
+        self.assertIn("`contraption.render-bundle/v1`", by_name["RENDER_BUNDLE.md"])
+
+    def test_luna_response_cannot_author_deterministic_shape_or_optical_payloads(self):
+        formats = (
+            "deterministic-part-ingestion-1",
+            "deterministic-part-ingestion-staged-1",
+            "shape-artifact-1",
+            "optical-material-1",
+            "optical-sensor-1",
+            "optical-scene-1",
+            "optical-observation-1",
+            "reconstruction-state-1",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for marker in formats:
+                value = _modeling_value(
+                    path=f"{marker}.json",
+                    content=json.dumps({"format": marker}),
+                )
+                with self.assertRaisesRegex(ValueError, "host-owned artifact"):
+                    ModelingAgent._materialize_artifacts(root / marker, value)
+            for schema in ("contraption.triangle-mesh/v1", "contraption.ctmesh/v1"):
+                value = _modeling_value(
+                    path="canonical-mesh.json",
+                    content=json.dumps({"schema": schema}),
+                )
+                with self.assertRaisesRegex(ValueError, "host-owned artifact"):
+                    ModelingAgent._materialize_artifacts(root / schema.replace("/", "_"), value)
+
+    def test_luna_candidate_recovery_enforces_deterministic_payload_boundary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            candidate = workspace / "candidate"
+            candidate.mkdir()
+            (candidate / "shape.json").write_text(
+                json.dumps({"format": "shape-artifact-1"}),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "host-owned artifact"):
+                ModelingAgent._value_from_candidate_files(workspace)
 
     def test_doctor_reports_explicit_torch_cuda_details_and_errors(self):
         cuda = types.SimpleNamespace(
@@ -591,9 +672,9 @@ class AgentWorkflowTests(unittest.TestCase):
             )
             inputs = _real_modeling_inputs()
             value = _modeling_value(
-                path="electrical/resistors/fixed_resistors/resistor.pmdl",
+                path="electrical/resistors/resistor.pmdl",
                 content=(
-                    CATALOG_ROOT / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl"
+                    CATALOG_ROOT / "electrical" / "resistors" / "resistor.pmdl"
                 ).read_text(encoding="utf-8"),
             )
             process = subprocess.CompletedProcess(
@@ -616,7 +697,6 @@ class AgentWorkflowTests(unittest.TestCase):
                     Path(first["staging_artifacts"])
                     / "electrical"
                     / "resistors"
-                    / "fixed_resistors"
                     / "resistor.pmdl"
                 )
                 (staged_model.parent / "notes.md").write_text(
@@ -649,7 +729,7 @@ class AgentWorkflowTests(unittest.TestCase):
             self.assertEqual(first["validation_activity"]["logged_calls"], 0)
             self.assertFalse(first["promoted"])
             artifacts = Path(first["staging_artifacts"])
-            self.assertTrue((artifacts / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl").is_file())
+            self.assertTrue((artifacts / "electrical" / "resistors" / "resistor.pmdl").is_file())
             receipt = json.loads(
                 (output / "romi_drive.json").read_text(encoding="utf-8")
             )
@@ -716,9 +796,12 @@ class ModelingValidationToolTests(unittest.TestCase):
             self.assertGreaterEqual(len(integrity["checked"]), 8)
             instructions = (workspace / "AGENTS.md").read_text(encoding="utf-8")
             self.assertIn(
-                "model_catalog/electrical/resistors/fixed_resistors/resistor.pmdl",
+                "model_catalog/electrical/resistors/resistor.pmdl",
                 instructions,
             )
+            for relative in STRUCTURED_FORMAT_GUIDES:
+                self.assertIn(relative, instructions)
+            self.assertIn("# Shape artifact (shape-artifact-1)", instructions)
             manifest = json.loads(
                 (workspace / "INPUT_MANIFEST.json").read_text(encoding="utf-8")
             )
@@ -733,7 +816,7 @@ class ModelingValidationToolTests(unittest.TestCase):
             self.assertIn("candidate/romi_drive.pmdl", invalid["issues"][0]["path"])
 
             candidate.write_bytes(
-                (CATALOG_ROOT / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl").read_bytes()
+                (CATALOG_ROOT / "electrical" / "resistors" / "resistor.pmdl").read_bytes()
             )
             valid = validate_candidate("candidate/romi_drive.pmdl", workspace=workspace)
             self.assertTrue(valid["valid"])
@@ -751,7 +834,7 @@ class ModelingValidationToolTests(unittest.TestCase):
             workspace = agent.prepare_workspace(_real_modeling_inputs(), "validator-run")
             outside = workspace / "outside.pmdl"
             outside.write_bytes(
-                (CATALOG_ROOT / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl").read_bytes()
+                (CATALOG_ROOT / "electrical" / "resistors" / "resistor.pmdl").read_bytes()
             )
 
             escaped = validate_candidate("outside.pmdl", workspace=workspace)
@@ -767,7 +850,7 @@ class ModelingValidationToolTests(unittest.TestCase):
             protected.write_text("tampered\n", encoding="utf-8")
             candidate = workspace / "candidate" / "safe.pmdl"
             candidate.write_bytes(
-                (CATALOG_ROOT / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl").read_bytes()
+                (CATALOG_ROOT / "electrical" / "resistors" / "resistor.pmdl").read_bytes()
             )
             tampered = validate_candidate("candidate/safe.pmdl", workspace=workspace)
             self.assertFalse(tampered["valid"])
@@ -807,17 +890,17 @@ class ModelingRecoveryTests(unittest.TestCase):
     def test_promotion_uses_validated_atomic_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            proposed = root / "proposed" / "electrical" / "resistors" / "fixed_resistors"
+            proposed = root / "proposed" / "electrical" / "resistors"
             proposed.mkdir(parents=True)
             source = proposed / "resistor.pmdl"
             source.write_bytes(
-                (CATALOG_ROOT / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl").read_bytes()
+                (CATALOG_ROOT / "electrical" / "resistors" / "resistor.pmdl").read_bytes()
             )
             registry = root / "registry"
 
             written = ModelingAgent.promote(root / "proposed", registry)
 
-            target = registry / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl"
+            target = registry / "electrical" / "resistors" / "resistor.pmdl"
             self.assertEqual(written, [target])
             self.assertEqual(target.read_bytes(), source.read_bytes())
             self.assertFalse(any(registry.rglob("*.tmp")))
@@ -826,10 +909,10 @@ class ModelingRecoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             proposed = root / "proposed"
-            model = proposed / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl"
+            model = proposed / "electrical" / "resistors" / "resistor.pmdl"
             model.parent.mkdir(parents=True)
             model.write_bytes(
-                (CATALOG_ROOT / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl").read_bytes()
+                (CATALOG_ROOT / "electrical" / "resistors" / "resistor.pmdl").read_bytes()
             )
             ModelingAgent.validate_artifacts(proposed)
             model.write_text('{"format":"pmdl-1","tampered":true}\n', encoding="utf-8")
@@ -838,7 +921,7 @@ class ModelingRecoveryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 ModelingAgent.promote(proposed, registry)
             self.assertFalse(
-                (registry / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl").exists()
+                (registry / "electrical" / "resistors" / "resistor.pmdl").exists()
             )
 
     def test_canary_contract_requires_static_part_and_model_instance(self):
@@ -847,7 +930,7 @@ class ModelingRecoveryTests(unittest.TestCase):
                 {
                     **_modeling_value(),
                     "artifacts": [
-                        {"path": "electrical/resistors/fixed_resistors/resistor.pmdl", "content": "{}"},
+                        {"path": "electrical/resistors/resistor.pmdl", "content": "{}"},
                     ],
                 }
             )

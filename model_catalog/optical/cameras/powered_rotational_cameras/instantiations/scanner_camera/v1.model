@@ -7,7 +7,7 @@
   "model": {
     "id": "electromechanical.camera_payload.rotational",
     "version": "1.0.0",
-    "sha256": "sha256:bc9fa47dd4ea936ba49bd3758ac782cd0b6f301d6561309030a610b11910d6e5"
+    "sha256": "sha256:ac693536603d5785d9e3083f14502919be11b2aa4563fce4315baa80d9918021"
   },
   "parameters": {
     "inertia": 8e-05,

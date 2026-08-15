@@ -1,0 +1,451 @@
+{
+  "caches": [
+    {
+      "byte_length": 19684,
+      "media_type": "model/gltf-binary",
+      "sha256": "20fb71cd193ef8a5a454b8fd6cffca148176d5ad587ba0657223b31adb7c2dc9",
+      "uri": "runtime.glb"
+    }
+  ],
+  "canonical_frame": "right_handed_z_up_x_forward_metres",
+  "derived_mass_properties": null,
+  "format": "shape-artifact-1",
+  "id": "generic-100ohm-resistor.body.envelope",
+  "metadata": {
+    "detailed_features": [
+      "axial resistive body",
+      "four identifying bands",
+      "two wire leads"
+    ],
+    "geometric_fidelity": "catalog-derived engineering visualization; not vendor CAD"
+  },
+  "optical_materials": [
+    {
+      "absorption_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "base_color_linear_rgba": [
+        0.018,
+        0.022,
+        0.028,
+        1.0
+      ],
+      "double_sided": false,
+      "emission_linear_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "extinction_coefficient": 0.0,
+      "id": "dark-polymer",
+      "metallic": 0.0,
+      "model": "principled",
+      "phase_anisotropy": 0.0,
+      "provenance": {
+        "kind": "catalog-class"
+      },
+      "refractive_index": 1.5,
+      "roughness": 0.72,
+      "scattering_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spectrum": [],
+      "transmission": 0.0,
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.05
+        }
+      }
+    },
+    {
+      "absorption_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "base_color_linear_rgba": [
+        0.52,
+        0.55,
+        0.58,
+        1.0
+      ],
+      "double_sided": false,
+      "emission_linear_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "extinction_coefficient": 3.1,
+      "id": "metal",
+      "metallic": 0.92,
+      "model": "conductor",
+      "phase_anisotropy": 0.0,
+      "provenance": {
+        "kind": "catalog-class"
+      },
+      "refractive_index": 1.5,
+      "roughness": 0.24,
+      "scattering_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spectrum": [],
+      "transmission": 0.0,
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.08
+        }
+      }
+    },
+    {
+      "absorption_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "base_color_linear_rgba": [
+        0.015,
+        0.19,
+        0.045,
+        1.0
+      ],
+      "double_sided": false,
+      "emission_linear_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "extinction_coefficient": 0.0,
+      "id": "pcb-green",
+      "metallic": 0.0,
+      "model": "principled",
+      "phase_anisotropy": 0.0,
+      "provenance": {
+        "kind": "catalog-class"
+      },
+      "refractive_index": 1.5,
+      "roughness": 0.46,
+      "scattering_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spectrum": [],
+      "transmission": 0.0,
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.04
+        }
+      }
+    },
+    {
+      "absorption_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "base_color_linear_rgba": [
+        0.008,
+        0.009,
+        0.01,
+        1.0
+      ],
+      "double_sided": false,
+      "emission_linear_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "extinction_coefficient": 0.0,
+      "id": "rubber",
+      "metallic": 0.0,
+      "model": "principled",
+      "phase_anisotropy": 0.0,
+      "provenance": {
+        "kind": "catalog-class"
+      },
+      "refractive_index": 1.5,
+      "roughness": 0.94,
+      "scattering_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spectrum": [],
+      "transmission": 0.0,
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.03
+        }
+      }
+    },
+    {
+      "absorption_per_m": [
+        0.03,
+        0.02,
+        0.015
+      ],
+      "base_color_linear_rgba": [
+        0.96,
+        0.98,
+        1.0,
+        0.08
+      ],
+      "double_sided": false,
+      "emission_linear_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "extinction_coefficient": 0.0,
+      "id": "optical-glass",
+      "metallic": 0.0,
+      "model": "dielectric",
+      "phase_anisotropy": 0.0,
+      "provenance": {
+        "kind": "catalog-class"
+      },
+      "refractive_index": 1.52,
+      "roughness": 0.035,
+      "scattering_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spectrum": [],
+      "transmission": 0.94,
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "refractive_index_std": 0.01
+        }
+      }
+    },
+    {
+      "absorption_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "base_color_linear_rgba": [
+        0.72,
+        0.31,
+        0.12,
+        1.0
+      ],
+      "double_sided": false,
+      "emission_linear_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "extinction_coefficient": 3.6,
+      "id": "copper",
+      "metallic": 1.0,
+      "model": "conductor",
+      "phase_anisotropy": 0.0,
+      "provenance": {
+        "kind": "catalog-class"
+      },
+      "refractive_index": 1.5,
+      "roughness": 0.21,
+      "scattering_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spectrum": [],
+      "transmission": 0.0,
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.05
+        }
+      }
+    },
+    {
+      "absorption_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "base_color_linear_rgba": [
+        0.66,
+        0.56,
+        0.38,
+        1.0
+      ],
+      "double_sided": false,
+      "emission_linear_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "extinction_coefficient": 0.0,
+      "id": "ceramic",
+      "metallic": 0.0,
+      "model": "dielectric",
+      "phase_anisotropy": 0.0,
+      "provenance": {
+        "kind": "catalog-class"
+      },
+      "refractive_index": 1.7,
+      "roughness": 0.61,
+      "scattering_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spectrum": [],
+      "transmission": 0.0,
+      "uncertainty": {
+        "distribution": "uniform",
+        "parameters": {
+          "roughness_lower": 0.45,
+          "roughness_upper": 0.8
+        }
+      }
+    },
+    {
+      "absorption_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "base_color_linear_rgba": [
+        0.04,
+        0.17,
+        0.48,
+        1.0
+      ],
+      "double_sided": false,
+      "emission_linear_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "extinction_coefficient": 0.0,
+      "id": "battery-wrap",
+      "metallic": 0.0,
+      "model": "principled",
+      "phase_anisotropy": 0.0,
+      "provenance": {
+        "kind": "catalog-class"
+      },
+      "refractive_index": 1.5,
+      "roughness": 0.58,
+      "scattering_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spectrum": [],
+      "transmission": 0.0,
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.05
+        }
+      }
+    }
+  ],
+  "physical_fields": [],
+  "provenance": {
+    "kind": "deterministic-procedural",
+    "source_static_part": "electrical/resistors/fixed_resistors/instantiations/generic-100ohm-resistor/static.part"
+  },
+  "sources": [
+    {
+      "content": {
+        "byte_length": 499,
+        "media_type": "application/vnd.contraption.procedural-shape+json",
+        "sha256": "5eca7f8e48da978aba56dd9f52ef3c7f052f9832715249d7f0a47c459ee9be58",
+        "uri": "source/procedural-shape.json"
+      },
+      "format": "procedural",
+      "id": "procedural-catalog-model",
+      "metres_per_source_unit": 1.0,
+      "provenance": {
+        "kind": "derived",
+        "static_part": "static.part"
+      },
+      "transform_to_canonical_row_major": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  ],
+  "surfaces": [
+    {
+      "bounds_m": [
+        -0.005000000000000001,
+        -0.0019,
+        -0.0019,
+        0.005000000000000001,
+        0.0019,
+        0.0019
+      ],
+      "content": {
+        "byte_length": 22216,
+        "media_type": "application/vnd.contraption.ctmesh",
+        "sha256": "6eec82dfb9b20230f2744aa7dbf8abb03263daf4350805ecb491705cdcbfa329",
+        "uri": "canonical.ctmesh"
+      },
+      "id": "canonical",
+      "kind": "ctmesh",
+      "manifold": true,
+      "material_ids": [
+        "dark-polymer",
+        "metal",
+        "pcb-green",
+        "rubber",
+        "optical-glass",
+        "copper",
+        "ceramic",
+        "battery-wrap"
+      ],
+      "purposes": [
+        "analysis",
+        "ray_trace",
+        "render",
+        "collision"
+      ],
+      "triangle_count": 768,
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "basis": "catalog envelope and deterministic procedural feature estimate",
+          "builder_version": 1,
+          "standard_deviation_m": 0.0001
+        }
+      },
+      "vertex_count": 398,
+      "watertight": true
+    }
+  ],
+  "version": "1.0.0",
+  "volumes": []
+}

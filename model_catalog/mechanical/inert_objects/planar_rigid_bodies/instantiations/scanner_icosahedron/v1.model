@@ -1,0 +1,28 @@
+{
+  "format": "model-instance-1",
+  "id": "scanner.icosahedron.v1",
+  "variant": "v1",
+  "part": "scanner.icosahedron",
+  "version": "1.0.0",
+  "model": {
+    "id": "mechanical.rigid_body.planar",
+    "version": "1.0.0",
+    "sha256": "sha256:236960d718da8c64879cbeceeb70bcc5213f19064b74c83d39b7f513f6a9c0a8"
+  },
+  "parameters": {
+    "mass": 0.05,
+    "inertia": 0.000072
+  },
+  "parameter_uncertainty": {
+    "mass": {"distribution": "normal", "std": 0.005},
+    "inertia": {"distribution": "lognormal", "std": 0.15}
+  },
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 0.1,
+    "notes": "Fixed world object; its PMDL dynamics are catalog identity and are not assembled into the scanner plant."
+  },
+  "metadata": {
+    "world_behavior": "fixed when referenced through environment.world_objects"
+  }
+}

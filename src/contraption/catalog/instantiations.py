@@ -16,7 +16,7 @@ import json
 import math
 from pathlib import Path
 import re
-from typing import Any, Iterable
+from typing import TYPE_CHECKING, Any, Iterable
 
 from ..physics.physical import (
     BodySpec,
@@ -40,10 +40,133 @@ from ..physics.physical import (
 from ..physics.specs import FrozenDict, ModelSpec
 
 
+if TYPE_CHECKING:
+    from ..optics import OpticalSensor
+
+
 _VARIANT_FILE = re.compile(r"^v[1-9][0-9]*\.model$")
 _CONDITIONS = frozenset(
     {"unverified", "inspected", "calibrated", "degraded", "retired"}
 )
+
+
+@dataclass(frozen=True, slots=True)
+class OpticalSensorBindingSpec:
+    id: str
+    body: str
+    pose_connector: str
+    artifact_port: str
+    descriptor_uri: str
+    descriptor_sha256: str
+
+    def __post_init__(self) -> None:
+        _identifier(self.id, "optical_sensor.id")
+        _identifier(self.body, "optical_sensor.body")
+        _identifier(self.pose_connector, "optical_sensor.pose_connector")
+        _identifier(self.artifact_port, "optical_sensor.artifact_port")
+        _text(self.descriptor_uri, "optical_sensor.descriptor_uri")
+        path = Path(self.descriptor_uri)
+        if path.is_absolute() or "\\" in self.descriptor_uri or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
+            raise PhysicalSpecError("optical_sensor.descriptor_uri must be a safe POSIX relative path")
+        if not isinstance(self.descriptor_sha256, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", self.descriptor_sha256) is None:
+            raise PhysicalSpecError("optical_sensor.descriptor_sha256 must be a prefixed SHA-256 digest")
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "OpticalSensorBindingSpec":
+        data = _mapping(value, "optical sensor binding")
+        names = ("id", "body", "pose_connector", "artifact_port", "descriptor_uri", "descriptor_sha256")
+        _keys(data, names, "optical sensor binding", names)
+        return cls(*(_text(data[name], f"optical_sensor.{name}") for name in names))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {name: getattr(self, name) for name in ("id", "body", "pose_connector", "artifact_port", "descriptor_uri", "descriptor_sha256")}
+
+
+def validate_optical_sensors(
+    static: "StaticPartSpec", directory: Path, model: ModelSpec | None = None
+) -> tuple[OpticalSensor, ...]:
+    """Verify and return descriptors admitted by static and optional PMDL closure."""
+
+    from ..optics import OpticalSensor, OpticalSchemaError
+
+    body_ids = {body.id for body in static.bodies}
+    connector_map = {connector.id: connector for connector in static.connectors}
+    validated: list[OpticalSensor] = []
+    for binding in static.optical_sensors:
+        if binding.body not in body_ids:
+            raise PhysicalSpecError(f"optical sensor {binding.id!r} references unknown body {binding.body!r}")
+        connector = connector_map.get(binding.pose_connector)
+        if connector is None or connector.body != binding.body or connector.domain != "optical":
+            raise PhysicalSpecError(f"optical sensor {binding.id!r} pose connector must be optical and belong to body {binding.body!r}")
+        descriptor = (directory.resolve() / Path(*binding.descriptor_uri.split("/"))).resolve()
+        if descriptor.parent != directory.resolve() or descriptor.name != "sensor.optical.json" or descriptor.is_symlink() or not descriptor.is_file():
+            raise PhysicalSpecError(f"optical sensor descriptor must be the regular instantiation-local sensor.optical.json: {descriptor}")
+        digest = "sha256:" + hashlib.sha256(descriptor.read_bytes()).hexdigest()
+        if digest != binding.descriptor_sha256:
+            raise PhysicalSpecError(f"optical sensor descriptor hash mismatch: expected {binding.descriptor_sha256}, got {digest}")
+        try:
+            sensor = OpticalSensor.load(descriptor)
+        except (OSError, OpticalSchemaError) as exc:
+            raise PhysicalSpecError(f"invalid optical sensor descriptor: {exc}") from exc
+        if sensor.id != binding.id or sensor.mount_connector != binding.pose_connector:
+            raise PhysicalSpecError("optical sensor descriptor identity/mount does not match static binding")
+        if model is not None:
+            port = next((item for item in model.artifact_ports if item.name == binding.artifact_port), None)
+            if port is None or port.direction != "output" or port.artifact_type != "contraption/optical-observation@1":
+                raise PhysicalSpecError(f"optical sensor {binding.id!r} requires an output contraption/optical-observation@1 artifact port")
+        validated.append(sensor)
+    return tuple(validated)
+
+
+def _validate_static_shapes(static: "StaticPartSpec", directory: Path) -> None:
+    """Verify every canonical shape binding before a part enters the registry."""
+
+    from ..shape.artifacts import ShapeArtifact, ShapeArtifactError
+
+    root = directory.resolve()
+    for body in static.bodies:
+        for solid in body.solids:
+            geometry = solid.geometry
+            if geometry.kind != "shape":
+                continue
+            assert geometry.shape_uri is not None
+            assert geometry.shape_sha256 is not None
+            assert geometry.surface_id is not None
+            manifest = (root / Path(*geometry.shape_uri.split("/"))).resolve()
+            if manifest != root and root not in manifest.parents:
+                raise PhysicalSpecError(
+                    f"shape manifest for {body.id}.{solid.id} escapes {directory}"
+                )
+            if manifest.is_symlink() or not manifest.is_file():
+                raise PhysicalSpecError(
+                    f"shape manifest for {body.id}.{solid.id} is missing or not regular: {manifest}"
+                )
+            digest = "sha256:" + hashlib.sha256(manifest.read_bytes()).hexdigest()
+            if digest != geometry.shape_sha256:
+                raise PhysicalSpecError(
+                    f"shape manifest hash mismatch for {body.id}.{solid.id}: "
+                    f"expected {geometry.shape_sha256}, got {digest}"
+                )
+            try:
+                artifact = ShapeArtifact.load(manifest)
+            except (OSError, ShapeArtifactError) as exc:
+                raise PhysicalSpecError(
+                    f"invalid shape artifact for {body.id}.{solid.id}: {exc}"
+                ) from exc
+            surface = next(
+                (item for item in artifact.surfaces if item.id == geometry.surface_id),
+                None,
+            )
+            if surface is None or surface.kind != "ctmesh":
+                raise PhysicalSpecError(
+                    f"shape {body.id}.{solid.id} requires CTMESH surface {geometry.surface_id!r}"
+                )
+            low, high = surface.bounds_m[:3], surface.bounds_m[3:]
+            dimensions = tuple(high[index] - low[index] for index in range(3))
+            if any(not math.isclose(dimensions[index], geometry.dimensions_m[index], rel_tol=1e-6, abs_tol=1e-10) for index in range(3)):
+                raise PhysicalSpecError(
+                    f"shape {body.id}.{solid.id} declared dimensions do not match canonical surface bounds"
+                )
 
 
 def _freeze_json(value: Any, context: str) -> Any:
@@ -71,6 +194,7 @@ class StaticPartSpec:
     bodies: tuple[BodySpec, ...]
     connectors: tuple[PhysicalConnectorSpec, ...]
     parameter_bindings: tuple[PhysicalParameterBindingSpec, ...]
+    optical_sensors: tuple[OpticalSensorBindingSpec, ...]
     provenance: ProvenanceSpec
     purchasing: FrozenDict[Any] = FrozenDict()
     metadata: FrozenDict[Any] = FrozenDict()
@@ -100,6 +224,12 @@ class StaticPartSpec:
         object.__setattr__(self, "bodies", tuple(self.bodies))
         object.__setattr__(self, "connectors", tuple(self.connectors))
         object.__setattr__(self, "parameter_bindings", tuple(self.parameter_bindings))
+        object.__setattr__(self, "optical_sensors", tuple(self.optical_sensors))
+        duplicates = _duplicates(item.id for item in self.optical_sensors)
+        if duplicates:
+            raise PhysicalSpecError(
+                f"static part has duplicate optical sensor id(s): {', '.join(duplicates)}"
+            )
         object.__setattr__(self, "purchasing", _freeze_json(self.purchasing, "static_part.purchasing"))
         object.__setattr__(self, "metadata", _freeze_json(self.metadata, "static_part.metadata"))
 
@@ -115,11 +245,12 @@ class StaticPartSpec:
             "bodies",
             "connectors",
             "parameter_bindings",
+            "optical_sensors",
             "provenance",
             "purchasing",
             "metadata",
         )
-        _keys(data, names, "static part", names[:9])
+        _keys(data, names, "static part", ("format", "id", "name", "version", "physical_role", "bodies", "connectors", "parameter_bindings", "provenance"))
         return cls(
             _text(data["format"], "static_part.format"),
             _identifier(data["id"], "static_part.id"),
@@ -148,6 +279,12 @@ class StaticPartSpec:
                     )
                 )
             ),
+            tuple(
+                OpticalSensorBindingSpec.from_dict(
+                    _mapping(item, f"static_part.optical_sensors[{index}]")
+                )
+                for index, item in enumerate(_sequence(data.get("optical_sensors", []), "static_part.optical_sensors"))
+            ),
             ProvenanceSpec.from_dict(_mapping(data["provenance"], "static_part.provenance")),
             _freeze_json(_mapping(data.get("purchasing", {}), "static_part.purchasing"), "static_part.purchasing"),
             _freeze_json(_mapping(data.get("metadata", {}), "static_part.metadata"), "static_part.metadata"),
@@ -167,6 +304,7 @@ class StaticPartSpec:
             "bodies": [item.to_dict() for item in self.bodies],
             "connectors": [item.to_dict() for item in self.connectors],
             "parameter_bindings": [item.to_dict() for item in self.parameter_bindings],
+            "optical_sensors": [item.to_dict() for item in self.optical_sensors],
             "provenance": self.provenance.to_dict(),
             "purchasing": _canonical_json_value(self.purchasing),
             "metadata": _canonical_json_value(self.metadata),
@@ -444,7 +582,9 @@ class PartInstantiationRegistry(Mapping[str, PartInstantiation]):
                     f"{contract_relative.as_posix()}"
                 )
             static = StaticPartSpec.from_json(static_path.read_text(encoding="utf-8"))
-            from .interfaces import load_interface
+            _validate_static_shapes(static, directory)
+            validate_optical_sensors(static, directory)
+            from .interfaces import DeviceInterface, load_interface
 
             contract = load_interface(contract_path)
             model_paths = sorted(directory.glob("*.model"))
@@ -464,17 +604,28 @@ class PartInstantiationRegistry(Mapping[str, PartInstantiation]):
                     )
                 if models is not None:
                     referenced_model = models.get(model_instance.model.id)
-                    if referenced_model is not None and referenced_model.implements != contract.id:
+                    allowed_implementations = {contract.id}
+                    if (
+                        isinstance(contract, DeviceInterface)
+                        and model_instance.model.id in contract.models
+                    ):
+                        allowed_implementations.add(contract.parent)
+                    if (
+                        referenced_model is not None
+                        and referenced_model.implements not in allowed_implementations
+                    ):
                         raise PhysicalSpecError(
                             f"{model_path.relative_to(catalog_root)} references PMDL implementing "
                             f"{referenced_model.implements!r}, but its instantiation directory belongs "
-                            f"to interface {contract.id!r}"
+                            f"to interface {contract.id!r}; allowed implementations are "
+                            f"{', '.join(sorted(allowed_implementations))}"
                         )
+                    validate_optical_sensors(static, directory, referenced_model)
                 values.append(PartInstantiation(static, model_instance, directory))
             extra = sorted(
                 path.name
                 for path in directory.iterdir()
-                if path.is_file() and path.name != "static.part" and path.suffix != ".model"
+                if path.is_file() and path.name not in {"static.part", "sensor.optical.json"} and path.suffix != ".model"
             )
             if extra:
                 raise PhysicalSpecError(
@@ -489,7 +640,9 @@ class PartInstantiationRegistry(Mapping[str, PartInstantiation]):
 __all__ = [
     "ComputeCostSpec",
     "ModelInstantiationSpec",
+    "OpticalSensorBindingSpec",
     "PartInstantiation",
     "PartInstantiationRegistry",
     "StaticPartSpec",
+    "validate_optical_sensors",
 ]

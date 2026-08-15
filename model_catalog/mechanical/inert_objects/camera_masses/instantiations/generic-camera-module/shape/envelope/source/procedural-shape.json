@@ -1,0 +1,29 @@
+{
+  "body": "body",
+  "builder": "scripts/build_part_shapes.py",
+  "features": [
+    "camera PCB",
+    "sensor package",
+    "multi-stage lens barrel",
+    "glass objective",
+    "flex connector"
+  ],
+  "format": "contraption.procedural-shape/v1",
+  "input_dimensions_m": [
+    0.06,
+    0.025,
+    0.025
+  ],
+  "optical_material_ids": [
+    "dark-polymer",
+    "metal",
+    "pcb-green",
+    "rubber",
+    "optical-glass",
+    "copper",
+    "ceramic",
+    "battery-wrap"
+  ],
+  "part": "generic-camera-module",
+  "solid": "envelope"
+}

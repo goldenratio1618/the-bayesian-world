@@ -21,6 +21,7 @@ from ..verification import VerificationProgram
 
 from .assembly import AssembledPMDLSystem, AssemblyError, assemble_contraption
 from .physical import (
+    FixedWorldObjectSpec,
     PhysicalAssemblySpec,
     PhysicalComponentInstance,
     ResolvedPartRegistry,
@@ -389,6 +390,7 @@ class ResolvedAssembly:
     verifications: FrozenDict[ResolvedVerification]
     physical: ResolvedPhysicalAssembly
     system: AssembledPMDLSystem
+    instantiations: PartInstantiationRegistry
 
     @property
     def assembly_sha256(self) -> str:
@@ -745,6 +747,7 @@ class ResolvedAssembly:
             "pmdl_sha256": self.system.pmdl_sha256,
             "contraption_id": self.specification.id,
             "component_count": len(self.specification.components),
+            "world_object_count": len(self.physical.world_objects),
             "connection_count": len(self.specification.connections),
             "state_count": len(self.system.state_names),
             "differential_state_count": len(self.system.differential_state_names),
@@ -1274,8 +1277,10 @@ def _parse_component(
     value: Mapping[str, Any],
     index: int,
     instantiations: PartInstantiationRegistry,
+    *,
+    context: str | None = None,
 ) -> ResolvedComponent:
-    context = f"contraption.components[{index}]"
+    context = context or f"contraption.components[{index}]"
     _keys(
         value,
         {"id", "instantiation"},
@@ -1300,6 +1305,48 @@ def _parse_component(
         instantiation.parameters,
         instantiation.model_instance.condition,
     )
+
+
+def _resolve_world_objects(
+    environment: Mapping[str, Any],
+    instantiations: PartInstantiationRegistry,
+) -> tuple[tuple[ResolvedComponent, FixedWorldObjectSpec], ...]:
+    """Strictly project fixed catalog geometry from environment DSL data."""
+
+    raw_objects = _sequence(
+        environment.get("world_objects", ()),
+        "contraption.environment.world_objects",
+    )
+    result: list[tuple[ResolvedComponent, FixedWorldObjectSpec]] = []
+    for index, raw in enumerate(raw_objects):
+        context = f"contraption.environment.world_objects[{index}]"
+        value = _mapping(raw, context)
+        _keys(
+            value,
+            {"id", "instantiation", "pose"},
+            context,
+            {"id", "instantiation", "pose"},
+        )
+        component = _parse_component(
+            {"id": value["id"], "instantiation": value["instantiation"]},
+            index,
+            instantiations,
+            context=context,
+        )
+        try:
+            pose = TransformSpec.from_dict(_mapping(value["pose"], f"{context}.pose"))
+        except PhysicalSpecError as exc:
+            raise ResolutionError(f"invalid {context}.pose: {exc}") from exc
+        result.append(
+            (
+                component,
+                FixedWorldObjectSpec(component.id, component.part, pose),
+            )
+        )
+    identifiers = [item[0].id for item in result]
+    if len(identifiers) != len(set(identifiers)):
+        raise ResolutionError("contraption world object identifiers must be unique")
+    return tuple(result)
 
 
 def _model_digest(model: ModelSpec) -> str:
@@ -1991,6 +2038,19 @@ def resolve_assembly(
     )
     if len({item.id for item in components}) != len(components):
         raise ResolutionError("contraption component identifiers must be unique")
+    world_object_pairs = _resolve_world_objects(
+        specification.environment, instantiations
+    )
+    world_components = tuple(item[0] for item in world_object_pairs)
+    world_objects = tuple(item[1] for item in world_object_pairs)
+    identifier_collisions = sorted(
+        {item.id for item in components} & {item.id for item in world_components}
+    )
+    if identifier_collisions:
+        raise ResolutionError(
+            "world object ids must not collide with component ids: "
+            + ", ".join(identifier_collisions)
+        )
     connections = specification.connections
     duplicate_connection_ids = sorted(
         {
@@ -2011,7 +2071,7 @@ def resolve_assembly(
                 "connection semantics require typed fields rather than opaque metadata"
             )
     component_by_id = {item.id: item for item in components}
-    used_part_ids = {item.part for item in components}
+    used_part_ids = {item.part for item in (*components, *world_components)}
     verified_models: dict[str, ModelSpec] = {}
     part_models = {
         part_id: _verify_part_model(part_registry[part_id], model_registry)
@@ -2021,6 +2081,10 @@ def resolve_assembly(
         verified_models[component.id] = part_models[component.part]
         _validate_component_parameter_bindings(
             component, part_registry[component.part], verified_models[component.id]
+        )
+    for component in world_components:
+        _validate_component_parameter_bindings(
+            component, part_registry[component.part], part_models[component.part]
         )
 
     actuators, controller_drafts = _prepare_runtime_wiring(
@@ -2074,6 +2138,7 @@ def resolve_assembly(
                 connections,
                 record.physical_root,
                 frozen_physical_source,
+                world_objects,
             ),
             part_registry,
             zero_coordinates,
@@ -2190,6 +2255,7 @@ def resolve_assembly(
         verifications,
         physical,
         system,
+        instantiations,
     )
 
 

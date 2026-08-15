@@ -18,7 +18,10 @@ simulation is E0/E1 engineering evidence only and does not qualify a part.
 
 The source of truth is a strict `contraption-4` bundle. Its manifest links the
 required catalog roots and exact-hash `control-1` and `verification-1`
-artifacts. Components contain only an id and a model instantiation reference.
+artifacts. Exact field, unit, validation, and ownership contracts for these and
+the optical/shape records are collected in the
+[structured-format guides](structured_formats/README.md).
+Components contain only an id and a model instantiation reference.
 Each catalog instantiation combines `static.part`
 (bodies, connectors, geometry bindings, and provenance) with a `vN.model`
 (exact PMDL identity, initialized parameters, uncertainty, condition, and
@@ -27,8 +30,10 @@ compute cost).
 Catalog top-level directories are physical domains. Categories and optional
 device types form the next two layers, and every layer owns an abstract
 `interface.pmdl` contract. Concrete models may live only at category or device
-layers and must implement the colocated contract. There is no parallel taxonomy
-or project-specific scanner domain.
+layers and must implement the colocated contract. A device instantiation may
+select a model implementing that device contract or a parent-category model
+explicitly listed by the device interface. There is no parallel taxonomy or
+project-specific scanner domain.
 
 `load_contraption` validates and resolves that filesystem closure into:
 
@@ -97,6 +102,14 @@ not part of this architecture.
 - A strict `verification-1` DSL for trajectory metrics, exact-time reducers,
   conservative confidence-bounded posterior criteria, differentiability
   classification, and automatic simulation acceptance reports.
+- Canonical CTMESH surfaces, uncertainty and provenance, explicit optical
+  materials and calibrated optical-sensor descriptors, with deterministic
+  host-owned ingestion kept outside the modeling agent.
+- An offline optical stack with CPU forward rendering, optional Torch CPU/CUDA
+  differentiable forward and inverse rendering, multi-view inverse-problem
+  parameters, priors, likelihoods and constraints, uncertainty-aware Bayesian
+  sparse reconstruction, and optical-sensor point-of-view selection in the
+  browser viewer.
 - Budgeted, staged classification/modeling agents whose artifacts are inert
   data until deterministic validation and explicit promotion.
 - A dependency-free, display-only browser viewer and a deterministic,
@@ -106,8 +119,13 @@ not part of this architecture.
 
 "Rigid body" currently means a planar root chassis with a declared tree of
 fixed/revolute attachments and three-dimensional visualization transforms. It
-does not include a general 3D contact solver, flexible bodies, fracture, fluid,
-thermal, or optical physics.
+does not include a general 3D contact solver, flexible bodies, fracture,
+fluids, or thermal physics.
+
+Optical simulation, inverse rendering, reconstruction, and sensor-view
+visualization are offline capabilities. The optical artifact-stream bridge to
+generated controller code or an FPGA is not implemented; the documented
+`controller_stream` transport is a compatibility contract, not that bridge.
 
 The scanner's hash-bound dynamics record is deliberately `incomplete`. Its
 chassis model uses the published **bare-chassis** mass of 0.160 kg (without

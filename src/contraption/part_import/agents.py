@@ -20,7 +20,7 @@ import subprocess
 import sys
 import tempfile
 import uuid
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from .budget import BudgetLedger, TokenPricing, Usage
 
@@ -113,6 +113,38 @@ def _load_json_strict(text: str, source: str) -> Any:
         return json.loads(text, object_pairs_hook=object_pairs)
     except json.JSONDecodeError as exc:
         raise ValueError(f"{source}: invalid JSON: {exc}") from exc
+
+
+_LUNA_FORBIDDEN_FORMATS = frozenset(
+    {
+        "deterministic-part-ingestion-1",
+        "deterministic-part-ingestion-staged-1",
+        "shape-artifact-1",
+        "optical-material-1",
+        "optical-sensor-1",
+        "optical-scene-1",
+        "optical-observation-1",
+        "reconstruction-state-1",
+    }
+)
+_LUNA_FORBIDDEN_SCHEMAS = frozenset(
+    {"contraption.triangle-mesh/v1", "contraption.ctmesh/v1"}
+)
+
+
+def _reject_luna_owned_deterministic_payload(path: Path, content: str) -> None:
+    """Keep host-derived geometry and optical artifacts outside Luna's output."""
+
+    if path.suffix != ".json":
+        return
+    value = _load_json_strict(content, path.as_posix())
+    if not isinstance(value, Mapping):
+        return
+    marker = value.get("format")
+    if marker in _LUNA_FORBIDDEN_FORMATS or value.get("schema") in _LUNA_FORBIDDEN_SCHEMAS:
+        raise ValueError(
+            f"modeling agent may not author deterministic host-owned artifact {path.as_posix()!r}"
+        )
 
 
 def _schema_wrapper(name: str, schema: dict[str, Any]) -> dict[str, Any]:
@@ -615,13 +647,23 @@ class ModelingInputs:
     component_information: Path
 
     def all_files(self) -> tuple[Path, ...]:
+        from .reference_docs import structured_format_guides
+
         return (
             self.constraints,
+            *structured_format_guides(),
             *self.gold_templates,
             *self.interfaces,
             *self.direct_hierarchy,
             self.component_information,
         )
+
+    def deterministic_files(self) -> tuple[Path, ...]:
+        from .deterministic_assets import input_paths
+        return input_paths(self.component_information)
+
+    def hash_files(self) -> tuple[Path, ...]:
+        return (*self.all_files(), *self.deterministic_files())
 
 
 class ModelingAgent:
@@ -686,6 +728,10 @@ class ModelingAgent:
         workspace.mkdir(exist_ok=False)
         (workspace / "candidate").mkdir()
         manifest: list[dict[str, Any]] = []
+        from .deterministic_assets import stage_plan
+        deterministic_plan = stage_plan(
+            inputs.component_information, run_root / "deterministic-assets"
+        )
         protected_files: list[Path] = []
         bundled: list[str] = [
             "# Isolated modeling-agent input bundle",
@@ -745,6 +791,10 @@ class ModelingAgent:
                 workspace / "output-schema.json",
             )
         )
+        if deterministic_plan is not None:
+            protected_files.extend(
+                path for path in deterministic_plan.parent.rglob("*") if path.is_file()
+            )
         from .model_validation_tool import write_validation_context
 
         write_validation_context(run_root, protected_files)
@@ -781,9 +831,25 @@ class ModelingAgent:
                 "restricted acausal DSL, contain no Python or executable hooks, remain "
                 "differentiable, declare units and validity envelopes, and include "
                 "machine-checkable physical and numerical properties. Follow the exact PMDL "
-                "object shape demonstrated by the supplied gold models: do not invent any "
+                "and optical abstractions in the bundled structured-format guides. Optical "
+                "power/signal behavior, sensor timing, calibration parameters, noise, and "
+                "validity belong in the documented declarative contracts when the target "
+                "requires them. Follow the exact PMDL object shape documented by those guides "
+                "and demonstrated by the supplied gold models: do not invent any "
                 "top-level keys (including jacobians or geometry), and do not translate "
                 "descriptive requirements into schema fields absent from those examples. "
+                "Geometry and optical source-asset ingestion are outside your trust boundary. "
+                "Never parse, convert, repair, normalize, tessellate, infer material values "
+                "from, or emit CAD, mesh, texture, image, point-cloud, scan, shape-artifact, "
+                "optical-material, optical-sensor, optical-scene, optical-observation, "
+                "reconstruction-state, deterministic-part-ingestion-1, or "
+                "deterministic-part-ingestion-staged-1 payloads. The deterministic host "
+                "ingestion pipeline "
+                "owns those exact bytes, their provenance, hashes, coordinate conversion, "
+                "and measured optical properties and bundles its validated results with your "
+                "proposal. You may author the documented PMDL optical behavior and may preserve "
+                "only host-supplied opaque identifiers/hash references exactly where a documented "
+                "catalog record permits them; never fabricate or edit such references. "
                 "Place catalog-relative paths directly under candidate/: use "
                 "candidate/<physical-domain>/<category>[/<device>]/..., never "
                 "candidate/model_catalog/... . Structured-response artifact paths are relative "
@@ -925,6 +991,7 @@ class ModelingAgent:
         normalized_names: set[str] = set()
         for artifact in value["artifacts"]:
             relative = cls._safe_relative(artifact["path"])
+            _reject_luna_owned_deterministic_payload(relative, artifact["content"])
             name = relative.as_posix()
             normalized = name.casefold()
             if normalized in normalized_names:
@@ -935,23 +1002,6 @@ class ModelingAgent:
             raise ValueError("modeling agent produced no artifacts")
 
         artifacts_dir = workspace / "proposed"
-        if artifacts_dir.exists():
-            if not artifacts_dir.is_dir() or artifacts_dir.is_symlink():
-                raise ValueError(f"existing proposal is not a safe directory: {artifacts_dir}")
-            cls.validate_artifacts(artifacts_dir)
-            existing_files = sorted(
-                path for path in artifacts_dir.rglob("*") if path.is_file()
-            )
-            existing = {
-                path.relative_to(artifacts_dir).as_posix(): path.read_text(encoding="utf-8")
-                for path in existing_files
-            }
-            if existing == expected:
-                return artifacts_dir
-            raise FileExistsError(
-                f"existing proposed artifacts differ from recovered output: {artifacts_dir}"
-            )
-
         temporary = Path(
             tempfile.mkdtemp(prefix=".proposed-", dir=str(workspace))
         )
@@ -966,7 +1016,25 @@ class ModelingAgent:
                     raise ValueError(f"artifact escaped materialization directory: {name!r}")
                 with target.open("w", encoding="utf-8", newline="\n") as stream:
                     stream.write(expected[name])
+            plan_path = workspace.parent / "deterministic-assets" / "plan.json"
+            if plan_path.is_file():
+                from .deterministic_assets import bundle_staged_plan
+                bundle_staged_plan(temporary, plan_path)
             cls.validate_artifacts(temporary)
+            if artifacts_dir.exists():
+                if not artifacts_dir.is_dir() or artifacts_dir.is_symlink():
+                    raise ValueError(f"existing proposal is not a safe directory: {artifacts_dir}")
+                cls.validate_artifacts(artifacts_dir)
+                def snapshot(directory: Path) -> dict[str, bytes]:
+                    return {
+                        path.relative_to(directory).as_posix(): path.read_bytes()
+                        for path in sorted(directory.rglob("*")) if path.is_file()
+                    }
+                if snapshot(artifacts_dir) == snapshot(temporary):
+                    return artifacts_dir
+                raise FileExistsError(
+                    f"existing proposed artifacts differ from recovered output: {artifacts_dir}"
+                )
             os.replace(temporary, artifacts_dir)
         finally:
             if temporary.exists():
@@ -997,7 +1065,6 @@ class ModelingAgent:
         candidate = Path(workspace) / "candidate"
         if candidate.is_symlink() or not candidate.is_dir():
             raise ValueError(f"candidate directory is not safe: {candidate}")
-        cls.validate_artifacts(candidate)
         artifacts: list[dict[str, str]] = []
         for path in sorted(candidate.rglob("*")):
             if path.is_symlink():
@@ -1010,7 +1077,9 @@ class ModelingAgent:
                 content = path.read_text(encoding="utf-8")
             except (OSError, UnicodeError) as exc:
                 raise ValueError(f"generated artifact is not UTF-8 text: {relative}") from exc
+            _reject_luna_owned_deterministic_payload(Path(relative), content)
             artifacts.append({"path": relative, "content": content})
+        cls.validate_artifacts(candidate)
         value = {
             "summary": "Recovered complete candidate bundle after a nonzero Codex CLI exit.",
             "artifacts": artifacts,
@@ -1297,17 +1366,34 @@ class ModelingAgent:
         if not files:
             raise ValueError("modeling agent produced no artifacts")
         catalog_files: list[Path] = []
+        shape_manifests: list[Path] = []
+        source_extensions = {".obj", ".mtl", ".stl", ".step", ".stp", ".brep", ".fcstd", ".ply", ".gltf"}
         for path in files:
             if path.suffix in {".pmdl", ".part", ".model"}:
                 catalog_files.append(path)
             elif path.suffix == ".json":
-                _load_json_strict(path.read_text(encoding="utf-8"), str(path))
+                value = _load_json_strict(path.read_text(encoding="utf-8"), str(path))
+                if isinstance(value, Mapping) and value.get("format") == "shape-artifact-1":
+                    shape_manifests.append(path)
             elif path.suffix == ".md":
                 text = path.read_text(encoding="utf-8")
                 if not text.strip() or "\x00" in text:
                     raise ValueError(f"invalid generated Markdown artifact: {path}")
+            elif path.suffix == ".ctmesh":
+                from ..shape.mesh import TriangleMesh
+                TriangleMesh.read(path)
+            elif path.suffix == ".glb":
+                payload = path.read_bytes()
+                if len(payload) < 12 or payload[:4] != b"glTF":
+                    raise ValueError(f"invalid generated GLB artifact: {path}")
+            elif path.suffix.lower() in source_extensions:
+                if path.stat().st_size <= 0:
+                    raise ValueError(f"empty deterministic source artifact: {path}")
             else:
                 raise ValueError(f"unsupported generated artifact: {path}")
+        from ..shape.artifacts import ShapeArtifact
+        for manifest in shape_manifests:
+            ShapeArtifact.load(manifest)
         if not catalog_files:
             return
 
@@ -1327,7 +1413,7 @@ class ModelingAgent:
         with tempfile.TemporaryDirectory(prefix="contraption-catalog-overlay-") as temporary:
             overlay = Path(temporary) / "model_catalog"
             shutil.copytree(source_catalog, overlay)
-            for path in catalog_files:
+            for path in files:
                 relative = path.resolve().relative_to(candidate_root)
                 if not relative.parts or relative.parts[0] in {".", ".."}:
                     raise ValueError(f"invalid catalog-relative artifact path: {relative}")
@@ -1445,7 +1531,7 @@ def run_modeling_proposal(
             agent.prompt(inputs.component_information.name).encode("utf-8")
         ).hexdigest(),
     }
-    input_hash = agent_input_hash("modeling", inputs.all_files(), settings)
+    input_hash = agent_input_hash("modeling", inputs.hash_files(), settings)
     receipt_path = output_directory / f"{target}.json"
     if receipt_path.exists() and not force:
         receipt = _read_json_object(receipt_path)

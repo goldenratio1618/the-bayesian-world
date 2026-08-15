@@ -24,12 +24,15 @@
         {
           "id": "servo_case",
           "geometry": {
-            "kind": "box",
+            "kind": "shape",
             "dimensions_m": [
               0.041,
               0.02,
-              0.038
-            ]
+              0.03572
+            ],
+            "shape_uri": "shape/servo_case/shape.artifact.json",
+            "shape_sha256": "sha256:2c83a06094ef9c52d8ecc88ecbffa0d4406f44c8a53286eca5fb1e0837f8e1e1",
+            "surface_id": "canonical"
           },
           "local_pose": {
             "translation_m": [

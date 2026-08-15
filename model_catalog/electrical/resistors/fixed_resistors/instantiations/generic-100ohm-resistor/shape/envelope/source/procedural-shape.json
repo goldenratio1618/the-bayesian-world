@@ -1,0 +1,27 @@
+{
+  "body": "body",
+  "builder": "scripts/build_part_shapes.py",
+  "features": [
+    "axial resistive body",
+    "four identifying bands",
+    "two wire leads"
+  ],
+  "format": "contraption.procedural-shape/v1",
+  "input_dimensions_m": [
+    0.01,
+    0.01,
+    0.01
+  ],
+  "optical_material_ids": [
+    "dark-polymer",
+    "metal",
+    "pcb-green",
+    "rubber",
+    "optical-glass",
+    "copper",
+    "ceramic",
+    "battery-wrap"
+  ],
+  "part": "generic-100ohm-resistor",
+  "solid": "envelope"
+}

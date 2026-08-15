@@ -1,0 +1,28 @@
+{
+  "body": "case",
+  "builder": "scripts/build_part_shapes.py",
+  "features": [
+    "motor can",
+    "rectangular metal gearbox",
+    "output shaft",
+    "rear electrical terminal"
+  ],
+  "format": "contraption.procedural-shape/v1",
+  "input_dimensions_m": [
+    0.037,
+    0.02,
+    0.027
+  ],
+  "optical_material_ids": [
+    "dark-polymer",
+    "metal",
+    "pcb-green",
+    "rubber",
+    "optical-glass",
+    "copper",
+    "ceramic",
+    "battery-wrap"
+  ],
+  "part": "scanner.gearmotor",
+  "solid": "motor_case"
+}

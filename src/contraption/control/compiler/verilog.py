@@ -922,7 +922,6 @@ def _observer_declarations(ir: ControlIR, fixed: FixedPointFormat) -> list[str]:
         f"{q} observer_innovation;",
         f"{q} observer_innovation_variance;",
         "integer observer_i, observer_j, observer_k, observer_l, observer_measurement_index;",
-        "integer observer_reset_i, observer_reset_j;",
     ]
 
 
@@ -1499,15 +1498,16 @@ def _module(ir: ControlIR, fixed: FixedPointFormat) -> str:
             ]
         )
     if ir.observer is not None:
-        lines.extend(
-            [
-                "        for (observer_reset_i = 0; observer_reset_i < OBS_NX; observer_reset_i = observer_reset_i + 1) begin",
-                "            observer_state[observer_reset_i] <= obs_initial_state(observer_reset_i);",
-                "            for (observer_reset_j = 0; observer_reset_j < OBS_NX; observer_reset_j = observer_reset_j + 1)",
-                "                observer_covariance[observer_reset_i*OBS_NX+observer_reset_j] <= obs_initial_covariance(observer_reset_i*OBS_NX+observer_reset_j);",
-                "        end",
-            ]
-        )
+        observer_size = len(ir.observer.state_names)
+        for index in range(observer_size):
+            lines.append(
+                f"        observer_state[{index}] <= obs_initial_state({index});"
+            )
+        for index in range(observer_size * observer_size):
+            lines.append(
+                "        "
+                f"observer_covariance[{index}] <= obs_initial_covariance({index});"
+            )
     lines.extend(
         [
             "    end else if (tick) begin",
@@ -1530,15 +1530,17 @@ def _module(ir: ControlIR, fixed: FixedPointFormat) -> str:
                 ]
             )
     if ir.observer is not None:
-        lines.extend(
-            [
-                "            for (observer_reset_i = 0; observer_reset_i < OBS_NX; observer_reset_i = observer_reset_i + 1) begin",
-                "                observer_state[observer_reset_i] <= observer_state_next[observer_reset_i];",
-                "                for (observer_reset_j = 0; observer_reset_j < OBS_NX; observer_reset_j = observer_reset_j + 1)",
-                "                    observer_covariance[observer_reset_i*OBS_NX+observer_reset_j] <= observer_covariance_next[observer_reset_i*OBS_NX+observer_reset_j];",
-                "            end",
-            ]
-        )
+        observer_size = len(ir.observer.state_names)
+        for index in range(observer_size):
+            lines.append(
+                f"            observer_state[{index}] <= observer_state_next[{index}];"
+            )
+        for index in range(observer_size * observer_size):
+            lines.append(
+                "            "
+                f"observer_covariance[{index}] "
+                f"<= observer_covariance_next[{index}];"
+            )
     lines.extend(["        end", "    end", "end", "", "endmodule"])
     return "\n".join(lines) + "\n"
 

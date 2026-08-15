@@ -28,6 +28,16 @@
             <h2>Spatial model</h2>
           </div>
           <div class="view-actions">
+            <label class="view-select-label">View
+              <select id="viewpoint" aria-label="Spatial viewpoint">
+                <option value="orbit">World orbit</option>
+              </select>
+            </label>
+            <label class="view-select-label">Mode
+              <select id="view-mode" aria-label="Optical view mode">
+                <option value="scene">Spatial scene</option>
+              </select>
+            </label>
             <button id="reset-view" type="button" title="Reset pan, rotation, and zoom">Reset view</button>
             <span class="interaction-hint">Drag to pan &middot; Right-drag to rotate &middot; Scroll to zoom</span>
           </div>
@@ -46,6 +56,7 @@
             </div>
           </div>
           <p class="empty-state">Markers use the connector body and local pose declared by each static.part.</p>
+          <p id="optical-view-summary" class="empty-state optical-view-summary">No calibrated optical POV is supplied.</p>
           <div id="external-controls" class="control-stack"></div>
         </section>
 

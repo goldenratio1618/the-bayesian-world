@@ -1,0 +1,29 @@
+{
+  "body": "board",
+  "builder": "scripts/build_part_shapes.py",
+  "features": [
+    "PCB substrate",
+    "controller IC",
+    "edge connector",
+    "terminal header",
+    "passive components"
+  ],
+  "format": "contraption.procedural-shape/v1",
+  "input_dimensions_m": [
+    0.023,
+    0.023,
+    0.01
+  ],
+  "optical_material_ids": [
+    "dark-polymer",
+    "metal",
+    "pcb-green",
+    "rubber",
+    "optical-glass",
+    "copper",
+    "ceramic",
+    "battery-wrap"
+  ],
+  "part": "scanner.servo_regulator",
+  "solid": "regulator_board"
+}

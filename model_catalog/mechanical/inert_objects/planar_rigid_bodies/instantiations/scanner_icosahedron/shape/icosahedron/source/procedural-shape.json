@@ -1,0 +1,28 @@
+{
+  "body": "body",
+  "builder": "scripts/build_part_shapes.py",
+  "features": [
+    "regular icosahedron",
+    "twenty triangular scan faces",
+    "twelve vertices"
+  ],
+  "format": "contraption.procedural-shape/v1",
+  "input_dimensions_m": [
+    0.12,
+    0.12,
+    0.12
+  ],
+  "optical_material_ids": [
+    "dark-polymer",
+    "metal",
+    "pcb-green",
+    "rubber",
+    "optical-glass",
+    "copper",
+    "ceramic",
+    "battery-wrap",
+    "scan-target"
+  ],
+  "part": "scanner.icosahedron",
+  "solid": "icosahedron"
+}

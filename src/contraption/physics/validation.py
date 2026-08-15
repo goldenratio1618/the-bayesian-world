@@ -151,7 +151,8 @@ def validate_model(model: ModelSpec, interfaces: Any = None) -> ValidationReport
         "states": [item.name for item in model.states], "algebraics": [item.name for item in model.algebraics],
         "parameters": [item.name for item in model.parameters], "power_ports": [item.name for item in model.power_ports],
         "signal_ports": [item.name for item in model.signal_ports], "relations": [item.name for item in model.relations],
-        "stored_energy": [item.name for item in model.stored_energy], "dissipation": [item.name for item in model.dissipation],
+        "artifact_ports": [item.name for item in model.artifact_ports], "stored_energy": [item.name for item in model.stored_energy],
+        "dissipation": [item.name for item in model.dissipation],
         "sources": [item.name for item in model.sources], "modes": [item.name for item in model.modes],
         "fidelity_levels": [item.name for item in model.fidelity_levels], "properties": [item.name for item in model.properties],
         "process_noise.channels": [item.name for item in model.process_noise.channels],
@@ -166,6 +167,10 @@ def validate_model(model: ModelSpec, interfaces: Any = None) -> ValidationReport
     )
     for duplicate in _duplicates(scalar_names):
         issues.error("symbol.duplicate", "model", f"scalar symbol {duplicate!r} is declared more than once")
+    endpoint_names = named_groups["power_ports"] + named_groups["signal_ports"] + named_groups["artifact_ports"]
+    for duplicate in _duplicates(endpoint_names):
+        issues.error("port.name_duplicate", "model", f"port name {duplicate!r} is declared more than once")
+
     reserved_noise_symbols = {"t", "dt", "pi", "e"}
     model_scalar_symbols = set(scalar_names) | {
         state.derivative or f"{state.name}_dot" for state in model.states

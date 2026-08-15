@@ -1,0 +1,27 @@
+{
+  "body": "wheel",
+  "builder": "scripts/build_part_shapes.py",
+  "features": [
+    "rubber tire",
+    "six-spoke polymer hub",
+    "metal axle bore"
+  ],
+  "format": "contraption.procedural-shape/v1",
+  "input_dimensions_m": [
+    0.07,
+    0.07,
+    0.008
+  ],
+  "optical_material_ids": [
+    "dark-polymer",
+    "metal",
+    "pcb-green",
+    "rubber",
+    "optical-glass",
+    "copper",
+    "ceramic",
+    "battery-wrap"
+  ],
+  "part": "scanner.wheel",
+  "solid": "tire"
+}

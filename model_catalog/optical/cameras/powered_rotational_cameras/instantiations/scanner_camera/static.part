@@ -24,12 +24,15 @@
         {
           "id": "camera_module",
           "geometry": {
-            "kind": "box",
+            "kind": "shape",
             "dimensions_m": [
               0.025,
               0.024,
-              0.0124
-            ]
+              0.008184
+            ],
+            "shape_uri": "shape/camera_module/shape.artifact.json",
+            "shape_sha256": "sha256:8deb0c454a9ca177192640a5c2e6ea1dd8aadba89c213a171df5b607700e687a",
+            "surface_id": "canonical"
           },
           "local_pose": {
             "translation_m": [
@@ -153,6 +156,16 @@
     }
   ],
   "parameter_bindings": [],
+  "optical_sensors": [
+    {
+      "id": "scanner.camera.optical",
+      "body": "camera",
+      "pose_connector": "optical_axis",
+      "artifact_port": "optical_observation",
+      "descriptor_uri": "sensor.optical.json",
+      "descriptor_sha256": "sha256:e28fb792f34fd7c90eb674ed9cbac72bd3f8c15df756d55576ef623f9a711114"
+    }
+  ],
   "provenance": {
     "kind": "catalog",
     "source": "vendor envelope with estimated mount and electrical abstractions",

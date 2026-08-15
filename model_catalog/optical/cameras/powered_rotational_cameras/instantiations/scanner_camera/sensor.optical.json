@@ -1,0 +1,79 @@
+{
+  "format": "optical-sensor-1",
+  "id": "scanner.camera.optical",
+  "display_name": "Raspberry Pi Camera Module 3 Wide",
+  "mount_connector": "optical_axis",
+  "projection": "pinhole",
+  "resolution_px": [
+    1920,
+    1080
+  ],
+  "focal_length_px": [
+    635.9245238233874,
+    635.9245238233874
+  ],
+  "principal_point_px": [
+    960.0,
+    540.0
+  ],
+  "near_clip_m": 0.05,
+  "far_clip_m": 20.0,
+  "exposure_duration_s": 0.01,
+  "readout_duration_s": 0.01,
+  "processing_latency_s": 0.02,
+  "outputs": [
+    "rgb_linear",
+    "depth_m",
+    "segmentation",
+    "uncertainty"
+  ],
+  "spectral_channels": [
+    {
+      "id": "red",
+      "center_wavelength_nm": 620.0,
+      "bandwidth_nm": 100.0,
+      "relative_response": 1.0
+    },
+    {
+      "id": "green",
+      "center_wavelength_nm": 540.0,
+      "bandwidth_nm": 100.0,
+      "relative_response": 1.0
+    },
+    {
+      "id": "blue",
+      "center_wavelength_nm": 460.0,
+      "bandwidth_nm": 100.0,
+      "relative_response": 1.0
+    }
+  ],
+  "noise": {
+    "model": "gaussian_poisson",
+    "seed": 314159,
+    "read_noise_std_linear": 0.002,
+    "shot_noise_scale": 0.001,
+    "depth_noise_std_m": 0.005,
+    "depth_quantization_m": 0.001,
+    "dropout_probability": 0.0
+  },
+  "wire": {
+    "schema": "contraption.optical-frame/v1",
+    "encoding": "raw-chunks",
+    "max_payload_bytes": 8388608,
+    "max_frame_rate_hz": 50.0
+  },
+  "metadata": {
+    "manufacturer": "Raspberry Pi",
+    "product": "Camera Module 3 Wide",
+    "calibration_status": "catalog_nominal",
+    "native_resolution_px": [
+      4608,
+      2592
+    ],
+    "native_diagonal_field_of_view_deg": 120.0,
+    "configured_video_mode": "1080p50",
+    "focal_length_derivation": "native_pixel_diagonal / (2*tan(120 deg / 2)), uniformly scaled from 4608x2592 to 1920x1080",
+    "noise_provenance": "engineering priors pending checkerboard, dark-frame, radiometric, and depth-pipeline calibration",
+    "depth_semantics": "simulated or inferred range along the normalized pinhole ray; the physical RGB module does not directly measure depth"
+  }
+}

@@ -45,6 +45,18 @@
       "reference": "positive camera tilt"
     }
   ],
+  "artifact_ports": [
+    {
+      "name": "optical_observation",
+      "direction": "output",
+      "artifact_type": "contraption/optical-observation@1",
+      "timing": "sampled",
+      "transport": "content_addressed",
+      "sample_period_s": 0.03333333333333333,
+      "max_payload_bytes": 67108864,
+      "description": "Calibrated RGB/depth/segmentation/uncertainty observation produced by the optical engine."
+    }
+  ],
   "states": [
     {
       "name": "angle",
@@ -146,7 +158,7 @@
       }
     },
     "assumptions": [
-      "Optical image formation is outside this model",
+      "Image formation follows the referenced optical-sensor-1 contract",
       "Camera power draw is constant over the short mission",
       "Single-axis rigid mounting"
     ],
@@ -168,7 +180,12 @@
       "admitted": true,
       "kind": "linearizable"
     },
-    "optics_simulated": false
+    "optics_simulated": true,
+    "optical_engine": {
+      "sensor_format": "optical-sensor-1",
+      "observation_format": "optical-observation-1",
+      "supports_differentiable_inverse": true
+    }
   },
   "implements": "powered-rotational-camera"
 }

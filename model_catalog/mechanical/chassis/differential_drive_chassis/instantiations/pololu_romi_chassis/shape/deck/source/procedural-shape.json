@@ -1,0 +1,28 @@
+{
+  "body": "body",
+  "builder": "scripts/build_part_shapes.py",
+  "features": [
+    "sculpted deck plates",
+    "four mounting bosses",
+    "battery bay",
+    "caster ball"
+  ],
+  "format": "contraption.procedural-shape/v1",
+  "input_dimensions_m": [
+    0.163,
+    0.149,
+    0.07
+  ],
+  "optical_material_ids": [
+    "dark-polymer",
+    "metal",
+    "pcb-green",
+    "rubber",
+    "optical-glass",
+    "copper",
+    "ceramic",
+    "battery-wrap"
+  ],
+  "part": "scanner.romi_chassis",
+  "solid": "deck"
+}

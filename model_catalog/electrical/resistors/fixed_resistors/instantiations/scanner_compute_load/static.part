@@ -24,12 +24,15 @@
         {
           "id": "compute_board",
           "geometry": {
-            "kind": "box",
+            "kind": "shape",
             "dimensions_m": [
               0.065,
               0.03,
-              0.005
-            ]
+              0.0033500000000000005
+            ],
+            "shape_uri": "shape/compute_board/shape.artifact.json",
+            "shape_sha256": "sha256:194d95dbccdedb5eac8053936a6ec734f7fc2d76c1a970685b9473225a85c2c2",
+            "surface_id": "canonical"
           },
           "local_pose": {
             "translation_m": [

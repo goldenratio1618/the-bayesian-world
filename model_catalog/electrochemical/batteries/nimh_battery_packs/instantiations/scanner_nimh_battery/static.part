@@ -24,12 +24,15 @@
         {
           "id": "battery_envelope",
           "geometry": {
-            "kind": "box",
+            "kind": "shape",
             "dimensions_m": [
-              0.086,
-              0.058,
-              0.052
-            ]
+              0.08342,
+              0.05634285714285715,
+              0.03737777777777779
+            ],
+            "shape_uri": "shape/battery_envelope/shape.artifact.json",
+            "shape_sha256": "sha256:584f64d7992e10b82b7fc3b247a708ccbffed0dab5be60e507bf44ac86b45e97",
+            "surface_id": "canonical"
           },
           "local_pose": {
             "translation_m": [

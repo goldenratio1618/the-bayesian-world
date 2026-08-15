@@ -24,12 +24,15 @@
         {
           "id": "linkage",
           "geometry": {
-            "kind": "box",
+            "kind": "shape",
             "dimensions_m": [
               0.18,
-              0.03,
+              0.02,
               0.02
-            ]
+            ],
+            "shape_uri": "shape/linkage/shape.artifact.json",
+            "shape_sha256": "sha256:5b533760a40388401a68ffd382cf991f31d7160f1b9f0c422122037d46e0266c",
+            "surface_id": "canonical"
           },
           "local_pose": {
             "translation_m": [

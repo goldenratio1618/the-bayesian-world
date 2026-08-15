@@ -1,0 +1,28 @@
+{
+  "body": "case",
+  "builder": "scripts/build_part_shapes.py",
+  "features": [
+    "servo case",
+    "mounting flanges",
+    "output spline",
+    "servo horn boss"
+  ],
+  "format": "contraption.procedural-shape/v1",
+  "input_dimensions_m": [
+    0.041,
+    0.02,
+    0.038
+  ],
+  "optical_material_ids": [
+    "dark-polymer",
+    "metal",
+    "pcb-green",
+    "rubber",
+    "optical-glass",
+    "copper",
+    "ceramic",
+    "battery-wrap"
+  ],
+  "part": "scanner.position_servo",
+  "solid": "servo_case"
+}

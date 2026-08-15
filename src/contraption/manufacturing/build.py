@@ -405,7 +405,10 @@ def _controller_identities(
 
 def _bom(assembly: ResolvedAssembly) -> tuple[BOMItem, ...]:
     groups: dict[str, list[str]] = {}
-    for component in assembly.specification.components:
+    for component in (
+        *assembly.specification.components,
+        *assembly.physical.world_objects,
+    ):
         groups.setdefault(component.part, []).append(component.id)
     result: list[BOMItem] = []
     for part_id in sorted(groups):
@@ -433,7 +436,11 @@ def generate_build_instructions(
 
     resolved = _require_resolved(assembly)
     component_by_id = {
-        component.id: component for component in resolved.specification.components
+        component.id: component
+        for component in (
+            *resolved.specification.components,
+            *resolved.physical.world_objects,
+        )
     }
     placements: list[PlacementInstruction] = []
     for body_key in sorted(resolved.physical.body_poses):

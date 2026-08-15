@@ -1,0 +1,27 @@
+{
+  "body": "link",
+  "builder": "scripts/build_part_shapes.py",
+  "features": [
+    "taper-equivalent linkage beam",
+    "two pivot bosses",
+    "two metal bushings"
+  ],
+  "format": "contraption.procedural-shape/v1",
+  "input_dimensions_m": [
+    0.18,
+    0.03,
+    0.02
+  ],
+  "optical_material_ids": [
+    "dark-polymer",
+    "metal",
+    "pcb-green",
+    "rubber",
+    "optical-glass",
+    "copper",
+    "ceramic",
+    "battery-wrap"
+  ],
+  "part": "scanner.arm_linkage",
+  "solid": "linkage"
+}

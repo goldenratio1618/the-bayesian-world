@@ -68,7 +68,7 @@ _PROVENANCE_KINDS = frozenset(
     }
 )
 _PHYSICAL_ROLES = frozenset({"part", "boundary", "software"})
-_SOLID_KINDS = frozenset({"box", "cylinder", "sphere", "mesh"})
+_SOLID_KINDS = frozenset({"box", "cylinder", "sphere", "shape"})
 _MECHANICAL_DOMAINS = frozenset({"mechanical", "rigid_mechanical"})
 
 
@@ -537,15 +537,16 @@ class GeometrySpec(StrictRecord):
     """Explicit solid geometry.
 
     ``dimensions_m`` is the axis-aligned XYZ extent in the solid's local
-    frame.  Cylinders use Z as their axis and therefore require equal X/Y
-    diameters.  Spheres require all three diameters to be equal.  Mesh extents
-    are the declared metric extents of the referenced asset, not an inferred
-    or viewer-selected scale.
+    frame. Cylinders use Z as their axis and spheres require equal diameters.
+    ``shape`` binds a canonical ``shape-artifact-1`` manifest and CTMESH
+    surface by digest; raw CAD/mesh URIs are deliberately not accepted.
     """
 
     kind: str
     dimensions_m: tuple[float, float, float]
-    mesh_uri: str | None = None
+    shape_uri: str | None = None
+    shape_sha256: str | None = None
+    surface_id: str | None = None
 
     def __post_init__(self) -> None:
         if self.kind not in _SOLID_KINDS:
@@ -570,10 +571,17 @@ class GeometrySpec(StrictRecord):
             raise PhysicalSpecError(
                 "sphere geometry requires three equal diameters in dimensions_m"
             )
-        if self.kind == "mesh":
-            _text(self.mesh_uri, "geometry.mesh_uri")
-        elif self.mesh_uri is not None:
-            raise PhysicalSpecError("geometry.mesh_uri is permitted only for mesh geometry")
+        shape_values = (self.shape_uri, self.shape_sha256, self.surface_id)
+        if self.kind == "shape":
+            _text(self.shape_uri, "geometry.shape_uri")
+            if not isinstance(self.shape_sha256, str) or _SHA256.fullmatch(self.shape_sha256) is None:
+                raise PhysicalSpecError("geometry.shape_sha256 must be 'sha256:' plus 64 lowercase hexadecimal characters")
+            _identifier(self.surface_id, "geometry.surface_id")
+            path = Path(self.shape_uri)
+            if path.is_absolute() or "\\" in self.shape_uri or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
+                raise PhysicalSpecError("geometry.shape_uri must be a safe POSIX path relative to the static.part directory")
+        elif any(value is not None for value in shape_values):
+            raise PhysicalSpecError("shape_uri, shape_sha256, and surface_id are permitted only for shape geometry")
         object.__setattr__(self, "dimensions_m", dimensions)
 
     @classmethod
@@ -581,14 +589,16 @@ class GeometrySpec(StrictRecord):
         data = _mapping(value, "geometry")
         _keys(
             data,
-            ("kind", "dimensions_m", "mesh_uri"),
+            ("kind", "dimensions_m", "shape_uri", "shape_sha256", "surface_id"),
             "geometry",
             ("kind", "dimensions_m"),
         )
         return cls(
             _text(data["kind"], "geometry.kind"),
             _vector(data["dimensions_m"], 3, "geometry.dimensions_m"),  # type: ignore[arg-type]
-            _optional_text(data.get("mesh_uri"), "geometry.mesh_uri"),
+            _optional_text(data.get("shape_uri"), "geometry.shape_uri"),
+            _optional_text(data.get("shape_sha256"), "geometry.shape_sha256"),
+            _optional_text(data.get("surface_id"), "geometry.surface_id"),
         )
 
 
@@ -1084,10 +1094,10 @@ class ResolvedPartSpec(StrictRecord):
                     f"parameter {binding.model_parameter!r} solid-radius measure "
                     f"references unknown solid {measure.body}.{measure.solid}"
                 ) from exc
-            if solid.geometry.kind not in {"cylinder", "sphere"}:
+            if solid.geometry.kind not in {"cylinder", "sphere", "shape"}:
                 raise PhysicalSpecError(
                     f"parameter {binding.model_parameter!r} solid-radius measure "
-                    f"requires cylinder/sphere geometry, got {solid.geometry.kind!r}"
+                    f"requires cylinder/sphere/shape geometry, got {solid.geometry.kind!r}"
                 )
             axis_index = {"x": 0, "y": 1, "z": 2}[measure.axis]
             if solid.geometry.kind == "cylinder" and measure.axis == "z":
@@ -1255,6 +1265,38 @@ class PhysicalComponentInstance(StrictRecord):
 
 
 @dataclass(frozen=True, slots=True)
+class FixedWorldObjectSpec(StrictRecord):
+    """One catalog part held at an authored pose in the world frame.
+
+    Fixed world objects participate in the hash-bound physical, optical, and
+    visualization scene but do not add PMDL states or attachment constraints to
+    the moving contraption. This is the typed projection of
+    ``environment.world_objects``.
+    """
+
+    id: str
+    part: str
+    pose: TransformSpec
+
+    def __post_init__(self) -> None:
+        _identifier(self.id, "world object.id")
+        _identifier(self.part, "world object.part")
+        if not isinstance(self.pose, TransformSpec):
+            raise TypeError("world object.pose must be a TransformSpec")
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "FixedWorldObjectSpec":
+        data = _mapping(value, "world object")
+        names = ("id", "part", "pose")
+        _keys(data, names, "world object", names)
+        return cls(
+            _identifier(data["id"], "world object.id"),
+            _identifier(data["part"], "world object.part"),
+            TransformSpec.from_dict(_mapping(data["pose"], "world object.pose")),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class PhysicalAssemblySpec(StrictRecord):
     """Typed projection consumed by the physical assembly resolver.
 
@@ -1268,6 +1310,7 @@ class PhysicalAssemblySpec(StrictRecord):
     connections: tuple[ConnectionSpec, ...]
     physical_root: FrozenDict[Any]
     source: FrozenDict[Any]
+    world_objects: tuple[FixedWorldObjectSpec, ...] = ()
 
     def __post_init__(self) -> None:
         _identifier(self.id, "physical assembly id")
@@ -1287,6 +1330,28 @@ class PhysicalAssemblySpec(StrictRecord):
             raise PhysicalSpecError(
                 "physical assembly has duplicate component id(s): "
                 + ", ".join(duplicate_components)
+            )
+        if any(
+            not isinstance(item, FixedWorldObjectSpec)
+            for item in self.world_objects
+        ):
+            raise TypeError(
+                "physical assembly world_objects must be FixedWorldObjectSpec values"
+            )
+        duplicate_world_objects = _duplicates(item.id for item in self.world_objects)
+        if duplicate_world_objects:
+            raise PhysicalSpecError(
+                "physical assembly has duplicate world object id(s): "
+                + ", ".join(duplicate_world_objects)
+            )
+        collisions = sorted(
+            {component.id for component in self.components}
+            & {item.id for item in self.world_objects}
+        )
+        if collisions:
+            raise PhysicalSpecError(
+                "world object ids must not collide with component ids: "
+                + ", ".join(collisions)
             )
         if any(
             not isinstance(connection, ConnectionSpec)
@@ -1345,6 +1410,17 @@ class PhysicalAssemblySpec(StrictRecord):
             connections,
             physical_root,
             source,
+            tuple(
+                FixedWorldObjectSpec.from_dict(
+                    _mapping(item, f"physical assembly.world_objects[{index}]")
+                )
+                for index, item in enumerate(
+                    _sequence(
+                        data.get("world_objects", ()),
+                        "physical assembly.world_objects",
+                    )
+                )
+            ),
         )
 
 
@@ -1729,6 +1805,7 @@ class ResolvedPhysicalAssembly:
     contraption_id: str
     root_component: str
     root_state_binding: PlanarRootStateBindingSpec | None
+    world_objects: tuple[FixedWorldObjectSpec, ...]
     components: tuple[PhysicalComponentInstance, ...]
     attachments: tuple[MechanicalAttachmentSpec, ...]
     connections: tuple[FrozenDict[Any], ...]
@@ -1779,6 +1856,16 @@ class ResolvedPhysicalAssembly:
         body_poses, connector_poses = _resolved_spatial_poses(
             self.components, self.parts, component_poses, coordinates
         )
+        fixed_components = tuple(
+            PhysicalComponentInstance(item.id, item.part) for item in self.world_objects
+        )
+        fixed_poses = {item.id: item.pose for item in self.world_objects}
+        fixed_body_poses, fixed_connector_poses = _resolved_spatial_poses(
+            fixed_components, self.parts, fixed_poses, {}
+        )
+        component_poses.update(fixed_poses)
+        body_poses.update(fixed_body_poses)
+        connector_poses.update(fixed_connector_poses)
         validate_mechanical_power_connection_coincidence(
             self.connections,
             connector_poses,
@@ -1788,7 +1875,7 @@ class ResolvedPhysicalAssembly:
         scene = _scene(
             self.assembly_sha256,
             self.contraption_id,
-            self.components,
+            (*self.components, *fixed_components),
             self.connections,
             self.parts,
             body_poses,
@@ -2183,8 +2270,12 @@ def _assembly_sha256(
     root_component: str,
     components: Sequence[PhysicalComponentInstance],
     parts: Mapping[str, ResolvedPartSpec],
+    world_objects: Sequence[FixedWorldObjectSpec] = (),
 ) -> str:
-    used_parts = sorted({component.part for component in components})
+    used_parts = sorted(
+        {component.part for component in components}
+        | {item.part for item in world_objects}
+    )
     payload = {
         "schema": "contraption.physical-assembly-closure/v1",
         "contraption": _hashable_contraption(contraption, root_component),
@@ -2262,6 +2353,7 @@ def resolve_physical_assembly(
 
     if not isinstance(specification, PhysicalAssemblySpec):
         raise TypeError("specification must be a parsed PhysicalAssemblySpec")
+    world_objects = specification.world_objects
     contraption_id = specification.id
     components = specification.components
     component_values = _sequence(
@@ -2271,7 +2363,11 @@ def resolve_physical_assembly(
         raise TypeError("parts must be a ResolvedPartRegistry")
     registry = parts
     missing_parts = sorted(
-        {component.part for component in components if component.part not in registry}
+        {
+            item.part
+            for item in (*components, *world_objects)
+            if item.part not in registry
+        }
     )
     if missing_parts:
         raise PhysicalAssemblyError(
@@ -2319,6 +2415,16 @@ def resolve_physical_assembly(
     body_poses, connector_poses = _resolved_spatial_poses(
         components, registry, component_poses, coordinates
     )
+    fixed_components = tuple(
+        PhysicalComponentInstance(item.id, item.part) for item in world_objects
+    )
+    fixed_poses = {item.id: item.pose for item in world_objects}
+    fixed_body_poses, fixed_connector_poses = _resolved_spatial_poses(
+        fixed_components, registry, fixed_poses, {}
+    )
+    component_poses.update(fixed_poses)
+    body_poses.update(fixed_body_poses)
+    connector_poses.update(fixed_connector_poses)
     validate_mechanical_power_connection_coincidence(
         connections,
         connector_poses,
@@ -2326,12 +2432,12 @@ def resolve_physical_assembly(
         angular_tolerance_rad=angular_tolerance_rad,
     )
     digest = _assembly_sha256(
-        specification.source, root_component, components, registry
+        specification.source, root_component, components, registry, world_objects
     )
     scene = _scene(
         digest,
         contraption_id,
-        components,
+        (*components, *fixed_components),
         connections,
         registry,
         body_poses,
@@ -2339,13 +2445,17 @@ def resolve_physical_assembly(
     )
     used_parts = {
         part_id: registry[part_id]
-        for part_id in sorted({component.part for component in components})
+        for part_id in sorted(
+            {component.part for component in components}
+            | {item.part for item in world_objects}
+        )
     }
     return ResolvedPhysicalAssembly(
         digest,
         contraption_id,
         root_component,
         root_state_binding,
+        world_objects,
         components,
         attachments,
         connections,
@@ -2387,6 +2497,7 @@ __all__ = [
     "ConnectorCoincidenceError",
     "ConnectorCompatibilityError",
     "ConnectorRef",
+    "FixedWorldObjectSpec",
     "CounterRotationKinematicsSpec",
     "GeometrySpec",
     "MechanicalAttachmentSpec",

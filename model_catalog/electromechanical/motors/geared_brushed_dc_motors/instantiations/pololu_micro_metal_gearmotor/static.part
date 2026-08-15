@@ -24,12 +24,15 @@
         {
           "id": "motor_case",
           "geometry": {
-            "kind": "box",
+            "kind": "shape",
             "dimensions_m": [
               0.037,
               0.02,
               0.027
-            ]
+            ],
+            "shape_uri": "shape/motor_case/shape.artifact.json",
+            "shape_sha256": "sha256:464a37db9b89920ca82d5e8fe82d782b30441efcb511706ae9ec1e382ed9c7ff",
+            "surface_id": "canonical"
           },
           "local_pose": {
             "translation_m": [

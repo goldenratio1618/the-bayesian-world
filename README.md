@@ -243,14 +243,26 @@ and budget ledger are machine-local and gitignored.
 - [Phase 1 scope and artifact contract](docs/PHASE1.md)
 - [Online C99 compiler contract](docs/ONLINE_COMPILER.md)
 - [Component-agent safety contract](docs/COMPONENT_AGENTS.md)
+- [Structured data and DSL contracts](docs/structured_formats/README.md)
+- [Offline optical capture and reconstruction](docs/structured_formats/OPTICAL_WORKFLOWS.md)
 - [Linux/GPU installation](docs/INSTALLATION.md)
 - [Purchasing and physical safety guidance](docs/PURCHASING.md)
 
 The current mechanics are deliberately bounded: planar chassis motion plus a
 declared rigid attachment/joint tree, not general 3D contact, flexible bodies,
-fracture, fluids, thermal behavior, or optical physics. Every physical instance
-starts `unverified`; measured acceptance and independent safety controls remain
-mandatory.
+fracture, fluids, or thermal behavior.
+
+The offline optical subsystem uses canonical CTMESH surfaces, explicit optical
+materials, CPU forward rendering, and optional Torch CPU/CUDA differentiable
+forward and inverse rendering. It also provides uncertainty-aware Bayesian
+sparse reconstruction and optical-sensor point-of-view selection in the
+browser viewer. The structured contracts are documented in the
+[format guides](docs/structured_formats/README.md).
+
+An onboard optical artifact-stream bridge to generated controller code or an
+FPGA is not implemented; `controller_stream` reserves that transport contract
+without claiming the bridge. Every physical instance starts `unverified`;
+measured acceptance and independent safety controls remain mandatory.
 
 The scanner is explicitly dynamics-incomplete. It models a published 0.160 kg
 bare chassis and component-local dynamics without hiding payload mass in a

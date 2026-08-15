@@ -15,17 +15,27 @@ from dataclasses import asdict, dataclass, is_dataclass
 import html
 import json
 import math
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 from typing import Any, Mapping
 from urllib.parse import urlsplit
 
 from ..paths import asset_root
 from ..physics.resolved import ResolvedAssembly
+from .render_bundle import (
+    RENDER_BUNDLE_SCHEMA,
+    RenderBundleError,
+    materialize_render_bundle,
+    normalize_render_bundle,
+    optical_sensors_from_registry,
+    sensor_view_from_descriptor,
+    shape_artifacts_from_registry,
+)
+from .optical_views import OpticalViewError, observation_view_from_artifact
 
 
 PHYSICAL_SCENE_SCHEMA = "contraption.physical-scene/v1"
-VIEWER_SCHEMA = "contraption.viewer/v2"
+VIEWER_SCHEMA = "contraption.viewer/v3"
 
 _ASSET_DIRECTORY = asset_root() / "web"
 _ASSEMBLY_HASH = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -219,29 +229,57 @@ def _provenance(value: Any, label: str) -> dict[str, Any]:
 def _geometry(value: Any, label: str) -> dict[str, Any]:
     geometry = _mapping(value, label)
     kind = _text(geometry.get("kind"), f"{label}.kind")
+    fields = {"kind", "dimensions_m", "shape_uri", "shape_sha256", "surface_id"}
     if kind in {"box", "sphere", "cylinder"}:
         _keys(
             geometry,
-            required={"kind", "dimensions_m", "mesh_uri"},
+            required=fields,
             optional=set(),
             label=label,
         )
-        if geometry["mesh_uri"] is not None:
-            raise VisualizationError(f"{label}.mesh_uri must be null for {kind} geometry")
+        for field in ("shape_uri", "shape_sha256", "surface_id"):
+            if geometry[field] is not None:
+                raise VisualizationError(f"{label}.{field} must be null for {kind} geometry")
         return {
             "kind": kind,
             "dimensions_m": _positive_vector(
                 geometry["dimensions_m"], f"{label}.dimensions_m", 3
             ),
-            "mesh_uri": None,
+            "shape_uri": None,
+            "shape_sha256": None,
+            "surface_id": None,
         }
-    if kind == "mesh":
-        raise VisualizationError(
-            f"{label} references mesh geometry, but the offline viewer cannot render a URI "
-            "without embedding the exact mesh; resolve it upstream instead of substituting a box"
+    if kind == "shape":
+        _keys(
+            geometry,
+            required=fields,
+            optional=set(),
+            label=label,
         )
+        uri = _text(geometry["shape_uri"], f"{label}.shape_uri")
+        uri_path = PurePosixPath(uri)
+        if (
+            "\\" in uri
+            or uri_path.is_absolute()
+            or not uri_path.parts
+            or any(part in {"", ".", ".."} for part in uri_path.parts)
+        ):
+            raise VisualizationError(
+                f"{label}.shape_uri must be a safe POSIX path relative to its static.part"
+            )
+        return {
+            "kind": "shape",
+            "dimensions_m": _positive_vector(
+                geometry["dimensions_m"], f"{label}.dimensions_m", 3
+            ),
+            # Evidence-only manifest identity. The browser never follows this
+            # URI; the complete bundle carries verified canonical triangles.
+            "shape_uri": uri,
+            "shape_sha256": _hash(geometry["shape_sha256"], f"{label}.shape_sha256"),
+            "surface_id": _identifier(geometry["surface_id"], f"{label}.surface_id"),
+        }
     raise VisualizationError(
-        f"{label}.kind {kind!r} is unsupported; expected box, sphere, or cylinder"
+        f"{label}.kind {kind!r} is unsupported; expected box, sphere, cylinder, or shape"
     )
 
 
@@ -840,6 +878,12 @@ def generate_viewer(
     output: str | Path | None = None,
     title: str | None = None,
     live: Mapping[str, Any] | None = None,
+    render_bundle: Mapping[str, Any] | Any | None = None,
+    shape_artifacts: Mapping[str, str | Path | Any] | None = None,
+    part_instantiations: Mapping[str, Any] | None = None,
+    optical_sensors: list[Any] | tuple[Any, ...] = (),
+    optical_observations: list[Any] | tuple[Any, ...] = (),
+    optical_scene_sha256: str | None = None,
 ) -> VisualizationArtifact:
     """Create a viewer only from the canonical resolved assembly projection.
 
@@ -888,6 +932,128 @@ def generate_viewer(
         "assembly_sha256": assembly_sha256,
         "scene": scene,
     }
+    shape_solids = [
+        f"{component['id']}/{body['id']}/{solid['id']}"
+        for component in scene["components"]
+        for body in component["bodies"]
+        for solid in body["solids"]
+        if solid["geometry"]["kind"] == "shape"
+    ]
+    if (
+        shape_solids
+        and render_bundle is None
+        and shape_artifacts is None
+        and part_instantiations is None
+    ):
+        part_instantiations = assembly.instantiations
+    supplied_shape_sources = sum(
+        item is not None
+        for item in (render_bundle, shape_artifacts, part_instantiations)
+    )
+    if supplied_shape_sources > 1:
+        raise VisualizationError(
+            "supply only one of render_bundle, shape_artifacts, or part_instantiations"
+        )
+    if part_instantiations is not None:
+        try:
+            resolved_shape_artifacts = shape_artifacts_from_registry(
+                scene=scene, registry=part_instantiations
+            )
+            shape_artifacts = resolved_shape_artifacts or None
+        except RenderBundleError as exc:
+            raise VisualizationError(str(exc)) from exc
+    if shape_artifacts is not None:
+        try:
+            sensor_instances: list[tuple[str | None, Any]] = []
+            for item in optical_sensors:
+                # Assembly captures carry the exact configured descriptor (for
+                # example, after a resolution override) together with the
+                # component that qualifies its local mount connector.  Accept
+                # that bound form without making the viewer depend on optics
+                # implementation types.
+                descriptor = getattr(item, "descriptor", None)
+                component_id = getattr(item, "component_id", None)
+                if descriptor is not None and component_id is not None:
+                    sensor_instances.append((str(component_id), descriptor))
+                else:
+                    sensor_instances.append((None, item))
+            if part_instantiations is not None and not optical_sensors:
+                sensor_instances = optical_sensors_from_registry(
+                    scene=scene,
+                    registry=part_instantiations,
+                    component_models=assembly.component_models,
+                )
+            sensor_views: list[dict[str, Any]] = []
+            descriptor_bindings: list[tuple[Any, dict[str, Any]]] = []
+            for component_id, item in sensor_instances:
+                if isinstance(item, Mapping):
+                    if component_id is not None:
+                        raise VisualizationError(
+                            "catalog sensor discovery must return OpticalSensor descriptors"
+                        )
+                    sensor_views.append(dict(item))
+                    continue
+                view = sensor_view_from_descriptor(item, component_id=component_id)
+                sensor_views.append(view)
+                descriptor_bindings.append((item, view))
+            observation_views = []
+            for item in optical_observations:
+                if isinstance(item, Mapping):
+                    observation_views.append(dict(item))
+                    continue
+                candidates = [
+                    (descriptor, view)
+                    for descriptor, view in descriptor_bindings
+                    if str(descriptor.id) == str(getattr(item, "sensor_id", ""))
+                    and view["connector"] == str(getattr(item, "mount_connector", ""))
+                ]
+                if len(candidates) != 1:
+                    raise VisualizationError(
+                        f"observation {getattr(item, 'id', '<unknown>')!r} must have exactly "
+                        "one matching instantiated OpticalSensor descriptor"
+                    )
+                descriptor, view = candidates[0]
+                observation_views.append(
+                    observation_view_from_artifact(
+                        item,
+                        descriptor,
+                        assembly_sha256=assembly_sha256,
+                        assembly_id=str(scene["contraption_id"]),
+                        scene=scene,
+                        expected_scene_sha256=optical_scene_sha256,
+                        viewer_sensor_id=view["id"],
+                        assembly_mount_connector=view["connector"],
+                    )
+                )
+            payload["render_bundle"] = materialize_render_bundle(
+                assembly_sha256=assembly_sha256,
+                scene=scene,
+                solid_shapes=shape_artifacts,
+                sensors=_convert_object(sensor_views),
+                observations=_convert_object(observation_views),
+            )
+        except (RenderBundleError, OpticalViewError) as exc:
+            raise VisualizationError(str(exc)) from exc
+    elif render_bundle is None:
+        if shape_solids:
+            raise VisualizationError(
+                "canonical shape geometry requires a complete render bundle; missing bindings "
+                + ", ".join(shape_solids)
+            )
+        if optical_sensors or optical_observations:
+            raise VisualizationError(
+                "optical sensors/observations require complete canonical shape_artifacts"
+            )
+    else:
+        raw_render_bundle = _convert_object(render_bundle)
+        try:
+            payload["render_bundle"] = normalize_render_bundle(
+                raw_render_bundle,
+                assembly_sha256=assembly_sha256,
+                scene=scene,
+            )
+        except RenderBundleError as exc:
+            raise VisualizationError(str(exc)) from exc
     live_configuration = _live_configuration(live)
     if live_configuration is not None:
         payload["live"] = live_configuration
@@ -931,6 +1097,7 @@ build_viewer = generate_viewer
 
 __all__ = [
     "PHYSICAL_SCENE_SCHEMA",
+    "RENDER_BUNDLE_SCHEMA",
     "VIEWER_SCHEMA",
     "VisualizationArtifact",
     "VisualizationError",

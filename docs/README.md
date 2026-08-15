@@ -23,6 +23,7 @@ The first recommended engineering proof is a guarded tabletop trading-card works
 - [Resumable catalog bootstrap script](../src/contraption/catalog_mining/bootstrap_catalogs.ps1)
 - [SHA-256 catalog verification script](../src/contraption/catalog_mining/verify_catalogs.ps1)
 - [Reproducible PPL smoke-test notes](../work/ppl-smoke/README.md)
+- [Structured formats and DSL reference](./structured_formats/README.md)
 
 ## Preserved original framing
 

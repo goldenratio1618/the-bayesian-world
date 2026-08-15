@@ -1,0 +1,26 @@
+{
+  "body": "pack",
+  "builder": "scripts/build_part_shapes.py",
+  "features": [
+    "six cylindrical NiMH cells",
+    "pack terminal"
+  ],
+  "format": "contraption.procedural-shape/v1",
+  "input_dimensions_m": [
+    0.086,
+    0.058,
+    0.052
+  ],
+  "optical_material_ids": [
+    "dark-polymer",
+    "metal",
+    "pcb-green",
+    "rubber",
+    "optical-glass",
+    "copper",
+    "ceramic",
+    "battery-wrap"
+  ],
+  "part": "scanner.nimh_battery",
+  "solid": "battery_envelope"
+}

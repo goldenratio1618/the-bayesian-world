@@ -1,0 +1,451 @@
+{
+  "caches": [
+    {
+      "byte_length": 11488,
+      "media_type": "model/gltf-binary",
+      "sha256": "1770ff252faeea8bd9244cbb012fade4ad379c21e912b8f1ff217007133bd40c",
+      "uri": "runtime.glb"
+    }
+  ],
+  "canonical_frame": "right_handed_z_up_x_forward_metres",
+  "derived_mass_properties": null,
+  "format": "shape-artifact-1",
+  "id": "scanner.wheel.wheel.tire",
+  "metadata": {
+    "detailed_features": [
+      "rubber tire",
+      "six-spoke polymer hub",
+      "metal axle bore"
+    ],
+    "geometric_fidelity": "catalog-derived engineering visualization; not vendor CAD"
+  },
+  "optical_materials": [
+    {
+      "absorption_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "base_color_linear_rgba": [
+        0.018,
+        0.022,
+        0.028,
+        1.0
+      ],
+      "double_sided": false,
+      "emission_linear_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "extinction_coefficient": 0.0,
+      "id": "dark-polymer",
+      "metallic": 0.0,
+      "model": "principled",
+      "phase_anisotropy": 0.0,
+      "provenance": {
+        "kind": "catalog-class"
+      },
+      "refractive_index": 1.5,
+      "roughness": 0.72,
+      "scattering_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spectrum": [],
+      "transmission": 0.0,
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.05
+        }
+      }
+    },
+    {
+      "absorption_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "base_color_linear_rgba": [
+        0.52,
+        0.55,
+        0.58,
+        1.0
+      ],
+      "double_sided": false,
+      "emission_linear_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "extinction_coefficient": 3.1,
+      "id": "metal",
+      "metallic": 0.92,
+      "model": "conductor",
+      "phase_anisotropy": 0.0,
+      "provenance": {
+        "kind": "catalog-class"
+      },
+      "refractive_index": 1.5,
+      "roughness": 0.24,
+      "scattering_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spectrum": [],
+      "transmission": 0.0,
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.08
+        }
+      }
+    },
+    {
+      "absorption_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "base_color_linear_rgba": [
+        0.015,
+        0.19,
+        0.045,
+        1.0
+      ],
+      "double_sided": false,
+      "emission_linear_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "extinction_coefficient": 0.0,
+      "id": "pcb-green",
+      "metallic": 0.0,
+      "model": "principled",
+      "phase_anisotropy": 0.0,
+      "provenance": {
+        "kind": "catalog-class"
+      },
+      "refractive_index": 1.5,
+      "roughness": 0.46,
+      "scattering_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spectrum": [],
+      "transmission": 0.0,
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.04
+        }
+      }
+    },
+    {
+      "absorption_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "base_color_linear_rgba": [
+        0.008,
+        0.009,
+        0.01,
+        1.0
+      ],
+      "double_sided": false,
+      "emission_linear_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "extinction_coefficient": 0.0,
+      "id": "rubber",
+      "metallic": 0.0,
+      "model": "principled",
+      "phase_anisotropy": 0.0,
+      "provenance": {
+        "kind": "catalog-class"
+      },
+      "refractive_index": 1.5,
+      "roughness": 0.94,
+      "scattering_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spectrum": [],
+      "transmission": 0.0,
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.03
+        }
+      }
+    },
+    {
+      "absorption_per_m": [
+        0.03,
+        0.02,
+        0.015
+      ],
+      "base_color_linear_rgba": [
+        0.96,
+        0.98,
+        1.0,
+        0.08
+      ],
+      "double_sided": false,
+      "emission_linear_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "extinction_coefficient": 0.0,
+      "id": "optical-glass",
+      "metallic": 0.0,
+      "model": "dielectric",
+      "phase_anisotropy": 0.0,
+      "provenance": {
+        "kind": "catalog-class"
+      },
+      "refractive_index": 1.52,
+      "roughness": 0.035,
+      "scattering_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spectrum": [],
+      "transmission": 0.94,
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "refractive_index_std": 0.01
+        }
+      }
+    },
+    {
+      "absorption_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "base_color_linear_rgba": [
+        0.72,
+        0.31,
+        0.12,
+        1.0
+      ],
+      "double_sided": false,
+      "emission_linear_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "extinction_coefficient": 3.6,
+      "id": "copper",
+      "metallic": 1.0,
+      "model": "conductor",
+      "phase_anisotropy": 0.0,
+      "provenance": {
+        "kind": "catalog-class"
+      },
+      "refractive_index": 1.5,
+      "roughness": 0.21,
+      "scattering_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spectrum": [],
+      "transmission": 0.0,
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.05
+        }
+      }
+    },
+    {
+      "absorption_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "base_color_linear_rgba": [
+        0.66,
+        0.56,
+        0.38,
+        1.0
+      ],
+      "double_sided": false,
+      "emission_linear_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "extinction_coefficient": 0.0,
+      "id": "ceramic",
+      "metallic": 0.0,
+      "model": "dielectric",
+      "phase_anisotropy": 0.0,
+      "provenance": {
+        "kind": "catalog-class"
+      },
+      "refractive_index": 1.7,
+      "roughness": 0.61,
+      "scattering_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spectrum": [],
+      "transmission": 0.0,
+      "uncertainty": {
+        "distribution": "uniform",
+        "parameters": {
+          "roughness_lower": 0.45,
+          "roughness_upper": 0.8
+        }
+      }
+    },
+    {
+      "absorption_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "base_color_linear_rgba": [
+        0.04,
+        0.17,
+        0.48,
+        1.0
+      ],
+      "double_sided": false,
+      "emission_linear_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "extinction_coefficient": 0.0,
+      "id": "battery-wrap",
+      "metallic": 0.0,
+      "model": "principled",
+      "phase_anisotropy": 0.0,
+      "provenance": {
+        "kind": "catalog-class"
+      },
+      "refractive_index": 1.5,
+      "roughness": 0.58,
+      "scattering_per_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "spectrum": [],
+      "transmission": 0.0,
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 0.05
+        }
+      }
+    }
+  ],
+  "physical_fields": [],
+  "provenance": {
+    "kind": "deterministic-procedural",
+    "source_static_part": "mechanical/wheels/rolling_drive_wheels/instantiations/pololu_romi_wheel/static.part"
+  },
+  "sources": [
+    {
+      "content": {
+        "byte_length": 478,
+        "media_type": "application/vnd.contraption.procedural-shape+json",
+        "sha256": "165d97b471e944bf06098423826cad7ee36d216d1095035d0425e43c56004022",
+        "uri": "source/procedural-shape.json"
+      },
+      "format": "procedural",
+      "id": "procedural-catalog-model",
+      "metres_per_source_unit": 1.0,
+      "provenance": {
+        "kind": "derived",
+        "static_part": "static.part"
+      },
+      "transform_to_canonical_row_major": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  ],
+  "surfaces": [
+    {
+      "bounds_m": [
+        -0.035,
+        -0.035,
+        -0.004,
+        0.035,
+        0.035,
+        0.004
+      ],
+      "content": {
+        "byte_length": 12679,
+        "media_type": "application/vnd.contraption.ctmesh",
+        "sha256": "1944a7812333c8d7d821f4ba277e05af7ce880b1de06f3c970faf405cddf3e8e",
+        "uri": "canonical.ctmesh"
+      },
+      "id": "canonical",
+      "kind": "ctmesh",
+      "manifold": true,
+      "material_ids": [
+        "dark-polymer",
+        "metal",
+        "pcb-green",
+        "rubber",
+        "optical-glass",
+        "copper",
+        "ceramic",
+        "battery-wrap"
+      ],
+      "purposes": [
+        "analysis",
+        "ray_trace",
+        "render",
+        "collision"
+      ],
+      "triangle_count": 424,
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "basis": "catalog envelope and deterministic procedural feature estimate",
+          "builder_version": 1,
+          "standard_deviation_m": 0.00035000000000000005
+        }
+      },
+      "vertex_count": 230,
+      "watertight": true
+    }
+  ],
+  "version": "1.0.0",
+  "volumes": []
+}

@@ -6,6 +6,7 @@ import argparse
 from dataclasses import dataclass
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -294,7 +295,10 @@ def command_validate(args: argparse.Namespace) -> int:
         ),
         "parts": {
             "registered": len(assembly.parts),
-            "used": len({item.part for item in assembly.specification.components}),
+            "used": len(
+                {item.part for item in assembly.specification.components}
+                | {item.part for item in assembly.physical.world_objects}
+            ),
         },
         "artifact_closure": {
             "simulation": assembly.assembly_sha256,
@@ -443,7 +447,7 @@ def _simulate_and_write(
 ) -> tuple[SimulationResult, Mapping[str, Any], Path, Path, Mapping[str, Any]]:
     result = simulate(
         assembly,
-        duration=args.duration,
+        duration=_simulation_duration(assembly, args.duration),
         dt=_simulation_dt(assembly, args.dt),
         num_samples=int(args.samples),
         seed=int(args.seed),
@@ -486,13 +490,143 @@ def _simulation_dt(
     )
 
 
+def _mission_setting(
+    assembly: ResolvedAssembly,
+    name: str,
+    default: float | int,
+) -> float | int:
+    environment = assembly.specification.environment
+    mission = environment.get("mission", {})
+    if not isinstance(mission, Mapping):
+        raise ValueError("contraption.environment.mission must be an object")
+    return mission.get(name, default)
+
+
+def _simulation_duration(
+    assembly: ResolvedAssembly,
+    requested: float | None,
+) -> float:
+    value = (
+        _mission_setting(assembly, "duration_s", 1.0)
+        if requested is None
+        else requested
+    )
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+        or float(value) <= 0.0
+    ):
+        raise ValueError("simulation duration must be a finite positive number")
+    return float(value)
+
+
+def _optical_frame_count(
+    assembly: ResolvedAssembly,
+    requested: int | None,
+) -> int:
+    value = (
+        _mission_setting(assembly, "camera_frame_count", 1)
+        if requested is None
+        else requested
+    )
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError("optical frame count must be a positive integer")
+    return value
+
+
 def command_simulate(args: argparse.Namespace) -> int:
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     assembly = _assembly_from_args(args)
-    _result, metrics, trajectory_path, scene_path, _scene = _simulate_and_write(
+    result, metrics, trajectory_path, scene_path, _scene = _simulate_and_write(
         assembly, args, output
     )
+    optical_captures = []
+    optical_observations = []
+    if args.optical_capture:
+        from .optics import capture_result
+
+        frame_count = _optical_frame_count(assembly, args.optical_frame_count)
+        if args.optical_frame_count is None and args.duration is not None:
+            # An explicit short simulation is an ad-hoc capture rather than the
+            # authored mission.  Preserve the historical single final-frame
+            # behavior unless the caller also explicitly requests a sequence.
+            frame_count = 1
+        if args.optical_time_index is not None and frame_count != 1:
+            raise ValueError(
+                "--optical-time-index requires --optical-frame-count 1"
+            )
+        if frame_count > len(result.time):
+            raise ValueError(
+                "optical frame count exceeds the number of simulation time points"
+            )
+        time_indices = (
+            [args.optical_time_index if args.optical_time_index is not None else -1]
+            if frame_count == 1
+            else np.rint(
+                np.linspace(0, len(result.time) - 1, frame_count)
+            ).astype(int).tolist()
+        )
+        base_seed = args.seed if args.optical_seed is None else args.optical_seed
+        for capture_index, time_index in enumerate(time_indices):
+            resolved_index = time_index if time_index >= 0 else len(result.time) + time_index
+            optical_capture = capture_result(
+                assembly,
+                result,
+                (
+                    output / "optical"
+                    if frame_count == 1
+                    else output / "optical" / f"frame-{resolved_index:08d}"
+                ),
+                sample_index=args.optical_sample_index,
+                time_index=time_index,
+                sensor_ids=tuple(args.optical_sensor),
+                sensor_resolution_px=(args.optical_width, args.optical_height),
+                backend=args.optical_backend,
+                device=args.optical_device,
+                seed=base_seed + capture_index * 1000,
+                external_scene=args.optical_scene,
+            )
+            optical_captures.append(optical_capture)
+            optical_observations.extend(optical_capture.observations)
+        metrics["optical_capture"] = {
+            "backend": optical_captures[0].backend,
+            "device": optical_captures[0].device,
+            "frame_count": len(optical_captures),
+            "sensor_count": len(optical_captures[0].frame.sensors),
+            "observation_count": len(optical_observations),
+            "frames": [
+                {
+                    "time_index": item.frame.time_index,
+                    "time_s": item.frame.time_s,
+                    "runtime_scene_sha256": item.frame.scene.artifact_sha256,
+                    "external_scene_sha256": item.frame.external_scene_sha256,
+                }
+                for item in optical_captures
+            ],
+        }
+    artifacts = {
+        "trajectory": str(trajectory_path),
+        "physical_scene": str(scene_path),
+    }
+    if optical_captures:
+        if len(optical_captures) == 1:
+            artifacts["optical_capture"] = str(optical_captures[0].report_path)
+        else:
+            artifacts["optical_captures"] = [
+                str(item.report_path) for item in optical_captures
+            ]
+        viewer = generate_viewer(
+            assembly,
+            result,
+            sample_index=args.optical_sample_index,
+            title="Full scanner orbit and camera views",
+            optical_sensors=tuple(optical_captures[0].frame.sensors),
+            optical_observations=tuple(optical_observations),
+        )
+        viewer_paths = viewer.write(output / "viewer")
+        artifacts["viewer"] = str(viewer_paths["index.html"])
     report = {
         "schema": "contraption.simulation-report/v2",
         "assembly_sha256": assembly.assembly_sha256,
@@ -500,13 +634,40 @@ def command_simulate(args: argparse.Namespace) -> int:
         "controllers": _controller_identities(assembly),
         "dynamics_completeness": metrics.get("dynamics_completeness"),
         "metrics": metrics,
-        "artifacts": {
-            "trajectory": str(trajectory_path),
-            "physical_scene": str(scene_path),
-        },
+        "artifacts": artifacts,
     }
     report_path = _write_json(output / "report.json", report)
     print(json.dumps({"report": str(report_path), **report}, indent=2, sort_keys=True))
+    return 0
+
+
+def command_optical_reconstruct(args: argparse.Namespace) -> int:
+    from .optics import reconstruct_observations
+
+    result = reconstruct_observations(
+        args.sensor,
+        args.observation,
+        args.output,
+        id=args.id,
+        voxel_size_m=args.voxel_size,
+        block_size=args.block_size,
+        origin_world_m=tuple(args.origin),
+        truncation_distance_m=args.truncation_distance,
+        pixel_stride=args.pixel_stride,
+        surface_occupancy_threshold=args.surface_occupancy_threshold,
+        surface_maximum_abs_tsdf=args.surface_maximum_abs_tsdf,
+        surface_maximum_occupied_voxels=args.surface_maximum_occupied_voxels,
+        surface_maximum_triangles=args.surface_maximum_triangles,
+    )
+    report_path = Path(args.output).resolve() / "report.json"
+    print(
+        json.dumps(
+            {"report": str(report_path), **result.to_dict()},
+            indent=2,
+            sort_keys=True,
+            allow_nan=False,
+        )
+    )
     return 0
 
 
@@ -720,7 +881,7 @@ def command_agent_canary(args: argparse.Namespace) -> int:
             inputs = ModelingInputs(
                 constraints=PROJECT_ROOT / "prompts" / "model_constraints.md",
                 gold_templates=(
-                    DEFAULT_CATALOG / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl",
+                    DEFAULT_CATALOG / "electrical" / "resistors" / "resistor.pmdl",
                     DEFAULT_CATALOG / "electrical" / "resistors" / "fixed_resistors" / "instantiations" / "generic-100ohm-resistor" / "static.part",
                     DEFAULT_CATALOG / "electrical" / "resistors" / "fixed_resistors" / "instantiations" / "generic-100ohm-resistor" / "v1.model",
                 ),
@@ -963,7 +1124,11 @@ def build_parser() -> argparse.ArgumentParser:
         )
 
     def simulation_options(command: argparse.ArgumentParser) -> None:
-        command.add_argument("--duration", type=float, default=1.0)
+        command.add_argument(
+            "--duration",
+            type=float,
+            help="simulation seconds; defaults to environment.mission.duration_s, then 1.0",
+        )
         command.add_argument("--samples", type=int, default=1)
         command.add_argument(
             "--dt",
@@ -995,7 +1160,82 @@ def build_parser() -> argparse.ArgumentParser:
     assembly_inputs(simulate_command)
     simulation_options(simulate_command)
     simulate_command.add_argument("--output", default=str(DEFAULT_OUTPUT))
+    simulate_command.add_argument(
+        "--optical-capture",
+        action="store_true",
+        help="capture optical-observation-1 artifacts at an exact simulation pose",
+    )
+    simulate_command.add_argument(
+        "--optical-scene",
+        help="strict optical-scene-1 manifest containing external world geometry",
+    )
+    simulate_command.add_argument(
+        "--optical-sensor",
+        action="append",
+        default=[],
+        metavar="ID",
+        help="capture one local or component-qualified optical sensor ID; repeat as needed",
+    )
+    simulate_command.add_argument("--optical-width", type=int, default=160)
+    simulate_command.add_argument("--optical-height", type=int, default=90)
+    simulate_command.add_argument(
+        "--optical-frame-count",
+        type=int,
+        help="evenly spaced captures; defaults to environment.mission.camera_frame_count, then 1",
+    )
+    simulate_command.add_argument(
+        "--optical-backend", choices=("numpy", "torch", "auto"), default="numpy"
+    )
+    simulate_command.add_argument("--optical-device")
+    simulate_command.add_argument("--optical-sample-index", type=int, default=0)
+    simulate_command.add_argument("--optical-time-index", type=int)
+    simulate_command.add_argument("--optical-seed", type=int)
     simulate_command.set_defaults(handler=command_simulate)
+
+    reconstruct = commands.add_parser(
+        "optical-reconstruct",
+        help="fuse verified depth observations into a sparse Bayesian TSDF/occupancy map",
+    )
+    reconstruct.add_argument(
+        "--sensor",
+        action="append",
+        required=True,
+        metavar="PATH",
+        help="optical-sensor-1 descriptor; repeat for heterogeneous observations",
+    )
+    reconstruct.add_argument(
+        "--observation",
+        action="append",
+        required=True,
+        metavar="PATH",
+        help="optical-observation-1 manifest to fuse; repeat for multi-view updates",
+    )
+    reconstruct.add_argument("--output", required=True)
+    reconstruct.add_argument("--id", default="optical-reconstruction")
+    reconstruct.add_argument("--voxel-size", type=float, default=0.01)
+    reconstruct.add_argument("--block-size", type=int, default=8)
+    reconstruct.add_argument(
+        "--origin",
+        type=float,
+        nargs=3,
+        default=(0.0, 0.0, 0.0),
+        metavar=("X", "Y", "Z"),
+    )
+    reconstruct.add_argument("--truncation-distance", type=float)
+    reconstruct.add_argument("--pixel-stride", type=int, default=1)
+    reconstruct.add_argument(
+        "--surface-occupancy-threshold", type=float, default=0.55
+    )
+    reconstruct.add_argument(
+        "--surface-maximum-abs-tsdf", type=float, default=0.5
+    )
+    reconstruct.add_argument(
+        "--surface-maximum-occupied-voxels", type=int, default=250_000
+    )
+    reconstruct.add_argument(
+        "--surface-maximum-triangles", type=int, default=2_000_000
+    )
+    reconstruct.set_defaults(handler=command_optical_reconstruct)
 
     view = commands.add_parser(
         "view", help="generate a display-only viewer from a canonical resolved assembly"

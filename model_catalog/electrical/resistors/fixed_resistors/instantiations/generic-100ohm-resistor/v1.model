@@ -7,7 +7,7 @@
   "model": {
     "id": "electrical.resistor.ideal",
     "version": "1.0.0",
-    "sha256": "sha256:8435156e22a8adecda051f672e6a9a277db1a94a648792e2c0372e34ef5a86bb"
+    "sha256": "sha256:10a026720ba1b0eec5a5cd2ea84f7c01bbcb030ac00ddbe5c5bf4251a08849c7"
   },
   "parameters": {
     "resistance": 100.0

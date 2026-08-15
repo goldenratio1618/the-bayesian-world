@@ -3,7 +3,7 @@
   "catalog": "../../model_catalog",
   "constraints": "../../prompts/model_constraints.md",
   "gold_templates": [
-    "../../model_catalog/electrical/resistors/fixed_resistors/resistor.pmdl",
+    "../../model_catalog/electrical/resistors/resistor.pmdl",
     "../../model_catalog/electrical/resistors/fixed_resistors/instantiations/generic-100ohm-resistor/static.part",
     "../../model_catalog/electrical/resistors/fixed_resistors/instantiations/generic-100ohm-resistor/v1.model",
     "../../model_catalog/mechanical/inert_objects/planar_rigid_bodies/rigid_body_planar.pmdl"
@@ -52,7 +52,7 @@
       "component_information": "component_inputs/power.json",
       "direct_hierarchy": [
         "../../model_catalog/electrical/voltage_sources/voltage_source.pmdl",
-        "../../model_catalog/electrical/capacitors/ceramic_capacitors/capacitor.pmdl"
+        "../../model_catalog/electrical/capacitors/capacitor.pmdl"
       ]
     }
   ]

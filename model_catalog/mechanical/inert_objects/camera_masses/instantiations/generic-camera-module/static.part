@@ -24,12 +24,15 @@
         {
           "id": "envelope",
           "geometry": {
-            "kind": "box",
+            "kind": "shape",
             "dimensions_m": [
               0.06,
               0.025,
-              0.025
-            ]
+              0.0165
+            ],
+            "shape_uri": "shape/envelope/shape.artifact.json",
+            "shape_sha256": "sha256:ee77bbd81fc6a016a820316f20ee1e2c6cd0bf0fca71254647f7503791fb064c",
+            "surface_id": "canonical"
           },
           "local_pose": {
             "translation_m": [

@@ -19,6 +19,7 @@ from contraption.control import control_digest, parse_control
 from contraption.loading import _load_catalogs
 from contraption.physics.specs import ContraptionSpec
 from contraption.verification import parse_verification
+from contraption.cli import _optical_frame_count, _simulation_duration
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -101,6 +102,19 @@ def test_load_contraption_resolves_closed_scanner_bundle(tmp_path: Path) -> None
     assert assembly.specification.format == "contraption-4"
     assert tuple(assembly.controllers) == ("scanner_orbit_controller",)
     assert tuple(assembly.verifications) == ("scanner.orbit_acceptance",)
+    assert len(assembly.physical.world_objects) == 1
+    target = assembly.physical.world_objects[0]
+    assert target.id == "scan-target"
+    assert target.part == "scanner.icosahedron.v1"
+    assert target.pose.translation_m == (0.0, 0.0, 0.35)
+    assert assembly.physical.body_pose("scan-target", "body").translation_m == (
+        0.0,
+        0.0,
+        0.35,
+    )
+    assert "scan-target.position_x" not in assembly.system.state_names
+    assert _simulation_duration(assembly, None) == pytest.approx(43.5)
+    assert _optical_frame_count(assembly, None) == 12
     controller = assembly.controllers["scanner_orbit_controller"]
     signal_outputs = {
         name: binding
@@ -124,6 +138,20 @@ def test_load_contraption_resolves_closed_scanner_bundle(tmp_path: Path) -> None
     verification = assembly.verifications["scanner.orbit_acceptance"]
     for binding in verification.input_bindings.values():
         assert assembly.system.state_names[binding.state_index] == binding.state_name
+
+
+def test_world_object_projection_is_strict_and_collision_free(tmp_path: Path) -> None:
+    path, manifest = _scanner_bundle(tmp_path)
+    manifest["environment"]["world_objects"][0]["viewer_color"] = "orange"
+    _write(path, manifest)
+    with pytest.raises(ContraptionLoadError, match="unknown.*world_objects"):
+        load_contraption(path)
+
+    path, manifest = _scanner_bundle(tmp_path)
+    manifest["environment"]["world_objects"][0]["id"] = "chassis"
+    _write(path, manifest)
+    with pytest.raises(ContraptionLoadError, match="must not collide"):
+        load_contraption(path)
 
 
 def test_load_contraption_checks_canonical_controller_hash(tmp_path: Path) -> None:

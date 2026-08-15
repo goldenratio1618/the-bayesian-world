@@ -1,0 +1,7 @@
+# Wavefront optical values are imported deterministically.
+newmtl optical_glass
+Kd 0.82 0.91 1.0
+Ns 900
+Ni 1.52
+d 0.08
+illum 7

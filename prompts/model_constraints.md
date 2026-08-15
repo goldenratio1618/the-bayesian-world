@@ -19,8 +19,9 @@ or embedded host-language code are allowed. Units, frames, orientations,
 reference conventions, bounds, initialization requirements, validity ranges,
 fidelity/approximation metadata, evidence, and property tests are mandatory.
 
-Each power port is bidirectional and pairs effort with flow. Directed command
-and measurement ports are separate and cannot carry power. Stored energy must
+Each power port is bidirectional and pairs effort with flow. Directed scalar
+command/measurement ports and typed non-scalar artifact ports are separate and
+cannot carry power. Artifact ports are not equation symbols. Stored energy must
 be nonnegative within the validity envelope; dissipation must be nonnegative;
 explicit sources must be declared. Models must be equation-balanced when
 assembled, conserve power under the declared sign convention, expose analytic
@@ -30,11 +31,27 @@ Generated output is staged and will be rejected on any parse, dimensional,
 balance, conservation, bounds, initialization, composition, property-test, or
 path-safety failure. It cannot modify the simulator or any host-language code.
 
+The workspace includes every authoritative guide under
+`docs/structured_formats/`. Read the relevant guide completely before using a
+format or optical abstraction. Source geometry and optical evidence belong to a
+separate deterministic host pipeline. Never open, parse, convert, repair,
+normalize, tessellate, infer from, or emit CAD, mesh, GLB, CTMESH, texture,
+image, depth, point-cloud, scan, shape, optical material/sensor/scene/observation,
+or reconstruction payloads. In particular, never author top-level
+`shape-artifact-1`, `optical-material-1`, `optical-sensor-1`,
+`optical-scene-1`, `optical-observation-1`, `reconstruction-state-1`,
+`deterministic-part-ingestion-1`, or
+`deterministic-part-ingestion-staged-1` artifacts. The host may append
+validated hash-bound artifacts after your proposal is materialized. You may use
+documented PMDL optical behavior and artifact ports, and may preserve only an
+exact opaque reference explicitly supplied by the host in a catalog field that permits it.
+
 The only top-level model keys are `format`, `id`, `name`, `version`, `domains`,
-`implements`, `description`, `power_ports`, `signal_ports`, `states`, `algebraics`,
-`parameters`, `relations`, `stored_energy`, `dissipation`, `sources`, `modes`,
-`initialization`, `validity`, `fidelity_levels`, `properties`, `trust`, and
-`metadata`. Never invent keys such as `jacobians` or `geometry`; express extra
+`implements`, `description`, `power_ports`, `signal_ports`, `artifact_ports`,
+`states`, `algebraics`, `parameters`, `relations`, `stored_energy`,
+`dissipation`, `sources`, `process_noise`, `modes`, `initialization`,
+`validity`, `fidelity_levels`, `properties`, `trust`, and `metadata`. Never
+invent keys such as `jacobians` or `geometry`; express extra
 descriptive detail under `metadata` only when it is data rather than executable
 behavior.
 
@@ -59,9 +76,19 @@ Use these field names exactly; unknown keys are rejected rather than ignored:
 - power port: `name`, `domain`, `effort`, `flow`, `effort_unit`, `flow_unit`,
   `orientation`, `frame`, `reference`, `description`
 - signal port: `name`, `direction`, `unit`, `dtype`, `shape`, `description`
+- artifact port: `name`, `direction`, `artifact_type`, `timing`, `transport`,
+  `sample_period_s`, `max_payload_bytes`, `description`. Direction is
+  `input`/`output`; type is lowercase `namespace/name@major`; timing is
+  `event`/`sampled`; transport is `in_process`, `content_addressed`,
+  `shared_memory`, `network`, or `controller_stream`. Sampled ports require a
+  positive period; controller streams require a positive byte bound.
 - relation: `name`, `expression`, `description`
 - stored-energy, dissipation, or source entry: `name`, `expression`, `unit`,
   `nonnegative`, `description`
+- process noise: `seed_policy`, `reproducibility`, `application`, `channels`,
+  and `increments`; channels use `name`, exactly
+  `distribution: standard_normal`, and `description`; increments use state
+  `target`, `expression`, and `description`
 - mode: `name`, `active_relations`, `transitions`, `initial`; each transition
   uses `target`, singular `guard`, and `resets` (a mapping from state names to
   expressions). Never put `guards` or `resets` directly on a mode.

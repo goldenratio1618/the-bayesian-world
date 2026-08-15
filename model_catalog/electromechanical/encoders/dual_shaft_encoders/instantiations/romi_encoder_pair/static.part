@@ -24,12 +24,15 @@
         {
           "id": "encoder_board",
           "geometry": {
-            "kind": "box",
+            "kind": "shape",
             "dimensions_m": [
               0.02,
               0.019,
-              0.004
-            ]
+              0.00268
+            ],
+            "shape_uri": "shape/encoder_board/shape.artifact.json",
+            "shape_sha256": "sha256:8690542a233f967f6c8b971615eb931b7e06198388c384db09897e52d02dad86",
+            "surface_id": "canonical"
           },
           "local_pose": {
             "translation_m": [

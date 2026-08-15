@@ -105,7 +105,7 @@ def _ground_model(*, constrained: bool = True):
 def _circuit_models(*, constrained_ground: bool = True):
     models = [
         load_model(ROOT / "model_catalog" / "electrical" / "voltage_sources" / "voltage_source.pmdl"),
-        load_model(ROOT / "model_catalog" / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl"),
+        load_model(ROOT / "model_catalog" / "electrical" / "resistors" / "resistor.pmdl"),
         _ground_model(constrained=constrained_ground),
     ]
     return {model.id: model for model in models}

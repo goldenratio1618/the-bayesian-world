@@ -30,8 +30,8 @@ from contraption.physics.validation import (
 
 ROOT = Path(__file__).resolve().parents[1]
 MODELS = ROOT / "model_catalog"
-RESISTOR = MODELS / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl"
-CAPACITOR = MODELS / "electrical" / "capacitors" / "ceramic_capacitors" / "capacitor.pmdl"
+RESISTOR = MODELS / "electrical" / "resistors" / "resistor.pmdl"
+CAPACITOR = MODELS / "electrical" / "capacitors" / "capacitor.pmdl"
 PLANAR_BODY = (
     ROOT
     / "assembled_contraptions"
@@ -373,6 +373,14 @@ class CatalogContractTests(unittest.TestCase):
         )
         self.assertEqual(self.interfaces.ancestry("camera-mass"), ("inert-object", "camera-mass"))
         self.assertEqual(self.interfaces.category_for("brushed-dc-motor").id, "motor")
+
+    def test_generic_ideal_models_are_colocated_with_category_interfaces(self) -> None:
+        resistor = MODELS / "electrical" / "resistors" / "resistor.pmdl"
+        capacitor = MODELS / "electrical" / "capacitors" / "capacitor.pmdl"
+        self.assertTrue(resistor.is_file())
+        self.assertTrue(capacitor.is_file())
+        self.assertEqual(self.models["electrical.resistor.ideal"].implements, "resistor")
+        self.assertEqual(self.models["electrical.capacitor.ideal"].implements, "capacitor")
 
     def test_instantiations_have_static_parts_and_initialized_models(self) -> None:
         registry = PartInstantiationRegistry.load_catalog(MODELS, models=self.models)

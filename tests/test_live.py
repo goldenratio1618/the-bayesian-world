@@ -58,7 +58,6 @@ def _scene() -> dict:
                                 "geometry": {
                                     "kind": "box",
                                     "dimensions_m": [0.1, 0.1, 0.1],
-                                    "mesh_uri": None,
                                 },
                                 "local_pose": pose,
                                 "provenance": provenance,

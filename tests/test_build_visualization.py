@@ -234,7 +234,9 @@ class VisualizationTests(unittest.TestCase):
                                     "geometry": {
                                         "kind": "box",
                                         "dimensions_m": [0.35, 0.28, 0.06],
-                                        "mesh_uri": None,
+                                        "shape_uri": None,
+                                        "shape_sha256": None,
+                                        "surface_id": None,
                                     },
                                     "local_pose": identity,
                                     "provenance": provenance,
@@ -250,7 +252,9 @@ class VisualizationTests(unittest.TestCase):
                                     "geometry": {
                                         "kind": "cylinder",
                                         "dimensions_m": [0.025, 0.025, 0.32],
-                                        "mesh_uri": None,
+                                        "shape_uri": None,
+                                        "shape_sha256": None,
+                                        "surface_id": None,
                                     },
                                     "local_pose": identity,
                                     "provenance": provenance,
@@ -286,7 +290,9 @@ class VisualizationTests(unittest.TestCase):
                                     "geometry": {
                                         "kind": "box",
                                         "dimensions_m": [0.09, 0.03, 0.025],
-                                        "mesh_uri": None,
+                                        "shape_uri": None,
+                                        "shape_sha256": None,
+                                        "surface_id": None,
                                     },
                                     "local_pose": identity,
                                     "provenance": provenance,
@@ -416,12 +422,23 @@ class VisualizationTests(unittest.TestCase):
             "transformPose(transformPose([0, 0, 0], item.connector.local_pose",
             artifact.javascript,
         )
-        self.assertEqual(artifact.data["schema"], "contraption.viewer/v2")
+        self.assertEqual(artifact.data["schema"], "contraption.viewer/v3")
         self.assertEqual(
             artifact.data["assembly_sha256"], self.assembly.assembly_sha256
         )
         self.assertEqual(artifact.assembly_sha256, self.assembly.assembly_sha256)
-        self.assertEqual(set(artifact.data), {"schema", "title", "assembly_sha256", "scene"})
+        self.assertEqual(
+            set(artifact.data),
+            {"schema", "title", "assembly_sha256", "scene", "render_bundle"},
+        )
+        self.assertEqual(
+            len(artifact.data["render_bundle"]["solid_bindings"]),
+            sum(
+                len(body["solids"])
+                for component in artifact.data["scene"]["components"]
+                for body in component["bodies"]
+            ),
+        )
         self.assertIn("connect-src 'none'", artifact.html)
 
     def test_live_viewer_is_same_origin_and_display_only(self) -> None:
@@ -536,15 +553,17 @@ class VisualizationTests(unittest.TestCase):
         with self.assertRaisesRegex(VisualizationError, "would ignore: metadata"):
             validate_physical_scene(ignored_metadata)
 
-    def test_rejects_mesh_uri_instead_of_drawing_an_inaccurate_box(self) -> None:
+    def test_rejects_removed_mesh_geometry_and_never_draws_a_box_substitute(self) -> None:
         scene = self.assembly_scene()
         scene["components"][0]["bodies"][0]["solids"][0]["geometry"] = {
             "kind": "mesh",
             "dimensions_m": [0.35, 0.28, 0.06],
             "mesh_uri": "cad/chassis.stl",
         }
-        with self.assertRaisesRegex(VisualizationError, "cannot render a URI"):
+        with self.assertRaisesRegex(VisualizationError, "unsupported"):
             validate_physical_scene(scene)
+        artifact = generate_viewer(self.assembly)
+        self.assertIn("refusing a bounding-box substitute", artifact.javascript)
 
     def test_static_canonical_body_poses_are_sufficient(self) -> None:
         artifact = generate_viewer(self.assembly)

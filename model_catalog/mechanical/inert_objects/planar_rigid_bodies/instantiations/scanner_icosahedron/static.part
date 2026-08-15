@@ -1,0 +1,142 @@
+{
+  "format": "static-part-1",
+  "id": "scanner.icosahedron",
+  "name": "Regular icosahedron scanner target",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "body",
+      "local_pose": {
+        "translation_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation_quaternion_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "solids": [
+        {
+          "id": "icosahedron",
+          "geometry": {
+            "kind": "shape",
+            "dimensions_m": [
+              0.12,
+              0.12,
+              0.12
+            ],
+            "shape_uri": "shape/icosahedron/shape.artifact.json",
+            "shape_sha256": "sha256:af58034d6a9caa246e408f4f560e679395469db1cb8c8a92e023c81a5d9ddaf4",
+            "surface_id": "canonical"
+          },
+          "local_pose": {
+            "translation_m": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "rotation_quaternion_wxyz": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "provenance": {
+            "kind": "derived",
+            "source": "Deterministic regular-icosahedron recipe in scripts/build_part_shapes.py"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "force_x",
+      "model_port": "force_x",
+      "body": "body",
+      "domain": "mechanical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation_quaternion_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "provenance": {
+        "kind": "derived",
+        "source": "center-of-mass frame"
+      }
+    },
+    {
+      "id": "force_y",
+      "model_port": "force_y",
+      "body": "body",
+      "domain": "mechanical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation_quaternion_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "provenance": {
+        "kind": "derived",
+        "source": "center-of-mass frame"
+      }
+    },
+    {
+      "id": "rotation",
+      "model_port": "rotation",
+      "body": "body",
+      "domain": "mechanical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation_quaternion_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "provenance": {
+        "kind": "derived",
+        "source": "center-of-mass frame"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "derived",
+    "source": "Programmatic scanner calibration target"
+  },
+  "purchasing": {},
+  "metadata": {
+    "purpose": "stationary optical target at the scanner orbit center",
+    "geometry_contract": "regular icosahedron with 0.12 m cubic bounding box"
+  }
+}

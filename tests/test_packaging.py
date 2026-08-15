@@ -8,13 +8,17 @@ from unittest import mock
 from contraption.catalog.interfaces import load_interface_catalog
 import contraption.paths as runtime_paths
 from contraption.paths import asset_root
+from contraption.part_import.reference_docs import (
+    STRUCTURED_FORMAT_GUIDES,
+    structured_format_guides,
+)
 
 
 class RuntimeAssetTests(unittest.TestCase):
     def test_complete_asset_root_is_discoverable(self) -> None:
         root = asset_root()
         catalog = root / "model_catalog"
-        self.assertTrue((catalog / "electrical" / "resistors" / "fixed_resistors" / "resistor.pmdl").is_file())
+        self.assertTrue((catalog / "electrical" / "resistors" / "resistor.pmdl").is_file())
         self.assertTrue((catalog / "mechanical" / "chassis" / "differential_drive_chassis" / "differential_chassis.pmdl").is_file())
         self.assertTrue(
             (catalog / "electrical" / "resistors" / "fixed_resistors" / "instantiations" / "generic-100ohm-resistor" / "static.part").is_file()
@@ -48,6 +52,12 @@ class RuntimeAssetTests(unittest.TestCase):
         )
         self.assertFalse((root / "examples").exists())
         self.assertTrue((root / "web" / "viewer.js").is_file())
+        guides = structured_format_guides(root)
+        self.assertEqual(
+            tuple(path.relative_to(root).as_posix() for path in guides),
+            STRUCTURED_FORMAT_GUIDES,
+        )
+        self.assertTrue(all(path.stat().st_size > 100 for path in guides))
         self.assertGreater(len(load_interface_catalog(catalog).categories), 1)
 
     def test_target_install_finds_adjacent_share_tree(self) -> None:

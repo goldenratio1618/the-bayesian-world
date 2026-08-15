@@ -2,8 +2,8 @@
   "format": "control-1",
   "id": "scanner_orbit_controller",
   "name": "Romi uncertainty-aware orbital scanner controller",
-  "version": "2.0.0",
-  "period_s": 0.01,
+  "version": "2.2.0",
+  "period_s": 0.05,
   "explicit_inputs": [
     {"name": "armed", "source": "external", "dtype": "bool", "unit": "1", "default": false, "description": "Mission-enable hardware input."},
     {"name": "reset", "source": "external", "dtype": "bool", "unit": "1", "default": false, "description": "Acknowledge an emergency stop."},
@@ -55,6 +55,7 @@
     {"name": "speed_kp", "unit": "V*s/m", "default": 4.0, "bounds": {"lower": 0.0, "upper": 30.0}},
     {"name": "heading_kp", "unit": "V", "default": 2.5, "bounds": {"lower": 0.0, "upper": 20.0}},
     {"name": "radius_kp", "unit": "V/m", "default": 1.6, "bounds": {"lower": 0.0, "upper": 20.0}},
+    {"name": "steering_limit", "unit": "V", "default": 0.6, "bounds": {"lower": 0.05, "upper": 4.5}},
     {"name": "voltage_limit", "unit": "V", "default": 4.5, "bounds": {"lower": 0.1, "upper": 12.0}},
     {"name": "speed_uncertainty_scale", "unit": "m/s", "default": 0.05, "bounds": {"lower": 0.001, "upper": 1.0}},
     {"name": "minimum_radius", "unit": "m", "default": 0.1, "bounds": {"lower": 0.01, "upper": 1.0}},
@@ -78,7 +79,8 @@
     {"name": "speed_std", "unit": "m/s", "expression": "sqrt(implicit.forward_speed.variance)"},
     {"name": "speed_confidence", "unit": "1", "expression": "1.0 / (1.0 + derived.speed_std / parameter.speed_uncertainty_scale)"},
     {"name": "drive_base", "unit": "V", "expression": "derived.speed_confidence * (parameter.speed_feedforward * input.target_speed + parameter.speed_kp * (input.target_speed - implicit.forward_speed.mean))"},
-    {"name": "steering", "unit": "V", "expression": "parameter.heading_kp * derived.heading_error + parameter.radius_kp * derived.radius_error"},
+    {"name": "steering_feedback", "unit": "V", "expression": "-parameter.heading_kp * derived.heading_error + parameter.radius_kp * derived.radius_error"},
+    {"name": "steering", "unit": "V", "expression": "clip(derived.steering_feedback, -parameter.steering_limit, parameter.steering_limit)"},
     {"name": "lift_wave", "unit": "1", "expression": "2.0 * input.position_x * input.position_y / (derived.safe_radius ** 2)"},
     {"name": "lift_command", "unit": "rad", "expression": "parameter.lift_midpoint + parameter.lift_amplitude * derived.lift_wave"},
     {"name": "look_height", "unit": "m", "expression": "parameter.object_center_height - parameter.camera_base_height - parameter.arm_length * input.lift_feedback"},
@@ -130,7 +132,7 @@
   "initial_mode": "idle",
   "emergency_when": "input.emergency_stop",
   "metadata": {
-    "hardware_math": "Fixed-point-safe algebraic orbit controller; heading and lift harmonics use measured vector components rather than runtime trigonometry.",
+    "hardware_math": "Fixed-point-safe 20 Hz algebraic orbit controller; signed heading error and outward radial error both request inward curvature, while lift harmonics use measured vector components rather than runtime trigonometry. At the 0.12 m/s mission speed each update advances at most 0.006 m.",
     "estimator": "A coupled local-affine observer is derived from the exact PMDL closure and infers chassis.forward_speed from every real sensor wire."
   }
 }
