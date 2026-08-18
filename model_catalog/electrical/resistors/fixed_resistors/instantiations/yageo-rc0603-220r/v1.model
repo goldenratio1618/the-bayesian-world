@@ -1,0 +1,58 @@
+{
+  "format": "model-instance-1",
+  "id": "yageo-rc0603-220r.v1",
+  "variant": "v1",
+  "part": "yageo-rc0603-220r",
+  "version": "1.0.0",
+  "model": {
+    "id": "electrical.resistor.fixed_parasitic_rlc",
+    "version": "1.0.0",
+    "sha256": "sha256:63136fceddd0b1ead672cf336b799bfef546bb61506f2d53706df654d2e8e39d"
+  },
+  "parameters": {
+    "resistance": 220.0,
+    "inductance": 1e-09,
+    "capacitance": 1e-12
+  },
+  "parameter_uncertainty": {
+    "resistance": {
+      "distribution": "normal",
+      "parameters": {
+        "std": 2.2
+      }
+    },
+    "inductance": {
+      "distribution": "lognormal",
+      "parameters": {
+        "std": 0.5
+      }
+    },
+    "capacitance": {
+      "distribution": "lognormal",
+      "parameters": {
+        "std": 0.5
+      }
+    }
+  },
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 2.0,
+    "notes": "Fitted parasitic RLC hypothesis for the Yageo RC0603FR-07220RL."
+  },
+  "metadata": {
+    "manufacturer": "Yageo",
+    "product": "RC0603FR-07220RL",
+    "published_resistance_ohm": 220.0,
+    "published_tolerance_fraction": 0.01,
+    "rated_power_w": 0.1,
+    "package": "0603",
+    "source_urls": [
+      "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-07220RL"
+    ],
+    "unknowns_to_fit": [
+      "actual resistance",
+      "parasitic inductance",
+      "parasitic capacitance"
+    ]
+  }
+}

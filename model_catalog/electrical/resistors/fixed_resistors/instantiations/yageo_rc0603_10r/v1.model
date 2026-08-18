@@ -1,0 +1,35 @@
+{
+  "format": "model-instance-1",
+  "id": "yageo_rc0603_10r.v1",
+  "variant": "v1",
+  "part": "yageo_rc0603_10r",
+  "version": "1.0.0",
+  "model": {
+    "id": "electrical.resistor.ideal",
+    "version": "1.0.0",
+    "sha256": "sha256:10a026720ba1b0eec5a5cd2ea84f7c01bbcb030ac00ddbe5c5bf4251a08849c7"
+  },
+  "parameters": {
+    "resistance": 10.0
+  },
+  "parameter_uncertainty": {
+    "resistance": {
+      "distribution": "uniform",
+      "parameters": {
+        "lower": 9.9,
+        "upper": 10.1
+      }
+    }
+  },
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1.0,
+    "notes": "Yageo RC0603FR-0710RL fixed-resistor nominal hypothesis."
+  },
+  "metadata": {
+    "manufacturer": "Yageo",
+    "product": "RC0603FR-0710RL",
+    "published_tolerance_fraction": 0.01,
+    "rated_power_w": 0.1
+  }
+}

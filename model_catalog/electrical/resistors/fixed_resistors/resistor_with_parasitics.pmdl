@@ -1,0 +1,287 @@
+{
+  "format": "pmdl-1",
+  "id": "electrical.resistor.fixed_parasitic_rlc",
+  "name": "Fixed resistor with fitted parasitics",
+  "version": "1.0.0",
+  "domains": [
+    "electrical"
+  ],
+  "implements": "fixed-resistor",
+  "description": "Acausal two-terminal fixed resistor with a series parasitic inductance and a parallel parasitic capacitance.",
+  "power_ports": [
+    {
+      "name": "p",
+      "domain": "electrical",
+      "effort": "v_p",
+      "flow": "i_p",
+      "effort_unit": "V",
+      "flow_unit": "A",
+      "orientation": "into_component",
+      "frame": "electrical",
+      "reference": "v_p relative to circuit reference"
+    },
+    {
+      "name": "n",
+      "domain": "electrical",
+      "effort": "v_n",
+      "flow": "i_n",
+      "effort_unit": "V",
+      "flow_unit": "A",
+      "orientation": "into_component",
+      "frame": "electrical",
+      "reference": "v_n relative to circuit reference"
+    }
+  ],
+  "states": [
+    {
+      "name": "inductor_current",
+      "unit": "A",
+      "initial": 0.0,
+      "derivative": "inductor_current_dot",
+      "description": "Current through the series parasitic inductance and resistance from terminal p to terminal n."
+    },
+    {
+      "name": "capacitor_voltage",
+      "unit": "V",
+      "initial": 0.0,
+      "derivative": "capacitor_voltage_dot",
+      "description": "Voltage across the parallel parasitic capacitance, positive at terminal p."
+    }
+  ],
+  "algebraics": [
+    {
+      "name": "branch_current",
+      "unit": "A",
+      "initial": 0.0,
+      "description": "Series resistor-inductor branch current from p to n."
+    },
+    {
+      "name": "capacitor_current",
+      "unit": "A",
+      "initial": 0.0,
+      "description": "Parallel capacitor current from p to n."
+    }
+  ],
+  "parameters": [
+    {
+      "name": "resistance",
+      "unit": "ohm",
+      "default": 220.0,
+      "bounds": {
+        "lower": 1e-09,
+        "upper": 1000000000000.0
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 2.2
+        }
+      },
+      "learnable": true,
+      "description": "Actual terminal resistance; the published one-percent tolerance is the nominal prior scale."
+    },
+    {
+      "name": "inductance",
+      "unit": "H",
+      "default": 1e-09,
+      "bounds": {
+        "lower": 1e-15,
+        "upper": 0.001
+      },
+      "uncertainty": {
+        "distribution": "lognormal",
+        "parameters": {
+          "std": 0.5
+        }
+      },
+      "learnable": true,
+      "description": "Uncharacterized series parasitic inductance, initialized to a small positive fitting prior."
+    },
+    {
+      "name": "capacitance",
+      "unit": "F",
+      "default": 1e-12,
+      "bounds": {
+        "lower": 1e-18,
+        "upper": 1e-06
+      },
+      "uncertainty": {
+        "distribution": "lognormal",
+        "parameters": {
+          "std": 0.5
+        }
+      },
+      "learnable": true,
+      "description": "Uncharacterized parallel parasitic capacitance, initialized to a small positive fitting prior."
+    }
+  ],
+  "relations": [
+    {
+      "name": "terminal_voltage_across_capacitance",
+      "expression": "capacitor_voltage - v_p + v_n",
+      "description": "The parasitic capacitance is directly across the two terminals."
+    },
+    {
+      "name": "capacitor_constitutive_law",
+      "expression": "capacitor_current - capacitance * capacitor_voltage_dot",
+      "description": "Capacitor current is capacitance times terminal-voltage rate."
+    },
+    {
+      "name": "series_rl_branch",
+      "expression": "v_p - v_n - resistance * branch_current - inductance * inductor_current_dot",
+      "description": "The series branch combines the fitted resistance and parasitic inductance."
+    },
+    {
+      "name": "branch_current_state",
+      "expression": "inductor_current - branch_current",
+      "description": "The inductor state is the series branch current."
+    },
+    {
+      "name": "terminal_current_balance",
+      "expression": "i_p - branch_current - capacitor_current",
+      "description": "The p-terminal current splits between the series branch and capacitor."
+    },
+    {
+      "name": "charge_conservation",
+      "expression": "i_p + i_n",
+      "description": "Terminal currents sum to zero under the into-component convention."
+    }
+  ],
+  "stored_energy": [
+    {
+      "name": "inductive_energy",
+      "expression": "0.5 * inductance * inductor_current ** 2",
+      "unit": "J",
+      "nonnegative": true,
+      "description": "Energy stored in the parasitic inductance."
+    },
+    {
+      "name": "capacitive_energy",
+      "expression": "0.5 * capacitance * capacitor_voltage ** 2",
+      "unit": "J",
+      "nonnegative": true,
+      "description": "Energy stored in the parasitic capacitance."
+    }
+  ],
+  "dissipation": [
+    {
+      "name": "joule_heating",
+      "expression": "resistance * branch_current ** 2",
+      "unit": "W",
+      "nonnegative": true,
+      "description": "Irreversible loss in the resistive film."
+    }
+  ],
+  "sources": [],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [],
+    "required": []
+  },
+  "validity": {
+    "ranges": {
+      "resistance": {
+        "lower": 1e-09,
+        "upper": 1000000000000.0
+      },
+      "inductance": {
+        "lower": 1e-15,
+        "upper": 0.001
+      },
+      "capacitance": {
+        "lower": 1e-18,
+        "upper": 1e-06
+      }
+    },
+    "assumptions": [
+      "Lumped two-terminal approximation",
+      "The parasitic inductance is a series element and the parasitic capacitance is in parallel with the terminals",
+      "Positive resistance, inductance, and capacitance exclude singular zero-energy limits",
+      "The 0603 package is represented by a nominal cuboid envelope in the static part",
+      "Rated power is 0.1 W and the model is intended for operation below that dissipative limit"
+    ],
+    "max_timestep": 1e-06
+  },
+  "fidelity_levels": [
+    {
+      "name": "fitted_parasitic_rlc",
+      "description": "Full smooth series-RL plus parallel-C model with all declared fit parameters active.",
+      "active_relations": [
+        "terminal_voltage_across_capacitance",
+        "capacitor_constitutive_law",
+        "series_rl_branch",
+        "branch_current_state",
+        "terminal_current_balance",
+        "charge_conservation"
+      ],
+      "parameter_overrides": {},
+      "approximation_error": "Parasitic topology is a lumped approximation; values are fit parameters.",
+      "relative_cost": 2.0
+    }
+  ],
+  "properties": [
+    {
+      "name": "positive_fit_parameters",
+      "kind": "parameter_bounds",
+      "expression": "resistance > 0 * resistance and inductance > 0 * inductance and capacitance > 0 * capacitance",
+      "expected": true,
+      "samples": 64,
+      "tolerance": 0.0,
+      "description": "All constitutive parameters stay strictly inside their positive validity envelope."
+    },
+    {
+      "name": "nonnegative_inductive_energy",
+      "kind": "nonnegative_energy",
+      "expression": "0.5 * inductance * inductor_current ** 2 >= 0 * (0.5 * inductance * inductor_current ** 2)",
+      "expected": true,
+      "samples": 64,
+      "tolerance": 1e-12,
+      "description": "Inductive stored energy is nonnegative."
+    },
+    {
+      "name": "nonnegative_capacitive_energy",
+      "kind": "nonnegative_energy",
+      "expression": "0.5 * capacitance * capacitor_voltage ** 2 >= 0 * (0.5 * capacitance * capacitor_voltage ** 2)",
+      "expected": true,
+      "samples": 64,
+      "tolerance": 1e-12,
+      "description": "Capacitive stored energy is nonnegative."
+    },
+    {
+      "name": "nonnegative_joule_loss",
+      "kind": "nonnegative_dissipation",
+      "expression": "resistance * branch_current ** 2 >= 0 * (resistance * branch_current ** 2)",
+      "expected": true,
+      "samples": 64,
+      "tolerance": 1e-12,
+      "description": "Resistive dissipation is nonnegative."
+    }
+  ],
+  "trust": {
+    "structural": "tested",
+    "physical": "reviewed",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": [
+      {
+        "kind": "textbook",
+        "reference": "Series R-L branch in parallel with C",
+        "summary": "Passive lumped parasitic network with explicit stored energy and Joule dissipation."
+      },
+      {
+        "kind": "manufacturer",
+        "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-07220RL",
+        "summary": "Published 220 ohm RC0603FR-07220RL component data supplied with the import target."
+      }
+    ]
+  },
+  "metadata": {
+    "causality": "acausal",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0",
+    "fit_unknowns": [
+      "actual resistance",
+      "parasitic inductance",
+      "parasitic capacitance"
+    ]
+  }
+}

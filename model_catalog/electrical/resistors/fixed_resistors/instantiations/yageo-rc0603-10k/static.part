@@ -1,0 +1,129 @@
+{
+  "format": "static-part-1",
+  "id": "yageo-rc0603-10k",
+  "name": "Yageo RC0603FR-0710KL 10 kOhm resistor",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "body",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "package",
+          "geometry": {
+            "kind": "shape",
+            "dimensions_m": [
+              0.0016,
+              0.0008,
+              0.00045
+            ],
+            "shape_uri": "shape/package/shape.artifact.json",
+            "shape_sha256": "sha256:2eba8ac4a367e4e5834c30b4cec8ae45bc0cc5384f6f0f02972f8725528f8511",
+            "surface_id": "canonical"
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "vendor",
+            "source": "Published Yageo package dimensions"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "p",
+      "model_port": "p",
+      "body": "body",
+      "domain": "electrical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          -0.0008,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "Package-end terminal frame"
+      }
+    },
+    {
+      "id": "n",
+      "model_port": "n",
+      "body": "body",
+      "domain": "electrical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          0.0008,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "estimated",
+        "source": "Package-end terminal frame"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "vendor",
+    "source": "Yageo product data for RC0603FR-0710KL",
+    "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-0710KL"
+  },
+  "purchasing": {
+    "manufacturer": "Yageo",
+    "product": "RC0603FR-0710KL"
+  },
+  "metadata": {
+    "package": "0603",
+    "published_resistance_ohm": 10000,
+    "published_tolerance_fraction": 0.01,
+    "rated_power_w": 0.1,
+    "unknowns_to_fit": [
+      "actual resistance",
+      "parasitic inductance",
+      "parasitic capacitance"
+    ]
+  }
+}

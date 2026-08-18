@@ -1,0 +1,303 @@
+{
+  "format": "pmdl-1",
+  "id": "electrical.resistor.thick_film_parasitic",
+  "name": "Thick-film resistor with lumped parasitics",
+  "version": "1.0.0",
+  "domains": [
+    "electrical"
+  ],
+  "implements": "fixed-resistor",
+  "description": "Acausal two-terminal fixed resistor with a series parasitic inductance and a shunt parasitic capacitance.",
+  "power_ports": [
+    {
+      "name": "p",
+      "domain": "electrical",
+      "effort": "v_p",
+      "flow": "i_p",
+      "effort_unit": "V",
+      "flow_unit": "A",
+      "orientation": "into_component",
+      "frame": "electrical",
+      "reference": "v_p relative to circuit reference"
+    },
+    {
+      "name": "n",
+      "domain": "electrical",
+      "effort": "v_n",
+      "flow": "i_n",
+      "effort_unit": "V",
+      "flow_unit": "A",
+      "orientation": "into_component",
+      "frame": "electrical",
+      "reference": "v_n relative to circuit reference"
+    }
+  ],
+  "signal_ports": [],
+  "artifact_ports": [],
+  "states": [
+    {
+      "name": "branch_current",
+      "unit": "A",
+      "initial": 0.0,
+      "derivative": "branch_current_dot",
+      "description": "Current through the series resistance-inductance branch."
+    },
+    {
+      "name": "capacitor_voltage",
+      "unit": "V",
+      "initial": 0.0,
+      "derivative": "capacitor_voltage_dot",
+      "description": "Voltage across the shunt parasitic capacitance, positive from p to n."
+    }
+  ],
+  "algebraics": [
+    {
+      "name": "capacitor_current",
+      "unit": "A",
+      "initial": 0.0,
+      "description": "Current through the shunt parasitic capacitance from p to n."
+    }
+  ],
+  "parameters": [
+    {
+      "name": "resistance",
+      "unit": "ohm",
+      "default": 1000000.0,
+      "bounds": {
+        "lower": 1e-09,
+        "upper": 1000000000000.0
+      },
+      "uncertainty": {
+        "distribution": "normal",
+        "parameters": {
+          "std": 10000.0
+        },
+        "correlation_group": "yageo_rc0603_resistance"
+      },
+      "learnable": true,
+      "description": "Nominal fixed resistance; the supplied one-percent tolerance is represented by the instance uncertainty."
+    },
+    {
+      "name": "parasitic_inductance",
+      "unit": "H",
+      "default": 5e-10,
+      "bounds": {
+        "lower": 1e-15,
+        "upper": 1e-06
+      },
+      "uncertainty": {
+        "distribution": "lognormal",
+        "parameters": {
+          "std": 0.5
+        },
+        "correlation_group": "yageo_rc0603_parasitics"
+      },
+      "learnable": true,
+      "description": "Lumped series parasitic inductance to be fitted."
+    },
+    {
+      "name": "parasitic_capacitance",
+      "unit": "F",
+      "default": 1e-13,
+      "bounds": {
+        "lower": 1e-18,
+        "upper": 1e-09
+      },
+      "uncertainty": {
+        "distribution": "lognormal",
+        "parameters": {
+          "std": 0.5
+        },
+        "correlation_group": "yageo_rc0603_parasitics"
+      },
+      "learnable": true,
+      "description": "Lumped shunt parasitic capacitance to be fitted."
+    }
+  ],
+  "relations": [
+    {
+      "name": "series_branch_voltage",
+      "expression": "v_p - v_n - resistance * branch_current - parasitic_inductance * branch_current_dot",
+      "description": "The terminal voltage drives the series resistance-inductance branch."
+    },
+    {
+      "name": "capacitor_voltage_definition",
+      "expression": "capacitor_voltage - (v_p - v_n)",
+      "description": "The shunt capacitance spans the two terminals."
+    },
+    {
+      "name": "capacitor_current_relation",
+      "expression": "capacitor_current - parasitic_capacitance * capacitor_voltage_dot",
+      "description": "Constitutive current law for the shunt parasitic capacitance."
+    },
+    {
+      "name": "p_current_balance",
+      "expression": "i_p - branch_current - capacitor_current",
+      "description": "Current entering p divides between the series branch and shunt capacitance."
+    },
+    {
+      "name": "n_current_balance",
+      "expression": "i_n + branch_current + capacitor_current",
+      "description": "The two terminal currents conserve charge."
+    }
+  ],
+  "stored_energy": [
+    {
+      "name": "inductive_energy",
+      "expression": "0.5 * parasitic_inductance * branch_current ** 2",
+      "unit": "J",
+      "nonnegative": true,
+      "description": "Energy stored in the series parasitic inductance."
+    },
+    {
+      "name": "capacitive_energy",
+      "expression": "0.5 * parasitic_capacitance * capacitor_voltage ** 2",
+      "unit": "J",
+      "nonnegative": true,
+      "description": "Energy stored in the shunt parasitic capacitance."
+    }
+  ],
+  "dissipation": [
+    {
+      "name": "joule_heating",
+      "expression": "resistance * branch_current ** 2",
+      "unit": "W",
+      "nonnegative": true,
+      "description": "Irreversible electrical loss in the thick-film resistance."
+    }
+  ],
+  "sources": [],
+  "initialization": {
+    "strategy": "consistent",
+    "constraints": [
+      {
+        "name": "initial_capacitor_voltage",
+        "expression": "capacitor_voltage - (v_p - v_n)",
+        "description": "Initialize the shunt-capacitor voltage consistently with the terminal effort difference."
+      },
+      {
+        "name": "initial_p_current_balance",
+        "expression": "i_p - branch_current - capacitor_current",
+        "description": "Initialize the positive-terminal current balance."
+      },
+      {
+        "name": "initial_n_current_balance",
+        "expression": "i_n + branch_current + capacitor_current",
+        "description": "Initialize the negative-terminal current balance."
+      }
+    ],
+    "required": []
+  },
+  "validity": {
+    "ranges": {
+      "resistance": {
+        "lower": 1e-09,
+        "upper": 1000000000000.0
+      },
+      "parasitic_inductance": {
+        "lower": 1e-15,
+        "upper": 1e-06
+      },
+      "parasitic_capacitance": {
+        "lower": 1e-18,
+        "upper": 1e-09
+      }
+    },
+    "assumptions": [
+      "Lumped series resistance-inductance branch",
+      "Lumped shunt capacitance across the terminals",
+      "Parasitic values are nominal fit priors rather than vendor-certified measurements",
+      "Distributed transmission-line and temperature effects are outside this model"
+    ],
+    "max_timestep": 1e-09
+  },
+  "fidelity_levels": [
+    {
+      "name": "lumped_parasitic_rlc",
+      "description": "Series R-L branch in parallel with a shunt C.",
+      "active_relations": [
+        "series_branch_voltage",
+        "capacitor_voltage_definition",
+        "capacitor_current_relation",
+        "p_current_balance",
+        "n_current_balance"
+      ],
+      "parameter_overrides": {},
+      "approximation_error": "Distributed package and frequency-dependent effects are omitted.",
+      "relative_cost": 3.0
+    }
+  ],
+  "properties": [
+    {
+      "name": "positive_resistance",
+      "kind": "parameter_bounds",
+      "expression": "resistance > 0 * resistance",
+      "expected": true,
+      "samples": 32,
+      "tolerance": 0.0,
+      "description": "The dissipative branch resistance remains strictly positive."
+    },
+    {
+      "name": "positive_parasitic_inductance",
+      "kind": "parameter_bounds",
+      "expression": "parasitic_inductance > 0 * parasitic_inductance",
+      "expected": true,
+      "samples": 32,
+      "tolerance": 0.0,
+      "description": "The fitted series inductance remains strictly positive."
+    },
+    {
+      "name": "positive_parasitic_capacitance",
+      "kind": "parameter_bounds",
+      "expression": "parasitic_capacitance > 0 * parasitic_capacitance",
+      "expected": true,
+      "samples": 32,
+      "tolerance": 0.0,
+      "description": "The fitted shunt capacitance remains strictly positive."
+    },
+    {
+      "name": "nonnegative_inductive_energy",
+      "kind": "nonnegative_energy",
+      "expression": "0.5 * parasitic_inductance * branch_current ** 2 >= 0 * (0.5 * parasitic_inductance * branch_current ** 2)",
+      "expected": true,
+      "samples": 64,
+      "tolerance": 1e-12,
+      "description": "Inductive stored energy is nonnegative over the validity envelope."
+    },
+    {
+      "name": "nonnegative_capacitive_energy",
+      "kind": "nonnegative_energy",
+      "expression": "0.5 * parasitic_capacitance * capacitor_voltage ** 2 >= 0 * (0.5 * parasitic_capacitance * capacitor_voltage ** 2)",
+      "expected": true,
+      "samples": 64,
+      "tolerance": 1e-12,
+      "description": "Capacitive stored energy is nonnegative over the validity envelope."
+    },
+    {
+      "name": "nonnegative_joule_loss",
+      "kind": "nonnegative_dissipation",
+      "expression": "resistance * branch_current ** 2 >= 0 * (resistance * branch_current ** 2)",
+      "expected": true,
+      "samples": 64,
+      "tolerance": 1e-12,
+      "description": "Resistive dissipation is nonnegative over the validity envelope."
+    }
+  ],
+  "trust": {
+    "structural": "tested",
+    "physical": "reviewed",
+    "numerical": "tested",
+    "empirical": "unverified",
+    "evidence": [
+      {
+        "kind": "engineering_assumption",
+        "reference": "Lumped parasitic RLC approximation",
+        "summary": "Passivity follows from positive resistance, inductance, and capacitance; parasitic values remain to be fitted."
+      }
+    ]
+  },
+  "metadata": {
+    "causality": "acausal",
+    "descriptor_form": "F(t,z,zdot,theta,u)=0"
+  }
+}

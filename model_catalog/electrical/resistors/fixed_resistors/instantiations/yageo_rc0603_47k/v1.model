@@ -1,0 +1,33 @@
+{
+  "format": "model-instance-1",
+  "id": "yageo_rc0603_47k.v1",
+  "variant": "v1",
+  "part": "yageo_rc0603_47k",
+  "version": "1.0.0",
+  "model": {
+    "id": "electrical.resistor.ideal",
+    "version": "1.0.0",
+    "sha256": "sha256:10a026720ba1b0eec5a5cd2ea84f7c01bbcb030ac00ddbe5c5bf4251a08849c7"
+  },
+  "parameters": {
+    "resistance": 47000.0
+  },
+  "parameter_uncertainty": {
+    "resistance": {
+      "distribution": "normal",
+      "parameters": {
+        "std": 470.0
+      }
+    }
+  },
+  "condition": "unverified",
+  "compute": {
+    "relative_cost": 1.0,
+    "notes": "Yageo RC0603FR-0747KL ideal fixed-resistor hypothesis."
+  },
+  "metadata": {
+    "manufacturer": "Yageo",
+    "product": "RC0603FR-0747KL",
+    "package": "0603"
+  }
+}

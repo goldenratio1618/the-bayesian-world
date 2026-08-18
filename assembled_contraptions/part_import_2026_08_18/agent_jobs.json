@@ -1,0 +1,32 @@
+{
+  "format": "agent-jobs-1",
+  "catalog": "../../model_catalog",
+  "constraints": "../../prompts/model_constraints.md",
+  "gold_templates": [
+    "../../model_catalog/electrical/resistors/resistor.pmdl",
+    "../../model_catalog/electrical/resistors/fixed_resistors/instantiations/generic-100ohm-resistor/static.part",
+    "../../model_catalog/electrical/resistors/fixed_resistors/instantiations/generic-100ohm-resistor/v1.model"
+  ],
+  "jobs": [
+    {"id": "yageo_rc0603_10r", "component_information": "component_inputs/yageo_rc0603_10r.json", "direct_hierarchy": ["../../model_catalog/electrical/resistors/resistor.pmdl"]},
+    {"id": "yageo_rc0603_47r", "component_information": "component_inputs/yageo_rc0603_47r.json", "direct_hierarchy": ["../../model_catalog/electrical/resistors/resistor.pmdl"]},
+    {"id": "yageo_rc0603_100r", "component_information": "component_inputs/yageo_rc0603_100r.json", "direct_hierarchy": ["../../model_catalog/electrical/resistors/resistor.pmdl"]},
+    {"id": "yageo_rc0603_220r", "component_information": "component_inputs/yageo_rc0603_220r.json", "direct_hierarchy": ["../../model_catalog/electrical/resistors/resistor.pmdl"]},
+    {"id": "yageo_rc0603_1k", "component_information": "component_inputs/yageo_rc0603_1k.json", "direct_hierarchy": ["../../model_catalog/electrical/resistors/resistor.pmdl"]},
+    {"id": "yageo_rc0603_4k7", "component_information": "component_inputs/yageo_rc0603_4k7.json", "direct_hierarchy": ["../../model_catalog/electrical/resistors/resistor.pmdl"]},
+    {"id": "yageo_rc0603_10k", "component_information": "component_inputs/yageo_rc0603_10k.json", "direct_hierarchy": ["../../model_catalog/electrical/resistors/resistor.pmdl"]},
+    {"id": "yageo_rc0603_47k", "component_information": "component_inputs/yageo_rc0603_47k.json", "direct_hierarchy": ["../../model_catalog/electrical/resistors/resistor.pmdl"]},
+    {"id": "yageo_rc0603_100k", "component_information": "component_inputs/yageo_rc0603_100k.json", "direct_hierarchy": ["../../model_catalog/electrical/resistors/resistor.pmdl"]},
+    {"id": "yageo_rc0603_1m", "component_information": "component_inputs/yageo_rc0603_1m.json", "direct_hierarchy": ["../../model_catalog/electrical/resistors/resistor.pmdl"]},
+    {"id": "murata_ncp18_100r", "component_information": "component_inputs/murata_ncp18_100r.json", "direct_hierarchy": []},
+    {"id": "murata_ncp18_150r", "component_information": "component_inputs/murata_ncp18_150r.json", "direct_hierarchy": []},
+    {"id": "murata_ncp18_220r", "component_information": "component_inputs/murata_ncp18_220r.json", "direct_hierarchy": []},
+    {"id": "murata_ncp18_330r", "component_information": "component_inputs/murata_ncp18_330r.json", "direct_hierarchy": []},
+    {"id": "murata_ncp18_470r", "component_information": "component_inputs/murata_ncp18_470r.json", "direct_hierarchy": []},
+    {"id": "murata_ncp18_680r", "component_information": "component_inputs/murata_ncp18_680r.json", "direct_hierarchy": []},
+    {"id": "murata_ncp18_1k", "component_information": "component_inputs/murata_ncp18_1k.json", "direct_hierarchy": []},
+    {"id": "murata_ncp18_1k5", "component_information": "component_inputs/murata_ncp18_1k5.json", "direct_hierarchy": []},
+    {"id": "murata_ncp18_2k2", "component_information": "component_inputs/murata_ncp18_2k2.json", "direct_hierarchy": []},
+    {"id": "murata_ncp18_3k3", "component_information": "component_inputs/murata_ncp18_3k3.json", "direct_hierarchy": []}
+  ]
+}

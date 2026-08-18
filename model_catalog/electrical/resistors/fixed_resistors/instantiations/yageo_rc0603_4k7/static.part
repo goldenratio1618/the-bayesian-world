@@ -1,0 +1,123 @@
+{
+  "format": "static-part-1",
+  "id": "yageo_rc0603_4k7",
+  "name": "Yageo RC0603FR-074K7L 4.7 kOhm resistor",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "body",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "package",
+          "geometry": {
+            "kind": "shape",
+            "dimensions_m": [
+              0.0016,
+              0.0008,
+              0.00045
+            ],
+            "shape_uri": "shape/package/shape.artifact.json",
+            "shape_sha256": "sha256:5c6c8e5497dc6932a290f3c663d5c0af1369516f6be8e9ebe2d32a2482a6f34b",
+            "surface_id": "canonical"
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "catalog",
+            "source": "Yageo RC0603FR-074K7L published package dimensions",
+            "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-074K7L"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "p",
+      "model_port": "p",
+      "body": "body",
+      "domain": "electrical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          -0.0008,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "catalog",
+        "source": "Yageo RC0603FR-074K7L package terminal convention",
+        "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-074K7L"
+      }
+    },
+    {
+      "id": "n",
+      "model_port": "n",
+      "body": "body",
+      "domain": "electrical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          0.0008,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "catalog",
+        "source": "Yageo RC0603FR-074K7L package terminal convention",
+        "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-074K7L"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "catalog",
+    "source": "Yageo RC0603FR-074K7L published component information",
+    "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-074K7L"
+  },
+  "purchasing": {},
+  "metadata": {
+    "manufacturer": "Yageo",
+    "product": "RC0603FR-074K7L",
+    "package": "0603"
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "format": "static-part-1",
+  "id": "yageo_rc0603_47k",
+  "name": "Yageo RC0603FR-0747KL 47 kOhm resistor",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "body",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "package",
+          "geometry": {
+            "kind": "shape",
+            "dimensions_m": [
+              0.0016,
+              0.0008,
+              0.00045
+            ],
+            "shape_uri": "shape/package/shape.artifact.json",
+            "shape_sha256": "sha256:6de468000a8da9e0bda6058f2844b70bfd2d631d9ab7e17311bed3d0a1890323",
+            "surface_id": "canonical"
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "vendor",
+            "source": "Yageo RC0603FR-0747KL published package dimensions",
+            "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-0747KL"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "p",
+      "model_port": "p",
+      "body": "body",
+      "domain": "electrical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          -0.0008,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "catalog",
+        "source": "Package terminal at the negative local X end"
+      }
+    },
+    {
+      "id": "n",
+      "model_port": "n",
+      "body": "body",
+      "domain": "electrical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          0.0008,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "catalog",
+        "source": "Package terminal at the positive local X end"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "vendor",
+    "source": "Yageo RC0603FR-0747KL component information",
+    "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-0747KL"
+  },
+  "purchasing": {},
+  "metadata": {}
+}

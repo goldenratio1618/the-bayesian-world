@@ -1,0 +1,125 @@
+{
+  "format": "static-part-1",
+  "id": "yageo_rc0603_100r",
+  "name": "Yageo RC0603FR-07100RL 100 ohm resistor",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "body",
+      "local_pose": {
+        "translation_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation_quaternion_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "solids": [
+        {
+          "id": "envelope",
+          "geometry": {
+            "kind": "shape",
+            "dimensions_m": [
+              0.0016,
+              0.0008,
+              0.00045
+            ],
+            "shape_uri": "shape/envelope/shape.artifact.json",
+            "shape_sha256": "sha256:99e0ff80bc160d03213f5eb171d92d4f9ca03af7e842885c3d4d87bbe38466fb",
+            "surface_id": "canonical"
+          },
+          "local_pose": {
+            "translation_m": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "rotation_quaternion_wxyz": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "provenance": {
+            "kind": "vendor",
+            "source": "Yageo published RC0603FR-07100RL package dimensions",
+            "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-07100RL"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "p",
+      "model_port": "p",
+      "body": "body",
+      "domain": "electrical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          -0.0008,
+          0.0,
+          0.0
+        ],
+        "rotation_quaternion_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "provenance": {
+        "kind": "derived",
+        "source": "Electrical terminal frame at the negative-X package end"
+      }
+    },
+    {
+      "id": "n",
+      "model_port": "n",
+      "body": "body",
+      "domain": "electrical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          0.0008,
+          0.0,
+          0.0
+        ],
+        "rotation_quaternion_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "provenance": {
+        "kind": "derived",
+        "source": "Electrical terminal frame at the positive-X package end"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "vendor",
+    "source": "Yageo published RC0603FR-07100RL product information",
+    "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-07100RL"
+  },
+  "purchasing": {
+    "manufacturer": "Yageo",
+    "product": "RC0603FR-07100RL"
+  },
+  "metadata": {
+    "package": "0603",
+    "resistance_ohm": 100.0,
+    "tolerance_fraction": 0.01,
+    "rated_power_w": 0.1
+  }
+}

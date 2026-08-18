@@ -1,0 +1,27 @@
+{
+  "body": "body",
+  "builder": "scripts/build_part_shapes.py",
+  "features": [
+    "ceramic resistor body",
+    "two metallized end terminations",
+    "top resistive coating"
+  ],
+  "format": "contraption.procedural-shape/v1",
+  "input_dimensions_m": [
+    0.0016,
+    0.0008,
+    0.00045
+  ],
+  "optical_material_ids": [
+    "dark-polymer",
+    "metal",
+    "pcb-green",
+    "rubber",
+    "optical-glass",
+    "copper",
+    "ceramic",
+    "battery-wrap"
+  ],
+  "part": "yageo-rc0603-10k",
+  "solid": "package"
+}

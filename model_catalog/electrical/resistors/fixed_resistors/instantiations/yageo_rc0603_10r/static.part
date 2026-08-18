@@ -1,0 +1,120 @@
+{
+  "format": "static-part-1",
+  "id": "yageo_rc0603_10r",
+  "name": "Yageo RC0603FR-0710RL 10 ohm resistor",
+  "version": "1.0.0",
+  "physical_role": "part",
+  "bodies": [
+    {
+      "id": "body",
+      "local_pose": {
+        "translation_m": [
+          0,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "solids": [
+        {
+          "id": "envelope",
+          "geometry": {
+            "kind": "shape",
+            "dimensions_m": [
+              0.0016,
+              0.0008,
+              0.00045
+            ],
+            "shape_uri": "shape/envelope/shape.artifact.json",
+            "shape_sha256": "sha256:674c38f984765d752eb2c58f0fc575fdc14d7a9c0dbe8a6072c97334e4356425",
+            "surface_id": "canonical"
+          },
+          "local_pose": {
+            "translation_m": [
+              0,
+              0,
+              0
+            ],
+            "rotation_quaternion_wxyz": [
+              1,
+              0,
+              0,
+              0
+            ]
+          },
+          "provenance": {
+            "kind": "vendor",
+            "source": "Yageo published RC0603FR-0710RL package dimensions"
+          }
+        }
+      ]
+    }
+  ],
+  "connectors": [
+    {
+      "id": "p",
+      "model_port": "p",
+      "body": "body",
+      "domain": "electrical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          -0.0008,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "vendor",
+        "source": "Yageo RC0603FR-0710RL terminal layout"
+      }
+    },
+    {
+      "id": "n",
+      "model_port": "n",
+      "body": "body",
+      "domain": "electrical",
+      "interface": "catalog-generic-port",
+      "local_pose": {
+        "translation_m": [
+          0.0008,
+          0,
+          0
+        ],
+        "rotation_quaternion_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "provenance": {
+        "kind": "vendor",
+        "source": "Yageo RC0603FR-0710RL terminal layout"
+      }
+    }
+  ],
+  "parameter_bindings": [],
+  "provenance": {
+    "kind": "vendor",
+    "source": "Yageo product data for RC0603FR-0710RL",
+    "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-0710RL"
+  },
+  "purchasing": {},
+  "metadata": {
+    "manufacturer": "Yageo",
+    "product": "RC0603FR-0710RL",
+    "package": "0603"
+  }
+}
