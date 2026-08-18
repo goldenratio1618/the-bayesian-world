@@ -625,7 +625,10 @@ class PartInstantiationRegistry(Mapping[str, PartInstantiation]):
             extra = sorted(
                 path.name
                 for path in directory.iterdir()
-                if path.is_file() and path.name not in {"static.part", "sensor.optical.json"} and path.suffix != ".model"
+                if path.is_file()
+                and path.name
+                not in {"static.part", "sensor.optical.json", "README.md"}
+                and path.suffix != ".model"
             )
             if extra:
                 raise PhysicalSpecError(

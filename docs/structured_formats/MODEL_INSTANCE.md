@@ -104,7 +104,12 @@ Uncertainty does not relax PMDL bounds or validity ranges.
 The referenced PMDL must implement the category/device contract owning the
 instantiation directory (a device instantiation may use that device or its
 parent category implementation). Each instantiation directory contains exactly
-one `static.part`, at least one `vN.model`, and no unrelated files.
+one `static.part`, at least one `vN.model`, an optional host-generated
+`README.md`, and no unrelated files. The README is a derived human-readable view,
+not an authoritative DSL record. It must be regenerated from a fully validated
+catalog rather than authored by Luna or used as validation input. It indexes and
+names every `vN.model`, so multiple hypotheses remain explicit to a reader who
+has no external project documentation.
 
 Different `vN.model` files represent distinct model hypotheses or fidelities for
 the same invariant physical part. Do not duplicate static geometry, connectors,

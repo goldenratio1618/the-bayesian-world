@@ -29,6 +29,7 @@ from .part_import.agents import (
     run_modeling_proposal,
     write_json_atomic,
 )
+from .part_import.part_markdown import write_part_markdown
 from .part_import.budget import BudgetLedger
 from .paths import asset_root, source_root
 from .physics.backend import infer_backend
@@ -846,6 +847,21 @@ def command_budget(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_part_markdown(args: argparse.Namespace) -> int:
+    part_directory = Path(args.part_directory).expanduser().resolve()
+    catalog_root = (
+        Path(args.catalog).expanduser().resolve() if args.catalog else None
+    )
+    output = Path(args.output).expanduser().resolve() if args.output else None
+    written = write_part_markdown(
+        part_directory,
+        catalog_root=catalog_root,
+        output=output,
+    )
+    print(json.dumps({"part_directory": str(part_directory), "markdown": str(written)}, indent=2, sort_keys=True))
+    return 0
+
+
 def command_agent_canary(args: argparse.Namespace) -> int:
     ledger = _agent_ledger(args.ledger)
     key, dotenv = _agent_key(args.env_file)
@@ -1295,6 +1311,24 @@ def build_parser() -> argparse.ArgumentParser:
     budget = commands.add_parser("budget", help="show the hard agent-dollar ledger")
     budget.add_argument("--ledger")
     budget.set_defaults(handler=command_budget)
+    part_markdown = commands.add_parser(
+        "part-markdown",
+        help="render a validated part directory as standalone deterministic Markdown",
+    )
+    part_markdown.add_argument(
+        "--part-directory",
+        required=True,
+        help="domain/category[/device]/instantiations/part directory",
+    )
+    part_markdown.add_argument(
+        "--catalog",
+        help="catalog root; inferred from the parent interface when omitted",
+    )
+    part_markdown.add_argument(
+        "--output",
+        help="output Markdown path; defaults to README.md in the part directory",
+    )
+    part_markdown.set_defaults(handler=command_part_markdown)
     canary = commands.add_parser("agent-canary", help="run guarded classification/modeling canaries")
     canary.add_argument("--kind", choices=("both", "classification", "modeling"), default="both")
     canary.add_argument("--ledger")

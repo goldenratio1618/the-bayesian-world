@@ -289,6 +289,7 @@ class BudgetTests(unittest.TestCase):
         self.assertIn("deterministic host ingestion pipeline", prompt)
         self.assertIn("deterministic-part-ingestion-1", prompt)
         self.assertIn("never fabricate or edit such references", prompt)
+        self.assertIn("Do not create an instantiation README.md", prompt)
 
     def test_all_structured_format_guides_exist_in_declared_order(self):
         paths = structured_format_guides(PROJECT_ROOT)
@@ -1083,6 +1084,19 @@ class ModelingRecoveryTests(unittest.TestCase):
                     / "v1.model"
                 ).is_file()
             )
+            readme = (
+                artifacts
+                / "electrical"
+                / "resistors"
+                / "fixed_resistors"
+                / "instantiations"
+                / "generic-100ohm-resistor"
+                / "README.md"
+            )
+            self.assertTrue(readme.is_file())
+            documentation = readme.read_text(encoding="utf-8")
+            self.assertIn("## Model hypotheses at a glance", documentation)
+            self.assertIn("Ideal uncertain resistor", documentation)
             self.assertAlmostEqual(charged, expected_charge)
             event = ledger.snapshot()["events"][-1]
             self.assertEqual(event["status"], "recovered_after_nonzero_exit")

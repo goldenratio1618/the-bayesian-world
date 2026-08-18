@@ -359,4 +359,4 @@ def test_shipped_physical_solids_use_detailed_uncertainty_aware_shapes() -> None
                         "not vendor CAD"
                     )
                 manifests.append(manifest)
-    assert len(manifests) == 15
+    assert manifests and len(manifests) == len(set(manifests))

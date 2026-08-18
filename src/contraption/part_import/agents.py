@@ -854,6 +854,9 @@ class ModelingAgent:
                 "candidate/<physical-domain>/<category>[/<device>]/..., never "
                 "candidate/model_catalog/... . Structured-response artifact paths are relative "
                 "to the catalog root and likewise must omit both candidate/ and model_catalog/. "
+                "Do not create an instantiation README.md: after the bundle passes host validation, "
+                "the host deterministically generates that standalone human-readable view from the "
+                "validated interfaces, part record, every vN.model, and exact PMDL programs. "
                 "Use the supplied static.part and .model files as exact record-shape examples. "
                 "Then run exactly "
                 "`python -I -m contraption.part_import.model_validation_tool --bundle candidate`. "
@@ -991,6 +994,10 @@ class ModelingAgent:
         normalized_names: set[str] = set()
         for artifact in value["artifacts"]:
             relative = cls._safe_relative(artifact["path"])
+            if relative.name.casefold() == "readme.md" and "instantiations" in {
+                part.casefold() for part in relative.parts
+            }:
+                raise ValueError("modeling agent cannot author the deterministic part README.md")
             _reject_luna_owned_deterministic_payload(relative, artifact["content"])
             name = relative.as_posix()
             normalized = name.casefold()
@@ -1020,6 +1027,8 @@ class ModelingAgent:
             if plan_path.is_file():
                 from .deterministic_assets import bundle_staged_plan
                 bundle_staged_plan(temporary, plan_path)
+            cls.validate_artifacts(temporary)
+            cls._generate_part_readmes(temporary)
             cls.validate_artifacts(temporary)
             if artifacts_dir.exists():
                 if not artifacts_dir.is_dir() or artifacts_dir.is_symlink():
@@ -1351,6 +1360,57 @@ class ModelingAgent:
                     f"modeling workspace input integrity failed: {integrity_error}"
                 ) from original_error
             raise
+
+    @staticmethod
+    def _generate_part_readmes(
+        directory: str | Path, *, catalog_root: str | Path | None = None
+    ) -> tuple[Path, ...]:
+        """Render derived part documentation from a host-validated catalog overlay."""
+
+        from ..catalog.instantiations import PartInstantiationRegistry
+        from ..catalog.interfaces import load_interface_catalog
+        from ..paths import asset_root
+        from ..physics.dsl import ModelRegistry
+        from .part_markdown import PART_README_FILENAME, render_part_markdown
+
+        candidate_root = Path(directory).resolve()
+        source_catalog = (
+            Path(catalog_root).expanduser().resolve()
+            if catalog_root is not None
+            else (asset_root() / "model_catalog").resolve()
+        )
+        static_paths = tuple(sorted(candidate_root.rglob("static.part")))
+        if not static_paths:
+            return ()
+        existing_readmes = tuple(sorted(candidate_root.rglob(PART_README_FILENAME)))
+        if existing_readmes:
+            raise ValueError(
+                "deterministic part README.md already exists in candidate artifacts: "
+                f"{existing_readmes[0].relative_to(candidate_root)}"
+            )
+        with tempfile.TemporaryDirectory(prefix="contraption-readme-overlay-") as temporary:
+            overlay = Path(temporary) / "model_catalog"
+            shutil.copytree(source_catalog, overlay)
+            for source in sorted(path for path in candidate_root.rglob("*") if path.is_file()):
+                relative = source.relative_to(candidate_root)
+                destination = overlay / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, destination)
+            interfaces = load_interface_catalog(overlay)
+            models = ModelRegistry()
+            models.load_directory(overlay, interfaces=interfaces)
+            PartInstantiationRegistry.load_catalog(overlay, models=models)
+            written: list[Path] = []
+            for static_path in static_paths:
+                relative_directory = static_path.parent.relative_to(candidate_root)
+                payload = render_part_markdown(
+                    overlay / relative_directory, catalog_root=overlay
+                )
+                target = static_path.parent / PART_README_FILENAME
+                with target.open("w", encoding="utf-8", newline="\n") as stream:
+                    stream.write(payload)
+                written.append(target)
+            return tuple(written)
 
     @staticmethod
     def validate_artifacts(

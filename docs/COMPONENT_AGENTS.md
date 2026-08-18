@@ -115,6 +115,32 @@ counts and flags more than five calls as a prompt/support-material smell. This
 telemetry is not trusted for admission: final structured-output shape checks,
 safe materialization, and full artifact validation still run independently.
 
+### Derived standalone part documentation
+
+After Luna's catalog proposal passes host validation, trusted host code renders
+a deterministic `README.md` in every proposed part-instantiation directory. Luna
+is instructed not to create that reserved file, and materialization rejects a
+Luna-authored copy. The host then validates the complete proposal again with the
+generated Markdown present before it can become `proposed/` or be promoted.
+
+The renderer loads the proposal through a full catalog overlay, so it documents
+the same resolved contracts and models that admission checks. Each README is
+standalone: it explains the part/model distinction, acausal residual convention,
+SI-unit convention, and validation limitations; describes the complete parent
+domain/category/device interface chain; and separates executable declarations
+from prose desires or explanations. It includes the physical part, provenance,
+connectors, equations in display math plus original DSL, inline expression
+comments, parameters, uncertainty, modes, transitions, properties, validity,
+notes, evidence, trust labels, and metadata.
+
+A model index and one detailed section per `vN.model` preserve every current or
+future model hypothesis for the component. Both the variant and the human PMDL
+model name are shown, together with the exact model id, version, and hash. The
+source manifest is catalog-relative and excludes the generated README itself,
+so identical validated inputs produce identical Markdown bytes on every host.
+Use `contraption part-markdown --part-directory PATH` to regenerate one validated
+catalog part explicitly.
+
 ## Credentials
 
 Only `OPENAI_API_KEY` is read from `.env`; unrelated dotenv values are ignored.

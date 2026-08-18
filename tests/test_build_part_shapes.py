@@ -66,6 +66,21 @@ def test_scanner_target_is_a_regular_twenty_face_icosahedron() -> None:
     assert "twenty triangular scan faces" in features
 
 
+def test_reviewed_rc0603_recipe_has_body_terminals_and_coating() -> None:
+    mesh, features = detailed_mesh(
+        "yageo_rc0603_100r",
+        "envelope",
+        (0.0016, 0.0008, 0.00045),
+    )
+
+    assert mesh.watertight
+    assert mesh.dimensions_m == pytest.approx((0.0016, 0.0008, 0.00045))
+    assert set(mesh.face_material.tolist()) == {0, 1, 6}
+    assert features == [
+        "ceramic resistor body", "two metallized end terminations", "top resistive coating"
+    ]
+
+
 def test_catalog_build_preflights_all_recipes_before_writing(tmp_path: Path) -> None:
     known = tmp_path / "a-known"
     unknown = tmp_path / "z-unknown"

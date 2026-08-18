@@ -43,7 +43,18 @@ _SUPPORTED_SOLIDS = {
     "scanner.wheel": "tire",
     "scanner.camera": "camera_module",
     "scanner.icosahedron": "icosahedron",
+    "yageo-rc0603-10k": "package",
+    "yageo-rc0603-220r": "package",
+    "yageo-rc0603-47r": "package",
+    "yageo_rc0603_100k": "package",
+    "yageo_rc0603_100r": "envelope",
+    "yageo_rc0603_10r": "envelope",
+    "yageo_rc0603_1k": "package",
+    "yageo_rc0603_1m": "package",
+    "yageo_rc0603_47k": "package",
+    "yageo_rc0603_4k7": "package",
 }
+_RC0603_CHIP_RESISTORS = frozenset(part for part in _SUPPORTED_SOLIDS if part.startswith("yageo"))
 
 
 def _require_supported(part_id: str, solid_id: str) -> None:
@@ -180,6 +191,12 @@ def detailed_mesh(part_id: str, solid_id: str, dimensions: tuple[float, float, f
         box(parts, (0.14*x, y, z), (-0.43*x, 0, 0), 1)
         box(parts, (0.14*x, y, z), (0.43*x, 0, 0), 1)
         features += ["ceramic dielectric body", "two metallized end terminations"]
+    elif part_id in _RC0603_CHIP_RESISTORS:
+        box(parts, (0.72*x, y, z), material=6)
+        box(parts, (0.14*x, y, z), (-0.43*x, 0, 0), 1)
+        box(parts, (0.14*x, y, z), (0.43*x, 0, 0), 1)
+        box(parts, (0.48*x, 0.72*y, 0.08*z), (0, 0, 0.46*z), 0)
+        features += ["ceramic resistor body", "two metallized end terminations", "top resistive coating"]
     elif part_id in {"scanner.control_board", "scanner.servo_regulator", "scanner.compute", "scanner.encoder_pair"}:
         board_thickness = min(z * 0.22, 0.002)
         box(parts, (x, y, board_thickness), (0, 0, -z/2 + board_thickness/2), 2)
