@@ -1,0 +1,21 @@
+{
+  "format": "legacy-static-procurement-evidence-1",
+  "records": [
+    {
+      "manufacturer": "KEMET",
+      "manufacturer_part_number": "C1210C476K8RAC",
+      "provenance": {
+        "kind": "catalog",
+        "reference": "C1210C476K8RAC",
+        "source": "KEMET C1210C476K8RAC nominal 1210 package and ordering code"
+      },
+      "static_part_id": "C1210C476K8RAC"
+    }
+  ],
+  "source": {
+    "git_blob_sha1": "092865ba0eb61c2fe5f7e0a2c7613ec2966d925f",
+    "git_commit": "96e9baa46c8219982a1a798408bfcf3f638ec63e",
+    "path": "model_catalog/electrical/capacitors/ceramic_capacitors/instantiations/C1210C476K8RAC/static.part",
+    "sha256": "sha256:10503c7f8b52f8d9663203427547a9c3d1f49752e105b535995a8b79d909cf0a"
+  }
+}

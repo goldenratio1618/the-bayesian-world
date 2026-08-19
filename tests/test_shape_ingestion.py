@@ -265,7 +265,11 @@ def test_host_bundles_deterministic_shape_with_luna_text_outputs(tmp_path: Path)
     geometry = static["bodies"][0]["solids"][0]["geometry"]
     assert geometry["kind"] == "shape"
     assert geometry["shape_sha256"] == "sha256:" + hashlib.sha256(manifest.read_bytes()).hexdigest()
-    ModelingAgent.validate_artifacts(proposed, catalog_root=ROOT / "model_catalog")
+    ModelingAgent.validate_artifacts(
+        proposed,
+        catalog_root=ROOT / "model_catalog",
+        trusted_host_artifacts=written,
+    )
 
 
 def test_host_bundles_deterministic_optical_sensor_with_luna_text_outputs(
@@ -326,7 +330,11 @@ def test_host_bundles_deterministic_optical_sensor_with_luna_text_outputs(
             + hashlib.sha256(bundled_descriptor.read_bytes()).hexdigest(),
         }
     ]
-    ModelingAgent.validate_artifacts(proposed, catalog_root=ROOT / "model_catalog")
+    ModelingAgent.validate_artifacts(
+        proposed,
+        catalog_root=ROOT / "model_catalog",
+        trusted_host_artifacts=written,
+    )
 
 
 def test_shipped_physical_solids_use_detailed_uncertainty_aware_shapes() -> None:

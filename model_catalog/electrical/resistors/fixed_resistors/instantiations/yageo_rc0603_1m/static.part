@@ -1,5 +1,5 @@
 {
-  "format": "static-part-1",
+  "format": "static-part-2",
   "id": "yageo_rc0603_1m",
   "name": "Yageo RC0603FR-071ML 1 MOhm resistor",
   "version": "1.0.0",
@@ -78,7 +78,18 @@
       },
       "provenance": {
         "kind": "estimated",
-        "source": "Package-end terminal frame from supplied 0603 envelope dimensions"
+        "source": "Package-end terminal frame from supplied 0603 envelope dimensions",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -102,7 +113,18 @@
       },
       "provenance": {
         "kind": "estimated",
-        "source": "Package-end terminal frame from supplied 0603 envelope dimensions"
+        "source": "Package-end terminal frame from supplied 0603 envelope dimensions",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     }
   ],
@@ -113,14 +135,10 @@
     "source": "Yageo RC0603FR-071ML published product information",
     "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-071ML"
   },
-  "purchasing": {
-    "manufacturer": "Yageo",
-    "product": "RC0603FR-071ML"
-  },
   "metadata": {
-    "part_kind": "fixed thick-film chip resistor",
     "package": "0603",
-    "rated_power_w": 0.1,
-    "published_tolerance_fraction": 0.01
+    "part_kind": "fixed thick-film chip resistor",
+    "published_tolerance_fraction": 0.01,
+    "rated_power_w": 0.1
   }
 }

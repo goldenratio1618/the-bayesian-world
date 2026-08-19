@@ -1,5 +1,5 @@
 {
-  "format": "static-part-1",
+  "format": "static-part-2",
   "id": "yageo-rc0603-220r",
   "name": "Yageo RC0603FR-07220RL 220 ohm chip resistor",
   "version": "1.0.0",
@@ -80,6 +80,16 @@
         "kind": "catalog",
         "source": "0603 package terminal p frame inferred from published package length",
         "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-07220RL"
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -105,19 +115,27 @@
         "kind": "catalog",
         "source": "0603 package terminal n frame inferred from published package length",
         "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-07220RL"
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     }
   ],
   "parameter_bindings": [],
+  "optical_sensors": [],
   "provenance": {
     "kind": "catalog",
     "source": "Yageo RC0603FR-07220RL published product data",
     "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-07220RL"
   },
-  "purchasing": {},
   "metadata": {
-    "manufacturer": "Yageo",
-    "product": "RC0603FR-07220RL",
     "package": "0603",
     "published_tolerance_fraction": 0.01,
     "rated_power_w": 0.1

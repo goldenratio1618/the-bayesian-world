@@ -350,7 +350,9 @@ def _render_interface(lines: list[str], interface: ModelInterface, path: Path, r
     lines.append("")
 
 
-def _render_physical_part(lines: list[str], part: PartInstantiation) -> None:
+def _render_physical_part(
+    lines: list[str], part: PartInstantiation, procurement_records: tuple[Any, ...]
+) -> None:
     static = part.static
     lines.extend(
         (
@@ -388,14 +390,22 @@ def _render_physical_part(lines: list[str], part: PartInstantiation) -> None:
     if static.connectors:
         lines.extend(
             (
-                "| Connector | Model port | Domain | Interface | Evidence |",
-                "|---|---|---|---|---|",
+                "| Connector | Model port | Domain | Interface | Fabrication | Evidence |",
+                "|---|---|---|---|---|---|",
             )
         )
         for connector in static.connectors:
+            if connector.fabrication is None:
+                fabrication = "missing record"
+            else:
+                missing = connector.fabrication.connector_missing_fields()
+                fabrication = connector.fabrication.status
+                if missing:
+                    fabrication += ": " + ", ".join(missing)
             lines.append(
                 f"| {_code(connector.id)} | {_code(connector.model_port) if connector.model_port else '—'} | "
                 f"{_code(connector.domain)} | {_code(connector.interface)} | "
+                f"{_markdown_text(fabrication)} | "
                 f"{_code(connector.provenance.kind)}: {_markdown_text(connector.provenance.source)} |"
             )
         lines.append("")
@@ -409,8 +419,35 @@ def _render_physical_part(lines: list[str], part: PartInstantiation) -> None:
                 f"with absolute tolerance {_number(binding.absolute_tolerance)}."
             )
         lines.append("")
-    _append_json(lines, "Purchasing data", static.purchasing)
     _append_json(lines, "Static-part metadata", static.metadata)
+    lines.extend(("### External procurement records", ""))
+    if not procurement_records:
+        lines.extend(
+            (
+                "- No evidence-backed procurement record currently provides this exact "
+                "static-part version and hash.",
+                "",
+            )
+        )
+    for record in procurement_records:
+        identifiers = ", ".join(
+            f"{item.scheme}={item.value}" for item in record.identifiers
+        )
+        lines.append(
+            f"- {_code(record.id)} ({_code(record.sha256)}): "
+            f"{_markdown_text(record.manufacturer or 'manufacturer unspecified')}; "
+            f"{_markdown_text(identifiers)}."
+        )
+        for document in record.documents:
+            lines.append(
+                f"  - {document.kind}: [{_markdown_text(document.url)}]({document.url})"
+            )
+        for offer in record.offers:
+            lines.append(
+                f"  - purchase offer: [{_markdown_text(offer.supplier)}]"
+                f"({offer.purchase_url}) ({offer.availability}, observed {offer.observed_at})"
+            )
+        lines.append("")
 
 
 def _annotation_rows(model: ModelSpec) -> list[tuple[str, str, str]]:
@@ -718,7 +755,11 @@ def render_part_markdown(
     lines.append("")
     for interface, path in zip(parents, parent_paths, strict=True):
         _render_interface(lines, interface, path, root)
-    _render_physical_part(lines, variants[0])
+    _render_physical_part(
+        lines,
+        variants[0],
+        registry.procurement.for_part(variants[0].static.id),
+    )
     for instance, model, path in zip(variants, resolved_models, model_paths, strict=True):
         _render_model(lines, instance, model, path, root)
     lines.extend(

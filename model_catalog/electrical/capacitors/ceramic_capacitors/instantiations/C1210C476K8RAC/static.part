@@ -1,5 +1,5 @@
 {
-  "format": "static-part-1",
+  "format": "static-part-2",
   "id": "C1210C476K8RAC",
   "name": "KEMET 47 uF ceramic capacitor",
   "version": "1.0.0",
@@ -9,15 +9,15 @@
       "id": "body",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "solids": [
@@ -36,15 +36,15 @@
           },
           "local_pose": {
             "translation_m": [
-              0,
-              0,
-              0
+              0.0,
+              0.0,
+              0.0
             ],
             "rotation_quaternion_wxyz": [
-              1,
-              0,
-              0,
-              0
+              1.0,
+              0.0,
+              0.0,
+              0.0
             ]
           },
           "provenance": {
@@ -66,19 +66,30 @@
       "local_pose": {
         "translation_m": [
           -0.0016,
-          0,
-          0
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "generic catalog connector frame"
+        "source": "generic catalog connector frame",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -90,31 +101,39 @@
       "local_pose": {
         "translation_m": [
           0.0016,
-          0,
-          0
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "generic catalog connector frame"
+        "source": "generic catalog connector frame",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     }
   ],
   "parameter_bindings": [],
+  "optical_sensors": [],
   "provenance": {
     "kind": "catalog",
     "source": "KEMET C1210C476K8RAC nominal 1210 package and ordering code",
     "reference": "C1210C476K8RAC"
-  },
-  "purchasing": {
-    "manufacturer": "KEMET",
-    "manufacturer_part_number": "C1210C476K8RAC"
   },
   "metadata": {
     "dielectric": "X7R",

@@ -1,5 +1,5 @@
 {
-  "format": "static-part-1",
+  "format": "static-part-2",
   "id": "test.planar_rigid_body",
   "name": "Planar rigid-body test system",
   "version": "1.0.0",
@@ -9,15 +9,15 @@
       "id": "body",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "solids": [
@@ -26,27 +26,31 @@
           "geometry": {
             "kind": "box",
             "dimensions_m": [
-              1,
+              1.0,
               0.6,
               0.1
-            ]
+            ],
+            "shape_uri": null,
+            "shape_sha256": null,
+            "surface_id": null
           },
           "local_pose": {
             "translation_m": [
-              0,
-              0,
-              0
+              0.0,
+              0.0,
+              0.0
             ],
             "rotation_quaternion_wxyz": [
-              1,
-              0,
-              0,
-              0
+              1.0,
+              0.0,
+              0.0,
+              0.0
             ]
           },
           "provenance": {
             "kind": "estimated",
-            "source": "synthetic test-fixture envelope"
+            "source": "synthetic test-fixture envelope",
+            "reference": null
           }
         }
       ]
@@ -63,18 +67,29 @@
         "translation_m": [
           -0.5,
           -0.15,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "synthetic test-fixture connector frame"
+        "source": "synthetic test-fixture connector frame",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -86,19 +101,30 @@
       "local_pose": {
         "translation_m": [
           -0.5,
-          0,
-          0
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "synthetic test-fixture connector frame"
+        "source": "synthetic test-fixture connector frame",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -111,18 +137,29 @@
         "translation_m": [
           -0.5,
           0.15,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "synthetic test-fixture connector frame"
+        "source": "synthetic test-fixture connector frame",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -132,12 +169,32 @@
       "domain": "signal",
       "interface": "test-signal-v1",
       "local_pose": {
-        "translation_m": [0.5, -0.1, 0],
-        "rotation_quaternion_wxyz": [1, 0, 0, 0]
+        "translation_m": [
+          0.5,
+          -0.1,
+          0.0
+        ],
+        "rotation_quaternion_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "synthetic test-fixture diagnostic connector frame"
+        "source": "synthetic test-fixture diagnostic connector frame",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -147,21 +204,42 @@
       "domain": "signal",
       "interface": "test-signal-v1",
       "local_pose": {
-        "translation_m": [0.5, 0.1, 0],
-        "rotation_quaternion_wxyz": [1, 0, 0, 0]
+        "translation_m": [
+          0.5,
+          0.1,
+          0.0
+        ],
+        "rotation_quaternion_wxyz": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "synthetic test-fixture diagnostic connector frame"
+        "source": "synthetic test-fixture diagnostic connector frame",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     }
   ],
   "parameter_bindings": [],
+  "optical_sensors": [],
   "provenance": {
     "kind": "estimated",
-    "source": "synthetic declarative reference-system fixture"
+    "source": "synthetic declarative reference-system fixture",
+    "reference": null
   },
-  "purchasing": {},
   "metadata": {
     "fixture": true
   }

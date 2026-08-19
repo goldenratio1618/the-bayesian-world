@@ -707,8 +707,11 @@ def load_interface_catalog(root: str | Path) -> ModelInterfaceCatalog:
             raise SpecError(
                 f"{relative}: device parent {device.parent!r} does not match directory category {actual_parent!r}"
             )
+    auxiliary_directories = {catalog_root / "procurement"}
     top_level_directories = sorted(
-        path for path in catalog_root.iterdir() if path.is_dir()
+        path
+        for path in catalog_root.iterdir()
+        if path.is_dir() and path not in auxiliary_directories
     )
     declared_domain_directories = {catalog_root / item.id for item in catalog.domains}
     undeclared = [path.name for path in top_level_directories if path not in declared_domain_directories]

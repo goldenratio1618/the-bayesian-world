@@ -11,6 +11,7 @@ gates.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -70,6 +71,9 @@ def _minimum_spanning_length(poses: Sequence[TransformSpec]) -> float:
 @dataclass(frozen=True, slots=True)
 class BOMItem:
     part_id: str
+    static_part_id: str
+    static_part_version: str
+    static_part_sha256: str
     model_id: str
     model_version: str
     quantity: int
@@ -77,6 +81,21 @@ class BOMItem:
     provenance_kind: str
     provenance_source: str
     provenance_reference: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True, slots=True)
+class PurchaseBOMItem:
+    procurement_record_id: str
+    procurement_sha256: str
+    manufacturer: str | None
+    units_required: int
+    identifiers: tuple[Mapping[str, Any], ...]
+    provides: tuple[Mapping[str, Any], ...]
+    documents: tuple[Mapping[str, Any], ...]
+    offers: tuple[Mapping[str, Any], ...]
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -107,6 +126,8 @@ class MechanicalInstruction:
     child_world_pose: Mapping[str, Any]
     connector_provenance: Mapping[str, Mapping[str, Any]]
     connector_joint_coordinate_states: Mapping[str, str | None]
+    endpoint_fabrication: Mapping[str, Mapping[str, Any] | None]
+    implementation: Mapping[str, Any] | None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -122,9 +143,13 @@ class WiringInstruction:
     connector_provenance: Mapping[str, Mapping[str, Any]]
     nonspatial_endpoints: tuple[str, ...]
     straight_line_lower_bound_m: float
-    routed_length_m: None = None
-    conductor_specification: None = None
-    protection: None = None
+    endpoint_fabrication: Mapping[str, Mapping[str, Any] | None]
+    implementation: Mapping[str, Any] | None
+    routed_length_m: float | None = None
+    conductor_specification: Mapping[str, Any] | None = None
+    termination: Mapping[str, Any] | None = None
+    protection: Mapping[str, Any] | None = None
+    route: Mapping[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -162,8 +187,10 @@ class BuildPlan:
     contraption_id: str
     assembly_sha256: str
     pmdl_sha256: str
+    procurement_sha256: str
     controllers: tuple[Mapping[str, str], ...]
     bill_of_materials: tuple[BOMItem, ...]
+    purchase_bill_of_materials: tuple[PurchaseBOMItem, ...]
     placements: tuple[PlacementInstruction, ...]
     mechanical: tuple[MechanicalInstruction, ...]
     wiring: tuple[WiringInstruction, ...]
@@ -171,7 +198,7 @@ class BuildPlan:
     steps: tuple[AssemblyStep, ...]
     safety_notes: tuple[str, ...]
     unresolved: tuple[str, ...]
-    schema: str = "contraption.build-plan/v3"
+    schema: str = "contraption.build-plan/v4"
 
     def __post_init__(self) -> None:
         pattern = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -179,6 +206,8 @@ class BuildPlan:
             raise BuildInstructionError("build plan has an invalid assembly_sha256")
         if pattern.fullmatch(self.pmdl_sha256) is None:
             raise BuildInstructionError("build plan has an invalid pmdl_sha256")
+        if pattern.fullmatch(self.procurement_sha256) is None:
+            raise BuildInstructionError("build plan has an invalid procurement_sha256")
         ids: set[str] = set()
         for controller in self.controllers:
             if set(controller) != {"id", "version", "sha256"}:
@@ -215,9 +244,13 @@ class BuildPlan:
             "contraption_id": self.contraption_id,
             "assembly_sha256": self.assembly_sha256,
             "pmdl_sha256": self.pmdl_sha256,
+            "procurement_sha256": self.procurement_sha256,
             "controllers": [dict(item) for item in self.controllers],
             "build_ready": self.build_ready,
             "bill_of_materials": [item.to_dict() for item in self.bill_of_materials],
+            "purchase_bill_of_materials": [
+                item.to_dict() for item in self.purchase_bill_of_materials
+            ],
             "placements": [item.to_dict() for item in self.placements],
             "mechanical": [item.to_dict() for item in self.mechanical],
             "wiring": [item.to_dict() for item in self.wiring],
@@ -238,6 +271,7 @@ class BuildPlan:
             "",
             f"Assembly closure: `{self.assembly_sha256}`  ",
             f"PMDL closure: `{self.pmdl_sha256}`  ",
+            f"Procurement closure: `{self.procurement_sha256}`  ",
             "Controllers: "
             + (
                 "none"
@@ -259,17 +293,30 @@ class BuildPlan:
             "",
             "## Bill of materials",
             "",
-            "| Part | Model | Qty | Components | Provenance |",
-            "|---|---|---:|---|---|",
+            "| Part instance | Static part | Model | Qty | Components | Provenance |",
+            "|---|---|---|---:|---|---|",
         ]
         for item in self.bill_of_materials:
             reference = (
                 f" ({item.provenance_reference})" if item.provenance_reference else ""
             )
             lines.append(
-                f"| {item.part_id} | {item.model_id}@{item.model_version} | "
+                f"| {item.part_id} | {item.static_part_id}@{item.static_part_version} | "
+                f"{item.model_id}@{item.model_version} | "
                 f"{item.quantity} | {', '.join(item.component_ids)} | "
                 f"{item.provenance_kind}: {item.provenance_source}{reference} |"
+            )
+        lines.extend(["", "## Purchase bill of materials", ""])
+        if not self.purchase_bill_of_materials:
+            lines.append("- No exact procurement records were selected.")
+        for item in self.purchase_bill_of_materials:
+            identifiers = ", ".join(
+                f"{value['scheme']}={value['value']}" for value in item.identifiers
+            )
+            lines.append(
+                f"- `{item.procurement_record_id}` × {item.units_required}: "
+                f"{item.manufacturer or 'manufacturer unspecified'}; {identifiers}; "
+                f"record `{item.procurement_sha256}`."
             )
         lines.extend(["", "## Resolved body placement", ""])
         for item in self.placements:
@@ -294,7 +341,8 @@ class BuildPlan:
             lines.append(
                 f"- `{item.connection_id}`: {item.joint_kind} {item.parent_connector} → "
                 f"{item.child_connector} at `{position}` m "
-                f"({item.behavior_binding}{coordinate}{aliases})."
+                f"({item.behavior_binding}{coordinate}{aliases}); fabrication "
+                f"{'specified' if item.implementation is not None else 'missing'}."
             )
         lines.extend(["", "## Wiring/net schedule", ""])
         for item in self.wiring:
@@ -303,10 +351,15 @@ class BuildPlan:
                 if item.nonspatial_endpoints
                 else ""
             )
+            routed = (
+                "unresolved"
+                if item.routed_length_m is None
+                else f"{item.routed_length_m:.6g} m"
+            )
             lines.append(
                 f"- `{item.connection_id}` ({item.kind}/{item.domain}): "
                 f"{', '.join(item.endpoints)}. Geometric lower bound "
-                f"{item.straight_line_lower_bound_m:.6g} m; routed length unresolved."
+                f"{item.straight_line_lower_bound_m:.6g} m; routed length {routed}."
                 f"{virtual}"
             )
         lines.extend(["", "## Ordered procedure", ""])
@@ -413,19 +466,132 @@ def _bom(assembly: ResolvedAssembly) -> tuple[BOMItem, ...]:
     result: list[BOMItem] = []
     for part_id in sorted(groups):
         part = assembly.parts[part_id]
+        try:
+            static = assembly.instantiations[part_id].static
+        except KeyError as exc:
+            raise BuildInstructionError(
+                f"resolved part {part_id!r} has no canonical model instantiation"
+            ) from exc
         result.append(
             BOMItem(
-                part.id,
-                part.model.id,
-                part.model.version,
-                len(groups[part_id]),
-                tuple(sorted(groups[part_id])),
-                part.provenance.kind,
-                part.provenance.source,
-                part.provenance.reference,
+                part_id=part.id,
+                static_part_id=static.id,
+                static_part_version=static.version,
+                static_part_sha256=static.sha256,
+                model_id=part.model.id,
+                model_version=part.model.version,
+                quantity=len(groups[part_id]),
+                component_ids=tuple(sorted(groups[part_id])),
+                provenance_kind=part.provenance.kind,
+                provenance_source=part.provenance.source,
+                provenance_reference=part.provenance.reference,
             )
         )
     return tuple(result)
+
+
+def _procurement_projection(
+    assembly: ResolvedAssembly,
+    physical_bom: Sequence[BOMItem],
+) -> tuple[str, tuple[PurchaseBOMItem, ...], tuple[str, ...]]:
+    """Select only unambiguous records and hash every relevant candidate.
+
+    A record may provide several static parts, so selected purchase quantities
+    are the maximum number of record units needed to cover each provision.
+    Ambiguous candidates remain release gates rather than being ranked by an
+    undocumented preference.
+    """
+
+    registry = assembly.instantiations.procurement
+    required: dict[str, int] = {}
+    procurement_required: set[str] = set()
+    for item in physical_bom:
+        part = assembly.parts[item.part_id]
+        if part.physical_role != "part":
+            continue
+        required[item.static_part_id] = (
+            required.get(item.static_part_id, 0) + item.quantity
+        )
+        if part.provenance.kind in {"catalog", "vendor"}:
+            procurement_required.add(item.static_part_id)
+
+    relevant: dict[str, Any] = {}
+    selected: dict[str, Any] = {}
+    unresolved: set[str] = set()
+    for static_part_id in sorted(required):
+        candidates = registry.for_part(static_part_id)
+        for record in candidates:
+            relevant[record.id] = record
+        if not candidates:
+            if static_part_id in procurement_required:
+                unresolved.add(
+                    f"static part {static_part_id}: catalog/vendor provenance requires an "
+                    "evidence-backed procurement record for this exact version and hash"
+                )
+            continue
+        if len(candidates) > 1:
+            if static_part_id in procurement_required:
+                unresolved.add(
+                    f"static part {static_part_id}: procurement is ambiguous across records "
+                    + ", ".join(record.id for record in candidates)
+                )
+            continue
+        selected[candidates[0].id] = candidates[0]
+
+    purchase_bom: list[PurchaseBOMItem] = []
+    for record_id in sorted(selected):
+        record = selected[record_id]
+        units = 1
+        covered = False
+        for provision in record.provides:
+            quantity = required.get(provision.part)
+            if quantity is None:
+                continue
+            covered = True
+            units = max(units, math.ceil(quantity / provision.quantity))
+        if not covered:  # pragma: no cover - selected through registry.for_part.
+            raise BuildInstructionError(
+                f"selected procurement record {record.id!r} covers no BOM part"
+            )
+        if record.lifecycle.status in {
+            "not_recommended_for_new_design",
+            "last_time_buy",
+            "obsolete",
+        }:
+            unresolved.add(
+                f"procurement record {record.id}: lifecycle status is "
+                f"{record.lifecycle.status!r}"
+            )
+        if record.offers and all(
+            offer.availability in {"out_of_stock", "discontinued"}
+            for offer in record.offers
+        ):
+            unresolved.add(
+                f"procurement record {record.id}: every evidenced offer is unavailable"
+            )
+        purchase_bom.append(
+            PurchaseBOMItem(
+                procurement_record_id=record.id,
+                procurement_sha256=record.sha256,
+                manufacturer=record.manufacturer,
+                units_required=units,
+                identifiers=tuple(item.to_dict() for item in record.identifiers),
+                provides=tuple(item.to_dict() for item in record.provides),
+                documents=tuple(item.to_dict() for item in record.documents),
+                offers=tuple(item.to_dict() for item in record.offers),
+            )
+        )
+
+    payload = [relevant[key].to_dict() for key in sorted(relevant)]
+    canonical = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+    digest = "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return digest, tuple(purchase_bom), tuple(sorted(unresolved))
 
 
 def generate_build_instructions(
@@ -461,7 +627,11 @@ def generate_build_instructions(
     mechanical: list[MechanicalInstruction] = []
     wiring: list[WiringInstruction] = []
     model_connections: list[ModelConnection] = []
-    unresolved: set[str] = set()
+    physical_bom = _bom(resolved)
+    procurement_sha256, purchase_bom, procurement_gates = _procurement_projection(
+        resolved, physical_bom
+    )
+    unresolved: set[str] = set(procurement_gates)
     try:
         dynamics_completeness = resolved.dynamics_completeness
     except ResolutionError as exc:
@@ -481,6 +651,62 @@ def generate_build_instructions(
     }
     for connection in resolved.specification.connections:
         endpoint_keys = tuple(_connector_key(endpoint) for endpoint in connection.endpoints)
+        endpoint_fabrication: dict[str, Mapping[str, Any] | None] = {}
+        physical_endpoint_present = False
+        for endpoint, key in zip(connection.endpoints, endpoint_keys, strict=True):
+            component = component_by_id[endpoint.component]
+            part = resolved.parts[component.part]
+            connector = part.connector_map[endpoint.port]
+            endpoint_fabrication[key] = (
+                None
+                if connector.fabrication is None
+                else connector.fabrication.to_dict()
+            )
+            if part.physical_role != "part":
+                continue
+            physical_endpoint_present = True
+            if connector.fabrication is None:
+                unresolved.add(
+                    f"connection {connection.id} endpoint {key}: connector fabrication "
+                    "record is missing"
+                )
+                continue
+            missing_paths = tuple(
+                dict.fromkeys(
+                    (
+                        *connector.fabrication.connector_missing_fields(),
+                        *connector.fabrication.missing,
+                    )
+                )
+            )
+            for path in missing_paths:
+                unresolved.add(
+                    f"connection {connection.id} endpoint {key}: connector fabrication "
+                    f"field {path!r} is missing"
+                )
+        implementation_payload = (
+            None
+            if connection.implementation is None
+            else connection.implementation.to_dict()
+        )
+        if physical_endpoint_present and connection.kind in {
+            "attachment",
+            "power",
+            "signal",
+        }:
+            if connection.implementation is None:
+                unresolved.add(
+                    f"connection {connection.id}: selected fabrication implementation "
+                    "is missing"
+                )
+            else:
+                for path in connection.implementation.implementation_missing_fields(
+                    endpoint_count=len(connection.endpoints)
+                ):
+                    unresolved.add(
+                        f"connection {connection.id}: fabrication implementation field "
+                        f"{path!r} is missing"
+                    )
         if connection.kind == "attachment":
             try:
                 attachment = attachment_by_id[connection.id]
@@ -541,18 +767,10 @@ def generate_build_instructions(
                             connection.endpoints[1].port
                         ].joint_coordinate_state,
                     },
+                    endpoint_fabrication,
+                    implementation_payload,
                 )
             )
-            if attachment.joint.kind == "fixed":
-                unresolved.add(
-                    f"attachment {connection.id}: retention method, fastener specification, "
-                    "quantity, locking method, and torque are not present in the canonical part closure"
-                )
-            else:
-                unresolved.add(
-                    f"attachment {connection.id}: bearing/shaft retention, clearance, and "
-                    "mechanical travel limits are not present in the canonical part closure"
-                )
             continue
 
         domain = connection.domain or "unspecified"
@@ -589,27 +807,52 @@ def generate_build_instructions(
                     provenance,
                     tuple(nonspatial),
                     _minimum_spanning_length(poses),
+                    endpoint_fabrication,
+                    implementation_payload,
+                    None
+                    if connection.implementation is None
+                    or connection.implementation.route is None
+                    else connection.implementation.route.routed_length_m,
+                    None
+                    if connection.implementation is None
+                    or connection.implementation.conductor is None
+                    else connection.implementation.conductor.to_dict(),
+                    None
+                    if connection.implementation is None
+                    or connection.implementation.termination is None
+                    else connection.implementation.termination.to_dict(),
+                    None
+                    if connection.implementation is None
+                    or connection.implementation.protection is None
+                    else connection.implementation.protection.to_dict(),
+                    None
+                    if connection.implementation is None
+                    or connection.implementation.route is None
+                    else connection.implementation.route.to_dict(),
                 )
             )
-            unresolved.add(
-                f"connection {connection.id}: conductor type/gauge, insulation, protection, "
-                "connector hardware, physical route, strain relief, and routed length are not "
-                "present in the canonical part closure"
-            )
-            if len(endpoint_keys) > 2:
-                unresolved.add(
-                    f"connection {connection.id}: multi-endpoint net connectivity is known, "
-                    "but physical branch topology and harness routing are not specified"
-                )
         else:
             model_connections.append(
                 ModelConnection(connection.id, connection.kind, domain, endpoint_keys)
             )
 
-    for component in resolved.specification.components:
-        if component.condition != "verified":
+    physical_instances = tuple(
+        (component, "component", component.condition)
+        for component in resolved.specification.components
+    ) + tuple(
+        (
+            world_object,
+            "world object",
+            resolved.instantiations[
+                world_object.part
+            ].model_instance.condition,
+        )
+        for world_object in resolved.physical.world_objects
+    )
+    for component, instance_kind, condition in physical_instances:
+        if condition not in {"inspected", "calibrated"}:
             unresolved.add(
-                f"component {component.id}: condition is {component.condition!r}; inspect, "
+                f"{instance_kind} {component.id}: condition is {condition!r}; inspect, "
                 "identify, and qualify the exact physical instance before construction"
             )
         part = resolved.parts[component.part]
@@ -642,26 +885,36 @@ def generate_build_instructions(
         )
     )
     for item in mechanical:
+        implementation_instruction = (
+            " Follow the typed fabrication implementation recorded in this step."
+            if item.implementation is not None
+            else " Do not choose retention hardware until its release gate is closed."
+        )
         steps.append(
             AssemblyStep(
                 len(steps) + 1,
                 f"Assemble {item.connection_id}",
                 f"Bring connector `{item.child_connector}` to the canonical frame of "
-                f"`{item.parent_connector}` using the declared {item.joint_kind} joint. "
-                "Do not choose retention hardware until its unresolved release gate is closed.",
+                f"`{item.parent_connector}` using the declared {item.joint_kind} joint."
+                + implementation_instruction,
                 "Connector origins and orientations coincide, joint motion matches its "
                 "declared coordinate bindings, and no undeclared constraint was introduced.",
                 item.connection_id,
             )
         )
     for item in wiring:
+        implementation_instruction = (
+            " Follow the typed conductor, termination, protection, and route records."
+            if item.implementation is not None
+            else " Complete and review the fabrication release gate before energizing."
+        )
         steps.append(
             AssemblyStep(
                 len(steps) + 1,
                 f"Implement net {item.connection_id}",
                 f"Connect exactly these canonical endpoints: {', '.join(item.endpoints)}. "
-                "The resolved geometry supplies connector locations only; complete and review "
-                "the conductor/routing/protection release gate before energizing.",
+                "The resolved geometry supplies connector locations."
+                + implementation_instruction,
                 "Continuity, isolation, polarity/direction, strain relief, and protection are "
                 "measured against an approved wiring record.",
                 item.connection_id,
@@ -678,22 +931,24 @@ def generate_build_instructions(
     )
 
     plan = BuildPlan(
-        resolved.specification.id,
-        resolved.assembly_sha256,
-        resolved.system.pmdl_sha256,
-        _controller_identities(resolved),
-        _bom(resolved),
-        tuple(placements),
-        tuple(mechanical),
-        tuple(wiring),
-        tuple(model_connections),
-        tuple(steps),
-        (
+        contraption_id=resolved.specification.id,
+        assembly_sha256=resolved.assembly_sha256,
+        pmdl_sha256=resolved.system.pmdl_sha256,
+        procurement_sha256=procurement_sha256,
+        controllers=_controller_identities(resolved),
+        bill_of_materials=physical_bom,
+        purchase_bill_of_materials=purchase_bom,
+        placements=tuple(placements),
+        mechanical=tuple(mechanical),
+        wiring=tuple(wiring),
+        model_connections=tuple(model_connections),
+        steps=tuple(steps),
+        safety_notes=(
             "Simulation and visualization are engineering evidence, not authorization to build or energize hardware.",
             "Use independent over-current protection, emergency stop, mechanical travel limits, and guarded low-energy commissioning.",
             "Any physical change to a part body, connector, model, parameter, or topology requires a new resolved closure hash.",
         ),
-        tuple(sorted(unresolved)),
+        unresolved=tuple(sorted(unresolved)),
     )
     if output is not None:
         plan.write(output)
@@ -711,6 +966,7 @@ __all__ = [
     "MechanicalInstruction",
     "ModelConnection",
     "PlacementInstruction",
+    "PurchaseBOMItem",
     "WiringInstruction",
     "generate_build_instructions",
     "generate_build_plan",

@@ -1,5 +1,5 @@
 {
-  "format": "static-part-1",
+  "format": "static-part-2",
   "id": "scanner.control_board",
   "name": "Scanner dual H-bridge control board",
   "version": "1.0.0",
@@ -9,15 +9,15 @@
       "id": "board",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "solids": [
@@ -36,15 +36,15 @@
           },
           "local_pose": {
             "translation_m": [
-              0,
-              0,
-              0
+              0.0,
+              0.0,
+              0.0
             ],
             "rotation_quaternion_wxyz": [
-              1,
-              0,
-              0,
-              0
+              1.0,
+              0.0,
+              0.0,
+              0.0
             ]
           },
           "provenance": {
@@ -65,20 +65,30 @@
       "interface": "scanner-fixed-mount",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
+          0.0,
+          0.0,
           -0.005
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "board lower face"
+        "source": "board lower face",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "fixed_mount",
+        "missing": [
+          "retention"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -91,18 +101,29 @@
         "translation_m": [
           -0.056,
           0.03,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "terminal-block approximation"
+        "source": "terminal-block approximation",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -115,18 +136,29 @@
         "translation_m": [
           -0.056,
           0.02,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "terminal-block approximation"
+        "source": "terminal-block approximation",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -137,20 +169,31 @@
       "interface": "wire-terminal",
       "local_pose": {
         "translation_m": [
-          0,
+          0.0,
           0.042,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "motor header approximation"
+        "source": "motor header approximation",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -163,18 +206,29 @@
         "translation_m": [
           0.012,
           0.042,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "motor header approximation"
+        "source": "motor header approximation",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -185,20 +239,31 @@
       "interface": "wire-terminal",
       "local_pose": {
         "translation_m": [
-          0,
+          0.0,
           -0.042,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "motor header approximation"
+        "source": "motor header approximation",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -211,18 +276,29 @@
         "translation_m": [
           0.012,
           -0.042,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "motor header approximation"
+        "source": "motor header approximation",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -235,18 +311,29 @@
         "translation_m": [
           0.056,
           0.01,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "logic header approximation"
+        "source": "logic header approximation",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -258,19 +345,30 @@
       "local_pose": {
         "translation_m": [
           0.056,
-          0,
-          0
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "logic header approximation"
+        "source": "logic header approximation",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -283,18 +381,29 @@
         "translation_m": [
           -0.02,
           0.042,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "on-board control signal"
+        "source": "on-board control signal",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -307,18 +416,29 @@
         "translation_m": [
           -0.02,
           -0.042,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "on-board control signal"
+        "source": "on-board control signal",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -331,18 +451,29 @@
         "translation_m": [
           0.03,
           0.042,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "encoder header approximation"
+        "source": "encoder header approximation",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -355,18 +486,29 @@
         "translation_m": [
           0.03,
           -0.042,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "encoder header approximation"
+        "source": "encoder header approximation",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -379,18 +521,29 @@
         "translation_m": [
           0.056,
           -0.02,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "analog header approximation"
+        "source": "analog header approximation",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -403,27 +556,38 @@
         "translation_m": [
           0.056,
           -0.03,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "analog header approximation"
+        "source": "analog header approximation",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     }
   ],
   "parameter_bindings": [],
+  "optical_sensors": [],
   "provenance": {
     "kind": "catalog",
     "source": "Pololu board envelope and estimated header locations",
     "reference": "Pololu 3544"
   },
-  "purchasing": {},
   "metadata": {}
 }

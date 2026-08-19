@@ -1,0 +1,25 @@
+{
+  "documents": [],
+  "evidence": [
+    {
+      "locator": "$.products[0]",
+      "sha256": "sha256:681438a1a754b8b0a53bb72127e39f22a48e1c0d24982a90cb303227bbf50413",
+      "source": "assembled_contraptions/scanner/component_inputs/power.json"
+    }
+  ],
+  "format": "procurement-record-1",
+  "id": "product.six-rechargeable-aa-nimh-cells-and-matched-charger",
+  "identifiers": [
+    {
+      "scheme": "product_name",
+      "value": "six rechargeable AA NiMH cells and matched charger"
+    }
+  ],
+  "lifecycle": {
+    "status": "unknown"
+  },
+  "manufacturer": null,
+  "offers": [],
+  "provides": [],
+  "version": "1.0.0"
+}

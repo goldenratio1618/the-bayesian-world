@@ -1,0 +1,57 @@
+{
+  "documents": [
+    {
+      "kind": "product_page",
+      "url": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-071KL"
+    }
+  ],
+  "evidence": [
+    {
+      "locator": "$.product",
+      "sha256": "sha256:b54f3bb2d21e120ff640d18342d144ead7e09a123e62d3a1d5617856cc1c643f",
+      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/yageo_rc0603_1k.json"
+    },
+    {
+      "locator": "$.manufacturer",
+      "sha256": "sha256:b54f3bb2d21e120ff640d18342d144ead7e09a123e62d3a1d5617856cc1c643f",
+      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/yageo_rc0603_1k.json"
+    },
+    {
+      "locator": "$.source_urls[0]",
+      "sha256": "sha256:b54f3bb2d21e120ff640d18342d144ead7e09a123e62d3a1d5617856cc1c643f",
+      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/yageo_rc0603_1k.json"
+    },
+    {
+      "locator": "$.provenance",
+      "sha256": "sha256:4b352477008aaf33a4446d0684045f7898e0afa752b020e8ca628791fc9eb026",
+      "source": "model_catalog/electrical/resistors/fixed_resistors/instantiations/yageo_rc0603_1k/static.part"
+    }
+  ],
+  "format": "procurement-record-1",
+  "id": "yageo.rc0603fr-071kl",
+  "identifiers": [
+    {
+      "scheme": "product_name",
+      "value": "RC0603FR-071KL"
+    },
+    {
+      "issuer": "Yageo",
+      "scheme": "manufacturer_part_number",
+      "value": "RC0603FR-071KL"
+    }
+  ],
+  "lifecycle": {
+    "status": "unknown"
+  },
+  "manufacturer": "Yageo",
+  "offers": [],
+  "provides": [
+    {
+      "part": "yageo_rc0603_1k",
+      "quantity": 1,
+      "static_sha256": "sha256:9647fcb7cc31a1e9bea978f3d7c4cc0754712541efbcfb60d9312ac7fb76288e",
+      "version": "1.0.0"
+    }
+  ],
+  "version": "1.0.0"
+}

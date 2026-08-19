@@ -93,7 +93,9 @@ domain/interface.
 ## Connections
 
 A connection allows exactly `id`, `kind`, `endpoints`, optional `domain`,
-conditional `joint`, and optional inert `metadata`.
+conditional `joint`, optional typed `implementation`, and optional `metadata`.
+Physical resolution requires `metadata` to be absent or empty; active connection
+semantics belong in typed fields.
 
 | `kind` | Semantics |
 |---|---|
@@ -105,6 +107,35 @@ conditional `joint`, and optional inert `metadata`.
 Every connection needs at least two unique endpoints. Endpoint components and
 ports/connectors must exist. Connection ids are unique. `domain`, when supplied,
 must match resolved port domains.
+
+### Construction implementation
+
+`implementation` is optional/nullable and uses the shared
+[fabrication record](./FABRICATION.md). Static connector fabrication records
+describe endpoint capabilities or requirements; this connection record selects
+assembly-specific hardware, bearing arrangement, wire termination/protection,
+route, or alignment details.
+
+Its required `kind` follows connection semantics:
+
+| Connection | Required fabrication kind |
+|---|---|
+| `power` or `signal` | `electrical_termination` |
+| fixed `attachment` | `fixed_mount` |
+| revolute `attachment` | `rotary_support` |
+| `constraint` | `other` |
+
+A construction-ready implementation has `status: specified`, `missing: []`,
+complete context-specific fields, and evidence. `missing` and `partial` records
+are accepted only when every absent construction field is named explicitly;
+they remain build-release gates. Electrical connection implementations require
+both endpoint termination facts and selected `protection` and `route`. A route
+for more than two endpoints cannot use `point_to_point` topology.
+
+Resolution checks known endpoint records against one another and against the
+selected implementation. Conflicting standard dimensions or non-complementary
+mating roles fail. Missing facts are not invented and do not count as
+compatibility evidence.
 
 ### Fixed joint
 
@@ -290,6 +321,11 @@ are configuration and do not change assembly identity.
         "kind": "fixed",
         "behavior_binding": "kinematic_only",
         "coordinate_bindings": []
+      },
+      "implementation": {
+        "kind": "fixed_mount",
+        "status": "missing",
+        "missing": ["retention"]
       }
     }
   ],

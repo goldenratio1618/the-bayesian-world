@@ -1,5 +1,5 @@
 {
-  "format": "static-part-1",
+  "format": "static-part-2",
   "id": "scanner.camera",
   "name": "Scanner camera payload",
   "version": "1.0.0",
@@ -9,15 +9,15 @@
       "id": "camera",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "solids": [
@@ -37,14 +37,14 @@
           "local_pose": {
             "translation_m": [
               0.0125,
-              0,
-              0
+              0.0,
+              0.0
             ],
             "rotation_quaternion_wxyz": [
-              1,
-              0,
-              0,
-              0
+              1.0,
+              0.0,
+              0.0,
+              0.0
             ]
           },
           "provenance": {
@@ -63,23 +63,34 @@
       "body": "camera",
       "domain": "mechanical",
       "interface": "rotational-shaft",
-      "joint_coordinate_state": "angle",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
           0.7071067811865476,
           -0.7071067811865475,
-          0,
-          0
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "derived",
-        "source": "camera bracket pivot with explicit PMDL angle-state binding; connector local +z is camera-body +y, parallel to both tangential servo shafts"
+        "source": "camera bracket pivot with explicit PMDL angle-state binding; connector local +z is camera-body +y, parallel to both tangential servo shafts",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": "angle",
+      "fabrication": {
+        "kind": "rotary_support",
+        "missing": [
+          "retention",
+          "bearing",
+          "travel"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -91,19 +102,31 @@
       "local_pose": {
         "translation_m": [
           0.025,
-          0,
-          0
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
           0.7071067811865476,
-          0,
+          0.0,
           0.7071067811865475,
-          0
+          0.0
         ]
       },
       "provenance": {
         "kind": "derived",
-        "source": "camera viewing frame at the declared front face; connector local +z is camera-body +x, orthogonal to the camera-body +y tilt axis"
+        "source": "camera viewing frame at the declared front face; connector local +z is camera-body +x, orthogonal to the camera-body +y tilt axis",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "optical_alignment",
+        "missing": [
+          "standards",
+          "alignment_tolerance_m",
+          "alignment_tolerance_rad"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -116,18 +139,29 @@
         "translation_m": [
           0.0125,
           0.008,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "flex cable electrical abstraction"
+        "source": "flex cable electrical abstraction",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -140,18 +174,29 @@
         "translation_m": [
           0.0125,
           -0.008,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "flex cable electrical abstraction"
+        "source": "flex cable electrical abstraction",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     }
   ],
@@ -171,6 +216,5 @@
     "source": "vendor envelope with estimated mount and electrical abstractions",
     "reference": "Raspberry Pi Camera Module 3 Wide"
   },
-  "purchasing": {},
   "metadata": {}
 }

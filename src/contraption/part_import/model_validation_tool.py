@@ -23,7 +23,8 @@ CONTEXT_FILENAME = ".model-validator-context.json"
 CALL_LOG_FILENAME = "validation-calls.jsonl"
 CONTEXT_SCHEMA = "contraption.model-validator-context/v1"
 RESULT_SCHEMA = "contraption.model-validation/v1"
-EXCESSIVE_CALL_THRESHOLD = 5
+MAX_AGENT_VALIDATION_CALLS = 3
+EXCESSIVE_CALL_THRESHOLD = MAX_AGENT_VALIDATION_CALLS
 MAX_CANDIDATE_BYTES = 4 * 1024 * 1024
 
 
@@ -273,11 +274,36 @@ def _append_call(workspace: Path, result: dict[str, Any]) -> None:
         os.fsync(stream.fileno())
 
 
+def _attempt_limit_result(candidate: str, prior_calls: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "schema": RESULT_SCHEMA,
+        "call_number": len(prior_calls) + 1,
+        "candidate": candidate,
+        "candidate_sha256": None,
+        "valid": False,
+        "issues": [
+            {
+                "severity": "error",
+                "code": "validator.attempt_limit",
+                "path": candidate,
+                "message": (
+                    f"agent validation is limited to {MAX_AGENT_VALIDATION_CALLS} calls; "
+                    "stop patching and leave the candidate for host review"
+                ),
+            }
+        ],
+        "protected_files_checked": [],
+        "guidance": "Do not call the validator again in this modeling turn.",
+    }
+
+
 def validate_candidate(candidate: str, *, workspace: str | Path | None = None) -> dict[str, Any]:
     """Validate one candidate and return a deterministic, machine-readable report."""
 
     workspace_path = Path.cwd().resolve() if workspace is None else Path(workspace).resolve()
     prior_calls = _read_call_log(workspace_path)
+    if len(prior_calls) >= MAX_AGENT_VALIDATION_CALLS:
+        return _attempt_limit_result(candidate, prior_calls)
     call_number = len(prior_calls) + 1
     issues: list[dict[str, str]] = []
     candidate_hash: str | None = None
@@ -357,7 +383,7 @@ def validate_candidate(candidate: str, *, workspace: str | Path | None = None) -
         "issues": issues,
         "protected_files_checked": integrity_checked,
         "guidance": (
-            "Candidate is valid; copy these exact bytes into the final structured response."
+            "Candidate is valid; leave these exact bytes in candidate/ and report its path."
             if valid
             else "Correct every error and validate again. If repeated attempts fail, re-read the supplied constraints and examples instead of guessing."
         ),
@@ -370,7 +396,10 @@ def validate_bundle(bundle: str, *, workspace: str | Path | None = None) -> dict
     """Validate the complete candidate import in a catalog overlay."""
 
     workspace_path = Path.cwd().resolve() if workspace is None else Path(workspace).resolve()
-    call_number = len(_read_call_log(workspace_path)) + 1
+    prior_calls = _read_call_log(workspace_path)
+    if len(prior_calls) >= MAX_AGENT_VALIDATION_CALLS:
+        return _attempt_limit_result(bundle, prior_calls)
+    call_number = len(prior_calls) + 1
     issues: list[dict[str, str]] = []
     checked: list[str] = []
     try:
@@ -409,7 +438,7 @@ def validate_bundle(bundle: str, *, workspace: str | Path | None = None) -> dict
         "issues": issues,
         "protected_files_checked": checked,
         "guidance": (
-            "Catalog import is valid; copy these exact bytes into the structured response."
+            "Catalog import is valid; leave these exact bytes in candidate/ and report its paths."
             if not issues
             else "Correct every catalog error and validate the complete bundle again."
         ),

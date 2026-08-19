@@ -17,6 +17,8 @@ import re
 import types
 from typing import Any, ClassVar, Generic, TypeVar, Union, get_args, get_origin, get_type_hints
 
+from ..fabrication import ConnectorFabricationSpec, FabricationSpecError
+
 
 class SpecError(ValueError):
     """Raised when serialized specification data violates its schema."""
@@ -143,6 +145,8 @@ def _hashable(value: Any) -> Any:
 def _to_data(value: Any) -> Any:
     if isinstance(value, StrictRecord):
         return {field.name: _to_data(getattr(value, field.name)) for field in fields(value)}
+    if hasattr(value, "to_dict"):
+        return _to_data(value.to_dict())
     if isinstance(value, Mapping):
         return {key: _to_data(value[key]) for key in sorted(value)}
     if isinstance(value, tuple):
@@ -1015,6 +1019,7 @@ class ConnectionSpec(StrictRecord):
     domain: str | None = None
     joint: JointSpec | None = None
     metadata: FrozenDict[Any] = FrozenDict()
+    implementation: ConnectorFabricationSpec | None = None
 
     def __post_init__(self) -> None:
         _identifier(self.id, "connection.id")
@@ -1035,17 +1040,79 @@ class ConnectionSpec(StrictRecord):
                 raise SpecError(f"joint coordinate bindings must reference endpoint components: {invalid}")
         elif self.joint is not None:
             raise SpecError("only attachment connections may declare a joint")
+        if self.implementation is not None:
+            if not isinstance(self.implementation, ConnectorFabricationSpec):
+                raise SpecError(
+                    "connection.implementation must be a ConnectorFabricationSpec or null"
+                )
+            expected_kind = {
+                "power": "electrical_termination",
+                "signal": "electrical_termination",
+                "constraint": "other",
+            }.get(self.kind)
+            if self.kind == "attachment":
+                assert self.joint is not None
+                expected_kind = (
+                    "rotary_support" if self.joint.kind == "revolute" else "fixed_mount"
+                )
+            if self.implementation.kind != expected_kind:
+                raise SpecError(
+                    f"{self.kind} connection implementation requires fabrication.kind "
+                    f"{expected_kind!r}, got {self.implementation.kind!r}"
+                )
+            required_missing = self.implementation.implementation_missing_fields(
+                endpoint_count=len(self.endpoints)
+            )
+            if self.implementation.status == "specified" and required_missing:
+                raise SpecError(
+                    "connection.implementation status 'specified' is not "
+                    "construction-ready: " + ", ".join(required_missing)
+                )
+            undeclared_missing = sorted(
+                set(required_missing) - set(self.implementation.missing)
+            )
+            if self.implementation.status != "specified" and undeclared_missing:
+                raise SpecError(
+                    "connection.implementation must explicitly identify every missing "
+                    "construction field: " + ", ".join(undeclared_missing)
+                )
         object.__setattr__(self, "metadata", _freeze(self.metadata, "connection.metadata"))
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "ConnectionSpec":
         data = _object(data, "connection")
-        _keys(data, ("id", "kind", "endpoints", "domain", "joint", "metadata"), "connection", ("id", "kind", "endpoints"))
-        return cls(_identifier(data["id"], "connection.id"), _string(data["kind"], "connection.kind"),
-                   tuple(PortRef.from_dict(item) for item in _sequence(data["endpoints"], "connection.endpoints")),
-                   None if data.get("domain") is None else _identifier(data["domain"], "connection.domain"),
-                   None if data.get("joint") is None else JointSpec.from_dict(_object(data["joint"], "connection.joint")),
-                   _freeze(_object(data.get("metadata", {}), "connection.metadata")))
+        _keys(
+            data,
+            ("id", "kind", "endpoints", "domain", "joint", "metadata", "implementation"),
+            "connection",
+            ("id", "kind", "endpoints"),
+        )
+        try:
+            implementation = (
+                None
+                if data.get("implementation") is None
+                else ConnectorFabricationSpec.from_dict(
+                    _object(data["implementation"], "connection.implementation")
+                )
+            )
+        except FabricationSpecError as exc:
+            raise SpecError(f"invalid connection.implementation: {exc}") from exc
+        return cls(
+            _identifier(data["id"], "connection.id"),
+            _string(data["kind"], "connection.kind"),
+            tuple(
+                PortRef.from_dict(item)
+                for item in _sequence(data["endpoints"], "connection.endpoints")
+            ),
+            None
+            if data.get("domain") is None
+            else _identifier(data["domain"], "connection.domain"),
+            None
+            if data.get("joint") is None
+            else JointSpec.from_dict(_object(data["joint"], "connection.joint")),
+            _freeze(_object(data.get("metadata", {}), "connection.metadata")),
+            implementation,
+        )
 
 
 @dataclass(frozen=True, slots=True)

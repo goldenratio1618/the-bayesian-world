@@ -1,0 +1,52 @@
+{
+  "documents": [
+    {
+      "kind": "product_page",
+      "url": "https://www.raspberrypi.com/products/camera-module-3/"
+    }
+  ],
+  "evidence": [
+    {
+      "locator": "$.products[1]",
+      "sha256": "sha256:45b51a0c32f2dff43c6ff25a025f6f5f9e0abfb886ec3f79da4d442fc349a1bf",
+      "source": "assembled_contraptions/scanner/component_inputs/camera_compute.json"
+    },
+    {
+      "locator": "$.manufacturer",
+      "sha256": "sha256:45b51a0c32f2dff43c6ff25a025f6f5f9e0abfb886ec3f79da4d442fc349a1bf",
+      "source": "assembled_contraptions/scanner/component_inputs/camera_compute.json"
+    },
+    {
+      "locator": "$.source_urls[1]",
+      "sha256": "sha256:45b51a0c32f2dff43c6ff25a025f6f5f9e0abfb886ec3f79da4d442fc349a1bf",
+      "source": "assembled_contraptions/scanner/component_inputs/camera_compute.json"
+    },
+    {
+      "locator": "$.provenance",
+      "sha256": "sha256:6df24b7caebc73379c1adf241e719dfedddcb5bcdfe84cbe7c9bc4cb15a41af2",
+      "source": "model_catalog/optical/cameras/powered_rotational_cameras/instantiations/scanner_camera/static.part"
+    }
+  ],
+  "format": "procurement-record-1",
+  "id": "raspberry-pi.camera-module-3-wide",
+  "identifiers": [
+    {
+      "scheme": "product_name",
+      "value": "Camera Module 3 Wide"
+    }
+  ],
+  "lifecycle": {
+    "status": "unknown"
+  },
+  "manufacturer": "Raspberry Pi",
+  "offers": [],
+  "provides": [
+    {
+      "part": "scanner.camera",
+      "quantity": 1,
+      "static_sha256": "sha256:c0b973971d633de0632455e0abf18ab9b1de9abd16d89e8157f28ca183c126da",
+      "version": "1.0.0"
+    }
+  ],
+  "version": "1.0.0"
+}

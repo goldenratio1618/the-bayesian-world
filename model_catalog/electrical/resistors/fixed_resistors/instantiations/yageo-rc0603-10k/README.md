@@ -85,19 +85,10 @@ The static record below is invariant across the model hypotheses listed later.
 |---|---|---|---|
 | `body.package` | `shape` | 0.0016000000000000001 × 0.00080000000000000004 × 0.00044999999999999999 | `vendor`: Published Yageo package dimensions |
 
-| Connector | Model port | Domain | Interface | Evidence |
-|---|---|---|---|---|
-| `p` | `p` | `electrical` | `catalog-generic-port` | `estimated`: Package-end terminal frame |
-| `n` | `n` | `electrical` | `catalog-generic-port` | `estimated`: Package-end terminal frame |
-
-#### Purchasing data
-
-```json
-{
-  "manufacturer": "Yageo",
-  "product": "RC0603FR-0710KL"
-}
-```
+| Connector | Model port | Domain | Interface | Fabrication | Evidence |
+|---|---|---|---|---|---|
+| `p` | `p` | `electrical` | `catalog-generic-port` | missing: conductor, termination | `estimated`: Package-end terminal frame |
+| `n` | `n` | `electrical` | `catalog-generic-port` | missing: conductor, termination | `estimated`: Package-end terminal frame |
 
 #### Static-part metadata
 
@@ -114,6 +105,11 @@ The static record below is invariant across the model hypotheses listed later.
   ]
 }
 ```
+
+### External procurement records
+
+- `yageo.rc0603fr-0710kl` (`sha256:993f70cde9a50ed323da23339709ee36c64f3af25ab37055e428ecab4b9690cf`): Yageo; product_name=RC0603FR-0710KL, manufacturer_part_number=RC0603FR-0710KL.
+  - product_page: [https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-0710KL](https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-0710KL)
 
 ## Model hypothesis v1: Ideal uncertain resistor
 
@@ -234,7 +230,7 @@ These hashes bind the inputs used for this rendering. The generated README is ex
 | `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-10k/shape/package/runtime.glb` | `sha256:7e5df3e3066f971c3c956d51fe32c616489619872b035ee26e1d7d56e74f4997` |
 | `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-10k/shape/package/shape.artifact.json` | `sha256:2eba8ac4a367e4e5834c30b4cec8ae45bc0cc5384f6f0f02972f8725528f8511` |
 | `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-10k/shape/package/source/procedural-shape.json` | `sha256:d8fa74555740be363e3f0845c27f78688b32c2b41542571c3aed608a2a3c57b8` |
-| `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-10k/static.part` | `sha256:066df18113f1f0f1effb50a432ae4f2f0158628f9494a2ab92571a7c4297c626` |
+| `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-10k/static.part` | `sha256:a65deaac6ef7d7737a1555a429e43a7450eb676441bf66fad78ac902ff688727` |
 | `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-10k/v1.model` | `sha256:082f18be9fe8185911d3013654e518a40ac3b1b500433fa3297e6287abb1df53` |
 | `electrical/resistors/fixed_resistors/interface.pmdl` | `sha256:96cb68346727c8e07114c334d569f1a9092291575995970d93870623d9a19e9a` |
 | `electrical/resistors/interface.pmdl` | `sha256:ae5de73b81f7f0c6c015f1df08e0ad2c2e95cb00101609bb7a773513ccfef66f` |

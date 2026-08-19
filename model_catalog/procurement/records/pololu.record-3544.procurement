@@ -1,0 +1,66 @@
+{
+  "documents": [
+    {
+      "kind": "product_page",
+      "url": "https://www.pololu.com/product/3544"
+    },
+    {
+      "kind": "product_page",
+      "url": "https://www.pololu.com/docs/0J69/all"
+    }
+  ],
+  "evidence": [
+    {
+      "locator": "$.product",
+      "sha256": "sha256:64372a30ac1b16dfb28c89d1fe098cd1299b41c084dabd4f0fe9bb51d4b73098",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_control.json"
+    },
+    {
+      "locator": "$.manufacturer",
+      "sha256": "sha256:64372a30ac1b16dfb28c89d1fe098cd1299b41c084dabd4f0fe9bb51d4b73098",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_control.json"
+    },
+    {
+      "locator": "$.source_urls[0]",
+      "sha256": "sha256:64372a30ac1b16dfb28c89d1fe098cd1299b41c084dabd4f0fe9bb51d4b73098",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_control.json"
+    },
+    {
+      "locator": "$.source_urls[1]",
+      "sha256": "sha256:64372a30ac1b16dfb28c89d1fe098cd1299b41c084dabd4f0fe9bb51d4b73098",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_control.json"
+    },
+    {
+      "locator": "$.provenance",
+      "sha256": "sha256:5b79e93f319e50c683959f4e01e431f226101c8b298a95e82e123f029e766c5a",
+      "source": "model_catalog/electrical/power_converters/dual_hbridges/instantiations/scanner_control_board/static.part"
+    }
+  ],
+  "format": "procurement-record-1",
+  "id": "pololu.record-3544",
+  "identifiers": [
+    {
+      "scheme": "product_name",
+      "value": "Romi 32U4 Control Board, item 3544"
+    },
+    {
+      "issuer": "Pololu",
+      "scheme": "manufacturer_item_number",
+      "value": "3544"
+    }
+  ],
+  "lifecycle": {
+    "status": "unknown"
+  },
+  "manufacturer": "Pololu",
+  "offers": [],
+  "provides": [
+    {
+      "part": "scanner.control_board",
+      "quantity": 1,
+      "static_sha256": "sha256:888860fb66ade8e396664b9dfd2fc906c5e30a774bcf5f434d1720ddddd795f4",
+      "version": "1.0.0"
+    }
+  ],
+  "version": "1.0.0"
+}

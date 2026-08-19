@@ -85,19 +85,10 @@ The static record below is invariant across the model hypotheses listed later.
 |---|---|---|---|
 | `body.package` | `shape` | 0.0016000000000000001 × 0.00080000000000000004 × 0.00044999999999999999 | `vendor`: Yageo RC0603FR-071ML published package dimensions |
 
-| Connector | Model port | Domain | Interface | Evidence |
-|---|---|---|---|---|
-| `p` | `p` | `electrical` | `catalog-generic-port` | `estimated`: Package-end terminal frame from supplied 0603 envelope dimensions |
-| `n` | `n` | `electrical` | `catalog-generic-port` | `estimated`: Package-end terminal frame from supplied 0603 envelope dimensions |
-
-#### Purchasing data
-
-```json
-{
-  "manufacturer": "Yageo",
-  "product": "RC0603FR-071ML"
-}
-```
+| Connector | Model port | Domain | Interface | Fabrication | Evidence |
+|---|---|---|---|---|---|
+| `p` | `p` | `electrical` | `catalog-generic-port` | missing: conductor, termination | `estimated`: Package-end terminal frame from supplied 0603 envelope dimensions |
+| `n` | `n` | `electrical` | `catalog-generic-port` | missing: conductor, termination | `estimated`: Package-end terminal frame from supplied 0603 envelope dimensions |
 
 #### Static-part metadata
 
@@ -109,6 +100,11 @@ The static record below is invariant across the model hypotheses listed later.
   "rated_power_w": 0.1
 }
 ```
+
+### External procurement records
+
+- `yageo.rc0603fr-071ml` (`sha256:90d4488080a002799ee747988ab0af8ade4d956fed77a17446fe329ce26f1e97`): Yageo; product_name=RC0603FR-071ML, manufacturer_part_number=RC0603FR-071ML.
+  - product_page: [https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-071ML](https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-071ML)
 
 ## Model hypothesis v1: Thick-film resistor with lumped parasitics
 
@@ -320,8 +316,6 @@ Trust labels are recorded claims, not automatic physical qualification:
 
 ```json
 {
-  "manufacturer": "Yageo",
-  "product": "RC0603FR-071ML",
   "published_tolerance_fraction": 0.01,
   "rated_power_w": 0.1
 }
@@ -338,8 +332,8 @@ These hashes bind the inputs used for this rendering. The generated README is ex
 | `electrical/resistors/fixed_resistors/instantiations/yageo_rc0603_1m/shape/package/runtime.glb` | `sha256:7e5df3e3066f971c3c956d51fe32c616489619872b035ee26e1d7d56e74f4997` |
 | `electrical/resistors/fixed_resistors/instantiations/yageo_rc0603_1m/shape/package/shape.artifact.json` | `sha256:9a3857c39cb86d6455ceecdb5b30b711bc1117f07b69c066d716217ed1cdba27` |
 | `electrical/resistors/fixed_resistors/instantiations/yageo_rc0603_1m/shape/package/source/procedural-shape.json` | `sha256:35c2eb0c9b64727cef4ddbae738ffdf6091a0cd587534f2d7cc743f1ad24f672` |
-| `electrical/resistors/fixed_resistors/instantiations/yageo_rc0603_1m/static.part` | `sha256:4eec17137087ee2ea5d111eea173033fb8cd163d8422c5a5b53ef27d65829215` |
-| `electrical/resistors/fixed_resistors/instantiations/yageo_rc0603_1m/v1.model` | `sha256:f95379488508854b9ae8ed4b64c10be6767b709a671b7dccbc95309b94a1507d` |
+| `electrical/resistors/fixed_resistors/instantiations/yageo_rc0603_1m/static.part` | `sha256:f47bb9069f7e6a5dbec4ce271580b8a8506777cc6a42aa7eed072b8d58bb8d14` |
+| `electrical/resistors/fixed_resistors/instantiations/yageo_rc0603_1m/v1.model` | `sha256:795461aa69a5f74a3eb939fcd1493d66f69f7a0a5936a276bfa238ac067360e4` |
 | `electrical/resistors/fixed_resistors/interface.pmdl` | `sha256:96cb68346727c8e07114c334d569f1a9092291575995970d93870623d9a19e9a` |
 | `electrical/resistors/fixed_resistors/resistor_thick_film_parasitic.pmdl` | `sha256:ec8cfc57e11f736e2fad903ce2be8dfbcf5a18f614ab7b820bdde0f5733d79ac` |
 | `electrical/resistors/interface.pmdl` | `sha256:ae5de73b81f7f0c6c015f1df08e0ad2c2e95cb00101609bb7a773513ccfef66f` |

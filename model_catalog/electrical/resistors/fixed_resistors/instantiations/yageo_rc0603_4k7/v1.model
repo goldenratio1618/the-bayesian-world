@@ -27,10 +27,8 @@
     "notes": "Yageo RC0603FR-074K7L nominal tolerance-bounded ideal resistor hypothesis."
   },
   "metadata": {
-    "manufacturer": "Yageo",
-    "product": "RC0603FR-074K7L",
-    "tolerance_fraction": 0.01,
+    "package": "0603",
     "rated_power_w": 0.1,
-    "package": "0603"
+    "tolerance_fraction": 0.01
   }
 }

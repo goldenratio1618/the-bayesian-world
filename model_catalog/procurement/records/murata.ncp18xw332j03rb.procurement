@@ -1,0 +1,45 @@
+{
+  "documents": [
+    {
+      "kind": "datasheet",
+      "url": "https://www.murata.com/-/media/webrenewal/products/thermistor/ntc/ncp/ncp18.ashx"
+    }
+  ],
+  "evidence": [
+    {
+      "locator": "$.product",
+      "sha256": "sha256:08ac54e35443fa3a9eae2d3a8f55ff66a98e2be7cd801126cb65e33d3e3cd27c",
+      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/murata_ncp18_3k3.json"
+    },
+    {
+      "locator": "$.manufacturer",
+      "sha256": "sha256:08ac54e35443fa3a9eae2d3a8f55ff66a98e2be7cd801126cb65e33d3e3cd27c",
+      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/murata_ncp18_3k3.json"
+    },
+    {
+      "locator": "$.source_urls[0]",
+      "sha256": "sha256:08ac54e35443fa3a9eae2d3a8f55ff66a98e2be7cd801126cb65e33d3e3cd27c",
+      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/murata_ncp18_3k3.json"
+    }
+  ],
+  "format": "procurement-record-1",
+  "id": "murata.ncp18xw332j03rb",
+  "identifiers": [
+    {
+      "scheme": "product_name",
+      "value": "NCP18XW332J03RB"
+    },
+    {
+      "issuer": "Murata",
+      "scheme": "manufacturer_part_number",
+      "value": "NCP18XW332J03RB"
+    }
+  ],
+  "lifecycle": {
+    "status": "unknown"
+  },
+  "manufacturer": "Murata",
+  "offers": [],
+  "provides": [],
+  "version": "1.0.0"
+}

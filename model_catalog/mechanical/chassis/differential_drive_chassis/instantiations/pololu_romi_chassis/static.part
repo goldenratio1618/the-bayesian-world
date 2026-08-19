@@ -1,5 +1,5 @@
 {
-  "format": "static-part-1",
+  "format": "static-part-2",
   "id": "scanner.romi_chassis",
   "name": "Pololu Romi chassis",
   "version": "2.0.0",
@@ -9,15 +9,15 @@
       "id": "body",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "solids": [
@@ -36,15 +36,15 @@
           },
           "local_pose": {
             "translation_m": [
-              0,
-              0,
+              0.0,
+              0.0,
               0.035
             ],
             "rotation_quaternion_wxyz": [
-              1,
-              0,
-              0,
-              0
+              1.0,
+              0.0,
+              0.0,
+              0.0
             ]
           },
           "provenance": {
@@ -65,20 +65,30 @@
       "interface": "hub-translation",
       "local_pose": {
         "translation_m": [
-          0,
+          0.0,
           0.075,
           0.035
         ],
         "rotation_quaternion_wxyz": [
           0.7071067811865476,
           0.7071067811865475,
-          0,
-          0
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "left wheel hub center and axle orientation"
+        "source": "left wheel hub center and axle orientation",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "fixed_mount",
+        "missing": [
+          "retention"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -89,20 +99,30 @@
       "interface": "hub-translation",
       "local_pose": {
         "translation_m": [
-          0,
+          0.0,
           -0.075,
           0.035
         ],
         "rotation_quaternion_wxyz": [
-          0,
-          0,
+          0.0,
+          0.0,
           0.7071067811865476,
           0.7071067811865475
         ]
       },
       "provenance": {
         "kind": "derived",
-        "source": "right wheel hub translation frame aligned in full orientation with the assembled right-wheel virtual hub frame"
+        "source": "right wheel hub translation frame aligned in full orientation with the assembled right-wheel virtual hub frame",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "fixed_mount",
+        "missing": [
+          "retention"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -114,19 +134,29 @@
       "local_pose": {
         "translation_m": [
           -0.02,
-          0,
+          0.0,
           0.045
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "prototype packaging layout"
+        "source": "prototype packaging layout",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "fixed_mount",
+        "missing": [
+          "retention"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -137,20 +167,30 @@
       "interface": "scanner-fixed-mount",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
+          0.0,
+          0.0,
           0.078
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "prototype packaging layout"
+        "source": "prototype packaging layout",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "fixed_mount",
+        "missing": [
+          "retention"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -161,20 +201,30 @@
       "interface": "scanner-fixed-mount",
       "local_pose": {
         "translation_m": [
-          0,
+          0.0,
           0.0565,
           0.035
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "prototype drivetrain layout"
+        "source": "prototype drivetrain layout",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "fixed_mount",
+        "missing": [
+          "retention"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -185,20 +235,30 @@
       "interface": "scanner-fixed-mount",
       "local_pose": {
         "translation_m": [
-          0,
+          0.0,
           -0.0565,
           0.035
         ],
         "rotation_quaternion_wxyz": [
-          0,
-          0,
-          0,
-          1
+          0.0,
+          0.0,
+          0.0,
+          1.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "prototype drivetrain layout"
+        "source": "prototype drivetrain layout",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "fixed_mount",
+        "missing": [
+          "retention"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -210,19 +270,29 @@
       "local_pose": {
         "translation_m": [
           -0.025,
-          0,
+          0.0,
           0.045
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "prototype packaging layout"
+        "source": "prototype packaging layout",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "fixed_mount",
+        "missing": [
+          "retention"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -238,15 +308,25 @@
           0.105
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "prototype packaging layout"
+        "source": "prototype packaging layout",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "fixed_mount",
+        "missing": [
+          "retention"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -257,8 +337,8 @@
       "interface": "scanner-fixed-mount",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
+          0.0,
+          0.0,
           0.14
         ],
         "rotation_quaternion_wxyz": [
@@ -270,7 +350,17 @@
       },
       "provenance": {
         "kind": "derived",
-        "source": "centered lift mount whose shaft is tangential to the orbit and whose linkage sweeps the object-center radial/elevation plane"
+        "source": "centered lift mount whose shaft is tangential to the orbit and whose linkage sweeps the object-center radial/elevation plane",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "fixed_mount",
+        "missing": [
+          "retention"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -282,19 +372,29 @@
       "local_pose": {
         "translation_m": [
           0.025,
-          0,
+          0.0,
           0.1125
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "prototype packaging layout"
+        "source": "prototype packaging layout",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "fixed_mount",
+        "missing": [
+          "retention"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -310,15 +410,26 @@
           0.08
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "derived",
-        "source": "modeled planar-localization header channel"
+        "source": "modeled planar-localization header channel",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -334,15 +445,26 @@
           0.08
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "derived",
-        "source": "modeled planar-localization header channel"
+        "source": "modeled planar-localization header channel",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -358,15 +480,26 @@
           0.08
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "derived",
-        "source": "modeled planar-localization heading-vector channel"
+        "source": "modeled planar-localization heading-vector channel",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -382,15 +515,26 @@
           0.08
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "derived",
-        "source": "modeled planar-localization heading-vector channel"
+        "source": "modeled planar-localization heading-vector channel",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     }
   ],
@@ -406,11 +550,11 @@
       }
     }
   ],
+  "optical_sensors": [],
   "provenance": {
     "kind": "catalog",
     "source": "Pololu catalog plus explicitly estimated connector locations",
     "reference": "Pololu 3500"
   },
-  "purchasing": {},
   "metadata": {}
 }

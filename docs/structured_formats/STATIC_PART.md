@@ -1,11 +1,13 @@
-# Static parts (`static-part-1`)
+# Static parts (`static-part-2`)
 
 `static.part` stores the physical facts that do not change when a different PMDL
 hypothesis or fidelity is selected for the same part: bodies, geometry/shape
-references, connectors, geometric parameter bindings, hash-bound optical sensor
-bindings, provenance, and purchasing
-identity. Dynamic equations and initialized parameter values belong in PMDL and
-`vN.model`. The authoritative parser is
+references, connectors, optional typed fabrication constraints, geometric
+parameter bindings, hash-bound optical sensor bindings, and provenance. Dynamic
+equations and initialized parameter values belong in PMDL and `vN.model`.
+Purchasing, supplier, lifecycle, and product-identity facts belong in separate
+[`procurement-record-1`](./PROCUREMENT.md) files so they can change without
+changing physical identity. The authoritative parser is
 `contraption.catalog.instantiations.StaticPartSpec` and physical records are in
 `contraption.physics.physical`.
 
@@ -20,7 +22,7 @@ duplicate JSON keys are invalid.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `format` | string | exactly `static-part-1` |
+| `format` | string | exactly `static-part-2` |
 | `id` | identifier | stable physical part id; directory/model-instance identity |
 | `name` | nonempty string | display name |
 | `version` | nonempty string | static physical record version |
@@ -30,8 +32,7 @@ duplicate JSON keys are invalid.
 | `parameter_bindings` | array | typed geometric measurements bound to PMDL parameters |
 | `optical_sensors` | array, optional | host-owned descriptor/pose/artifact-port bindings; default empty |
 | `provenance` | provenance | part-level source |
-| `purchasing` | object, optional | manufacturer/order/sourcing data |
-| `metadata` | object, optional | inert JSON |
+| `metadata` | object, optional | inert non-procurement JSON |
 
 Identifiers match `^[A-Za-z][A-Za-z0-9_.-]*$`. PMDL symbols match
 `^[A-Za-z][A-Za-z0-9_]*$`.
@@ -40,6 +41,14 @@ A `part` requires at least one body and every connector is spatial. A
 `boundary` or `software` requires `bodies: []`, nonspatial connectors, no
 physical parameter bindings, and matching `boundary` or `software` provenance.
 The validator never creates placeholder geometry.
+A top-level `purchasing` field is invalid. Procurement-like metadata keys such
+as `manufacturer`, `mpn`, `part_number`, `supplier`, `purchase_url`,
+`datasheet_url`, and `source_urls` are also rejected rather than becoming a
+hidden second procurement schema.
+This rejection is recursive and case-insensitive. A provenance citation may
+name the immutable drawing or catalog evidence from which a physical fact was
+derived, but it is not an authoritative product identifier, offer, or purchase
+link; those exact records remain in the procurement catalog.
 
 ## Transforms and coordinate convention
 
@@ -136,6 +145,7 @@ A connector allows exactly:
 | `provenance` | yes | connector-frame evidence |
 | `kinematics` | no | special frame kinematics |
 | `joint_coordinate_state` | conditional | PMDL state symbol for `rotational-shaft` |
+| `fabrication` | no, nullable | typed invariant endpoint capability/requirement, explicit missing record, or null |
 
 `body` and `local_pose` are either both present or both null. A physical
 `part` requires both; boundaries/software require both null. Connector ids,
@@ -144,6 +154,33 @@ may be bound only once.
 
 A `rotational-shaft` requires `joint_coordinate_state`. It identifies the local
 PMDL angular state associated with the shaft coordinate.
+
+### Connector fabrication
+
+`fabrication` uses the shared [fabrication record](./FABRICATION.md). Its kind
+must match connector semantics: mechanical connectors use `fixed_mount` except
+`rotational-shaft`, which uses `rotary_support`; electrical/signal connectors
+use `electrical_termination`; optical connectors use `optical_alignment`; other
+domains use `other`.
+
+The field is optional because many source files do not contain construction
+details. Omission or null means no fabrication record exists, never that a
+standard default applies. Importers should retain an explicit evidence-free
+missing record when they can identify the required kind but no values, for
+example:
+
+~~~json
+{
+  "kind": "electrical_termination",
+  "status": "missing",
+  "missing": ["conductor", "termination"]
+}
+~~~
+
+`partial` and `specified` claims require evidence. The static record describes
+the endpoint constraint, not the selected assembly hardware or route; those
+belong in `contraption.json` `connections[].implementation`. Incompatible
+known endpoint standards are rejected during physical assembly resolution.
 
 The only special connector kinematics is:
 
@@ -249,7 +286,7 @@ than pretending they are primitive-radius measurements.
 
 ~~~json
 {
-  "format": "static-part-1",
+  "format": "static-part-2",
   "id": "scanner.camera",
   "name": "Scanner camera payload",
   "version": "1.0.0",
@@ -297,6 +334,15 @@ than pretending they are primitive-radius measurements.
       "provenance": {
         "kind": "derived",
         "source": "Calibrated optical center and +Z viewing axis"
+      },
+      "fabrication": {
+        "kind": "optical_alignment",
+        "status": "missing",
+        "missing": [
+          "standards",
+          "alignment_tolerance_m",
+          "alignment_tolerance_rad"
+        ]
       }
     }
   ],
@@ -315,19 +361,22 @@ than pretending they are primitive-radius measurements.
     "kind": "catalog",
     "source": "Vendor mechanical drawing"
   },
-  "purchasing": {},
   "metadata": {}
 }
 ~~~
 
-This example binds detailed geometry, an optical connector frame, and the exact
+This example binds detailed geometry, an optical connector frame, an explicit
+missing fabrication constraint, and the exact
 host-owned `optical-sensor-1` descriptor/PMDL artifact port. Neither record
 hides the other inside `metadata`.
 
 ## Luna/deterministic bundling boundary
 
 Luna may propose bodies, connector abstractions, PMDL bindings, provenance
-claims supported by its textual inputs, and ordinary catalog metadata. It must
+claims supported by its textual inputs, and ordinary non-procurement catalog
+metadata. Connector fabrication is host-owned: only strict deterministic
+`component_input.connector_fabrication` records are retained, and unsupported
+agent claims are replaced with typed missing records. Luna must
 not parse a source geometry/texture/calibration file, compute transforms,
 generate canonical surfaces, infer optical properties, or author a shape,
 material, sensor, scene, observation, or reconstruction payload.

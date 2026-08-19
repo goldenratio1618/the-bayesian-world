@@ -22,6 +22,7 @@ from contraption.cli import (
 )
 from contraption.physics.physical import (
     PhysicalAssemblySpec,
+    ProvenanceSpec,
     ResolvedPartRegistry,
     ResolvedPartSpec,
     resolve_physical_assembly as _resolve_physical_assembly,
@@ -65,9 +66,12 @@ class BuildInstructionTests(unittest.TestCase):
         second = generate_build_instructions(self.assembly)
         self.assertEqual(first, second)
         self.assertEqual(first.to_markdown(), second.to_markdown())
+        self.assertEqual(first.to_dict()["schema"], "contraption.build-plan/v4")
         self.assertEqual(first.assembly_sha256, self.assembly.assembly_sha256)
         self.assertEqual(first.pmdl_sha256, self.assembly.system.pmdl_sha256)
+        self.assertRegex(first.procurement_sha256, r"^sha256:[0-9a-f]{64}$")
         self.assertIn(self.assembly.assembly_sha256, first.to_markdown())
+        self.assertIn(first.procurement_sha256, first.to_markdown())
         expected = tuple(
             {
                 "id": controller.id,
@@ -83,6 +87,39 @@ class BuildInstructionTests(unittest.TestCase):
         )
         self.assertIn(expected[0]["sha256"], first.to_markdown())
 
+    def test_purchase_bom_preserves_kit_quantities_and_exact_part_identities(self) -> None:
+        plan = generate_build_instructions(self.assembly)
+        purchase = {
+            item.procurement_record_id: item
+            for item in plan.purchase_bill_of_materials
+        }
+        chassis_kit = purchase["pololu.record-3500"]
+        self.assertEqual(chassis_kit.units_required, 1)
+        self.assertEqual(
+            {item["part"]: item["quantity"] for item in chassis_kit.provides},
+            {
+                "scanner.romi_chassis": 1,
+                "scanner.wheel": 2,
+                "scanner.gearmotor": 2,
+            },
+        )
+        arm_kit = purchase["pololu.record-3550"]
+        self.assertEqual(arm_kit.units_required, 1)
+        self.assertEqual(
+            {item["part"]: item["quantity"] for item in arm_kit.provides},
+            {"scanner.arm_linkage": 1, "scanner.position_servo": 2},
+        )
+        self.assertTrue(
+            all(item.static_part_sha256.startswith("sha256:") for item in plan.bill_of_materials)
+        )
+        self.assertTrue(
+            any(
+                "static part scanner.nimh_battery" in item
+                and "procurement record" in item
+                for item in plan.unresolved
+            )
+        )
+
     def test_every_written_build_artifact_carries_the_exact_closure_hash(self) -> None:
         plan = generate_build_instructions(self.assembly)
         with tempfile.TemporaryDirectory() as directory:
@@ -91,9 +128,15 @@ class BuildInstructionTests(unittest.TestCase):
             human = paths["BUILD_INSTRUCTIONS.md"].read_text(encoding="utf-8")
         self.assertEqual(machine["assembly_sha256"], self.assembly.assembly_sha256)
         self.assertEqual(machine["pmdl_sha256"], self.assembly.system.pmdl_sha256)
+        self.assertEqual(machine["procurement_sha256"], plan.procurement_sha256)
+        self.assertEqual(
+            machine["purchase_bill_of_materials"],
+            json.loads(plan.to_json())["purchase_bill_of_materials"],
+        )
         self.assertEqual(machine["controllers"], [dict(item) for item in plan.controllers])
         self.assertIn(self.assembly.assembly_sha256, human)
         self.assertIn(self.assembly.system.pmdl_sha256, human)
+        self.assertIn(plan.procurement_sha256, human)
 
     def test_placement_and_wiring_are_derived_from_resolved_connector_poses(self) -> None:
         plan = generate_build_instructions(self.assembly)
@@ -124,7 +167,18 @@ class BuildInstructionTests(unittest.TestCase):
     def test_unrepresented_fabrication_facts_remain_release_gates(self) -> None:
         plan = generate_build_instructions(self.assembly)
         self.assertFalse(plan.build_ready)
-        self.assertTrue(any("conductor type/gauge" in item for item in plan.unresolved))
+        self.assertTrue(
+            any(
+                "connector fabrication field 'conductor' is missing" in item
+                for item in plan.unresolved
+            )
+        )
+        self.assertTrue(
+            any(
+                "selected fabrication implementation is missing" in item
+                for item in plan.unresolved
+            )
+        )
         self.assertTrue(any("pose is estimated" in item for item in plan.unresolved))
         self.assertTrue(any("condition is 'unverified'" in item for item in plan.unresolved))
         dynamics = [
@@ -135,6 +189,63 @@ class BuildInstructionTests(unittest.TestCase):
         self.assertEqual(len(dynamics), 7)
         self.assertTrue(any("fixed_payload_mass_inertia" in item for item in dynamics))
         self.assertTrue(any("full_body_keepout" in item for item in dynamics))
+
+    def test_world_object_condition_and_estimated_geometry_are_release_gates(self) -> None:
+        world_object = self.assembly.physical.world_objects[0]
+        original = self.assembly.parts[world_object.part]
+        estimated = ProvenanceSpec(
+            "estimated",
+            "world-object-only build gate fixture",
+        )
+        estimated_part = replace(
+            original,
+            provenance=estimated,
+            bodies=tuple(
+                replace(
+                    body,
+                    solids=tuple(
+                        replace(solid, provenance=estimated)
+                        for solid in body.solids
+                    ),
+                )
+                for body in original.bodies
+            ),
+            connectors=tuple(
+                replace(connector, provenance=estimated)
+                for connector in original.connectors
+            ),
+        )
+        parts = ResolvedPartRegistry(
+            estimated_part if part.id == original.id else part
+            for part in self.assembly.parts.values()
+        )
+
+        plan = generate_build_instructions(replace(self.assembly, parts=parts))
+
+        self.assertTrue(
+            any(
+                f"world object {world_object.id}: condition is 'unverified'" in item
+                for item in plan.unresolved
+            )
+        )
+        self.assertTrue(
+            any(
+                f"part {original.id}: part geometry/provenance is estimated" in item
+                for item in plan.unresolved
+            )
+        )
+        self.assertTrue(
+            any(
+                f"part {original.id} solid " in item and "geometry is estimated" in item
+                for item in plan.unresolved
+            )
+        )
+        self.assertTrue(
+            any(
+                f"part {original.id} connector " in item and "pose is estimated" in item
+                for item in plan.unresolved
+            )
+        )
 
     def test_build_rejects_resolved_assembly_missing_mandatory_completeness(self) -> None:
         corrupted = replace(

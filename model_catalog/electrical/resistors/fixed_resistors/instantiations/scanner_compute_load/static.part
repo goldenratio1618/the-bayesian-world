@@ -1,5 +1,5 @@
 {
-  "format": "static-part-1",
+  "format": "static-part-2",
   "id": "scanner.compute",
   "name": "Scanner compute load",
   "version": "1.0.0",
@@ -9,15 +9,15 @@
       "id": "board",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "solids": [
@@ -36,15 +36,15 @@
           },
           "local_pose": {
             "translation_m": [
-              0,
-              0,
-              0
+              0.0,
+              0.0,
+              0.0
             ],
             "rotation_quaternion_wxyz": [
-              1,
-              0,
-              0,
-              0
+              1.0,
+              0.0,
+              0.0,
+              0.0
             ]
           },
           "provenance": {
@@ -65,20 +65,30 @@
       "interface": "scanner-fixed-mount",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
+          0.0,
+          0.0,
           -0.0025
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "board lower face"
+        "source": "board lower face",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "fixed_mount",
+        "missing": [
+          "retention"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -91,18 +101,29 @@
         "translation_m": [
           -0.0325,
           0.006,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "power header abstraction"
+        "source": "power header abstraction",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -115,27 +136,38 @@
         "translation_m": [
           -0.0325,
           -0.006,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "power header abstraction"
+        "source": "power header abstraction",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     }
   ],
   "parameter_bindings": [],
+  "optical_sensors": [],
   "provenance": {
     "kind": "catalog",
     "source": "vendor envelope with equivalent power terminals",
     "reference": "Raspberry Pi Zero 2 W"
   },
-  "purchasing": {},
   "metadata": {}
 }

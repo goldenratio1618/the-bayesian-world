@@ -1,0 +1,47 @@
+{
+  "documents": [
+    {
+      "kind": "product_page",
+      "url": "https://www.pololu.com/product/4981"
+    }
+  ],
+  "evidence": [
+    {
+      "locator": "$.products[1]",
+      "sha256": "sha256:681438a1a754b8b0a53bb72127e39f22a48e1c0d24982a90cb303227bbf50413",
+      "source": "assembled_contraptions/scanner/component_inputs/power.json"
+    },
+    {
+      "locator": "$.source_urls[1]",
+      "sha256": "sha256:681438a1a754b8b0a53bb72127e39f22a48e1c0d24982a90cb303227bbf50413",
+      "source": "assembled_contraptions/scanner/component_inputs/power.json"
+    },
+    {
+      "locator": "$.provenance",
+      "sha256": "sha256:5ff4e6588cd1d55534f15cb43879ffc81bd0adeda61681a3d2ce935daad56611",
+      "source": "model_catalog/electrical/power_converters/fixed_voltage_regulators/instantiations/scanner_servo_regulator/static.part"
+    }
+  ],
+  "format": "procurement-record-1",
+  "id": "product.pololu-6v-2-5a-step-up-step-down-regulator-s13v25f6-item-4981",
+  "identifiers": [
+    {
+      "scheme": "product_name",
+      "value": "Pololu 6V 2.5A step-up/step-down regulator S13V25F6, item 4981"
+    }
+  ],
+  "lifecycle": {
+    "status": "unknown"
+  },
+  "manufacturer": null,
+  "offers": [],
+  "provides": [
+    {
+      "part": "scanner.servo_regulator",
+      "quantity": 1,
+      "static_sha256": "sha256:217d829fa2ccabd2c2d471e085d0164bfe4de35515ab6f43234604e3284ab459",
+      "version": "1.0.0"
+    }
+  ],
+  "version": "1.0.0"
+}

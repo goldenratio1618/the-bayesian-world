@@ -1,0 +1,103 @@
+{
+  "documents": [
+    {
+      "kind": "product_page",
+      "url": "https://www.pololu.com/product/3500"
+    },
+    {
+      "kind": "product_page",
+      "url": "https://www.pololu.com/product/1520"
+    }
+  ],
+  "evidence": [
+    {
+      "locator": "$.product",
+      "sha256": "sha256:1b27a7d2b50ca3dbb0b8044b37185e68c514a93a954fe55121cfce1716c26a7c",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_drive.json"
+    },
+    {
+      "locator": "$.manufacturer",
+      "sha256": "sha256:1b27a7d2b50ca3dbb0b8044b37185e68c514a93a954fe55121cfce1716c26a7c",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_drive.json"
+    },
+    {
+      "locator": "$.source_urls[0]",
+      "sha256": "sha256:1b27a7d2b50ca3dbb0b8044b37185e68c514a93a954fe55121cfce1716c26a7c",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_drive.json"
+    },
+    {
+      "locator": "$.source_urls[1]",
+      "sha256": "sha256:1b27a7d2b50ca3dbb0b8044b37185e68c514a93a954fe55121cfce1716c26a7c",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_drive.json"
+    },
+    {
+      "locator": "$.included[4]",
+      "sha256": "sha256:1b27a7d2b50ca3dbb0b8044b37185e68c514a93a954fe55121cfce1716c26a7c",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_drive.json"
+    },
+    {
+      "locator": "$.provenance",
+      "sha256": "sha256:93b02069ed1016ee9d97d9f384e63e47aa6a59b2acee76f8f65967a0ce8c15ac",
+      "source": "model_catalog/mechanical/chassis/differential_drive_chassis/instantiations/pololu_romi_chassis/static.part"
+    },
+    {
+      "locator": "$.included[1]",
+      "sha256": "sha256:1b27a7d2b50ca3dbb0b8044b37185e68c514a93a954fe55121cfce1716c26a7c",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_drive.json"
+    },
+    {
+      "locator": "$.provenance",
+      "sha256": "sha256:e1691ecc003822ab8def398501c1a90284223e677a1c412e1dc5ae9b5cb13134",
+      "source": "model_catalog/mechanical/wheels/rolling_drive_wheels/instantiations/pololu_romi_wheel/static.part"
+    },
+    {
+      "locator": "$.included[0]",
+      "sha256": "sha256:1b27a7d2b50ca3dbb0b8044b37185e68c514a93a954fe55121cfce1716c26a7c",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_drive.json"
+    },
+    {
+      "locator": "$.provenance",
+      "sha256": "sha256:b77294f24097761ba39e133ea56feada5ec2ca41f6ac3ae5dc181dbdce830691",
+      "source": "model_catalog/electromechanical/motors/geared_brushed_dc_motors/instantiations/pololu_micro_metal_gearmotor/static.part"
+    }
+  ],
+  "format": "procurement-record-1",
+  "id": "pololu.record-3500",
+  "identifiers": [
+    {
+      "scheme": "product_name",
+      "value": "Romi Chassis Kit, item 3500"
+    },
+    {
+      "issuer": "Pololu",
+      "scheme": "manufacturer_item_number",
+      "value": "3500"
+    }
+  ],
+  "lifecycle": {
+    "status": "unknown"
+  },
+  "manufacturer": "Pololu",
+  "offers": [],
+  "provides": [
+    {
+      "part": "scanner.romi_chassis",
+      "quantity": 1,
+      "static_sha256": "sha256:3759e67d778f6a892923be8f0f7647a1639d042dcdef76ff5f3e6da105b32c3d",
+      "version": "2.0.0"
+    },
+    {
+      "part": "scanner.wheel",
+      "quantity": 2,
+      "static_sha256": "sha256:a15c4458d508d35df37b6cfc1014b977fe14ce4a3ea458db367ae19a3378256b",
+      "version": "1.0.0"
+    },
+    {
+      "part": "scanner.gearmotor",
+      "quantity": 2,
+      "static_sha256": "sha256:17b9826e8ecd1de7e79ccd396a9b6cb838c99fb400dc131430a38a193d88a3ee",
+      "version": "1.0.0"
+    }
+  ],
+  "version": "1.0.0"
+}

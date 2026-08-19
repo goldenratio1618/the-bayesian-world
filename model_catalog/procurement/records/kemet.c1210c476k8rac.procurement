@@ -1,0 +1,43 @@
+{
+  "documents": [],
+  "evidence": [
+    {
+      "locator": "$.purchasing.manufacturer",
+      "sha256": "sha256:10503c7f8b52f8d9663203427547a9c3d1f49752e105b535995a8b79d909cf0a",
+      "source": "git:96e9baa46c8219982a1a798408bfcf3f638ec63e:model_catalog/electrical/capacitors/ceramic_capacitors/instantiations/C1210C476K8RAC/static.part"
+    },
+    {
+      "locator": "$.purchasing.manufacturer_part_number",
+      "sha256": "sha256:10503c7f8b52f8d9663203427547a9c3d1f49752e105b535995a8b79d909cf0a",
+      "source": "git:96e9baa46c8219982a1a798408bfcf3f638ec63e:model_catalog/electrical/capacitors/ceramic_capacitors/instantiations/C1210C476K8RAC/static.part"
+    },
+    {
+      "locator": "$.provenance",
+      "sha256": "sha256:6c3b86b22d26d5262b0d38a38def2e7a42db4ea64510fa74ce1b28a432184071",
+      "source": "model_catalog/electrical/capacitors/ceramic_capacitors/instantiations/C1210C476K8RAC/static.part"
+    }
+  ],
+  "format": "procurement-record-1",
+  "id": "kemet.c1210c476k8rac",
+  "identifiers": [
+    {
+      "issuer": "KEMET",
+      "scheme": "manufacturer_part_number",
+      "value": "C1210C476K8RAC"
+    }
+  ],
+  "lifecycle": {
+    "status": "unknown"
+  },
+  "manufacturer": "KEMET",
+  "offers": [],
+  "provides": [
+    {
+      "part": "C1210C476K8RAC",
+      "quantity": 1,
+      "static_sha256": "sha256:76dad1d4d05382eb5fb1bf04198ed9f6eaf0fca2c01c52dd559161efd93437b6",
+      "version": "1.0.0"
+    }
+  ],
+  "version": "1.0.0"
+}

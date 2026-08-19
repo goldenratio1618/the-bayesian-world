@@ -12,6 +12,9 @@ and validated:
 
 ```text
 model_catalog/
+  procurement/
+    records/
+      <record-id>.procurement
   <physical-domain>/
     interface.pmdl
     <category>/
@@ -28,14 +31,23 @@ model_catalog/
 
 Every layer declares abstract interface contracts in `interface.pmdl`. Concrete
 PMDL classes live beside the most specific contract they implement. A
-`static.part` owns model-independent geometry, connectors, provenance, purchase
-facts, and metadata. Each `vN.model` selects an exact PMDL id/version/hash and
+`static.part` owns model-independent geometry, connectors, typed endpoint
+fabrication constraints, provenance, and non-procurement metadata. Central
+`.procurement` records own evidenced product identity, documents, lifecycle,
+offers, and exact static-part provisions. Each `vN.model` selects an exact PMDL id/version/hash and
 initializes its parameters, uncertainty, condition, and relative compute cost.
 
 There is no SQL registry. `load_contraption` dynamically builds the Python
-`ModelRegistry`, `ModelInterfaceCatalog`, and `PartInstantiationRegistry` from
-the catalog roots named by the contraption manifest. Stale hashes, duplicate
-ids, and incomplete part/model closures fail before resolution.
+`ModelRegistry`, `ModelInterfaceCatalog`, and `PartInstantiationRegistry`—the
+last carrying its validated `ProcurementRegistry`—from the catalog roots named
+by the contraption manifest. Stale hashes, duplicate ids, and incomplete
+part/model/procurement closures fail before resolution.
+
+Static-part canonical hashes exclude procurement. Procurement records and the
+sorted procurement registry have their own canonical hashes, and build plans
+carry `assembly_sha256` and `procurement_sha256` separately. Supplier or price
+updates therefore do not rewrite physical assembly identity; stale
+`provides[].static_sha256` bindings still fail closed.
 
 ## Canonical contraption closure
 
@@ -68,7 +80,8 @@ contraption-4 manifest
 
 Resolution verifies interface conformance, PMDL and artifact hashes, complete
 parameter initialization, physical bindings, signal direction, units, sensor
-state indices, and actuator destinations. All downstream systems consume the
+state indices, endpoint fabrication compatibility, selected connection
+implementations, exact procurement provisions, and actuator destinations. All downstream systems consume the
 same `ResolvedAssembly`; none may add or override the represented device.
 
 ## Controller boundary
@@ -163,7 +176,8 @@ algebraic lowering is supplied.
   and Verilog generation.
 - `contraption.verification` owns the verification DSL and posterior evaluator.
 - `contraption.catalog` owns interface discovery and part/model instantiation
-  registries.
+  registries plus central procurement records and their exact static-part
+  provisions.
 - `contraption.part_import` owns guarded part classification/modeling, budgets,
   and deterministic candidate validation.
 - `contraption.visualization` is display-only; `contraption.live` provides the
@@ -189,6 +203,9 @@ are explicit bundles under `assembled_contraptions/examples/test_systems/`.
   boundary conditions within declared tolerances.
 - Viewer frames, verification reports, controller artifacts, and build plans
   remain bound to the exact assembly closure.
+- Missing fabrication and procurement facts remain explicit. No connector
+  hardware, cable route, product identifier, supplier, URL, lifecycle state, or
+  offer is inferred from an absent field.
 - Controller inference is a coupled local-affine approximation derived from the
   complete assembled PMDL descriptor system at a hash-bound operating point.
   Nonlinear plant relations require explicit approximation approval, and the

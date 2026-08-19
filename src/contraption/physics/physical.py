@@ -22,6 +22,11 @@ from pathlib import Path
 import re
 from typing import Any
 
+from ..fabrication import (
+    ConnectorFabricationSpec,
+    FabricationSpecError,
+    fabrication_compatibility_issues,
+)
 from .specs import ConnectionSpec, FrozenDict, JointSpec, SpecError, StrictRecord
 from .units import UnitError, parse_unit
 
@@ -70,6 +75,17 @@ _PROVENANCE_KINDS = frozenset(
 _PHYSICAL_ROLES = frozenset({"part", "boundary", "software"})
 _SOLID_KINDS = frozenset({"box", "cylinder", "sphere", "shape"})
 _MECHANICAL_DOMAINS = frozenset({"mechanical", "rigid_mechanical"})
+_ELECTRICAL_DOMAINS = frozenset({"electrical", "signal"})
+
+
+def _expected_fabrication_kind(domain: str, interface: str) -> str:
+    if domain in _MECHANICAL_DOMAINS:
+        return "rotary_support" if interface == "rotational-shaft" else "fixed_mount"
+    if domain in _ELECTRICAL_DOMAINS:
+        return "electrical_termination"
+    if domain == "optical":
+        return "optical_alignment"
+    return "other"
 
 
 def _mapping(value: Any, context: str) -> Mapping[str, Any]:
@@ -679,6 +695,7 @@ class PhysicalConnectorSpec(StrictRecord):
     provenance: ProvenanceSpec
     kinematics: CounterRotationKinematicsSpec | None = None
     joint_coordinate_state: str | None = None
+    fabrication: ConnectorFabricationSpec | None = None
 
     def __post_init__(self) -> None:
         _identifier(self.id, "connector.id")
@@ -719,6 +736,18 @@ class PhysicalConnectorSpec(StrictRecord):
                     f"connector {self.id!r} may bind a joint coordinate state only "
                     "for interface 'rotational-shaft'"
                 )
+        if self.fabrication is not None:
+            if not isinstance(self.fabrication, ConnectorFabricationSpec):
+                raise PhysicalSpecError(
+                    "connector.fabrication must be a ConnectorFabricationSpec or null"
+                )
+            expected_kind = _expected_fabrication_kind(self.domain, self.interface)
+            if self.fabrication.kind != expected_kind:
+                raise PhysicalSpecError(
+                    f"connector {self.id!r} in domain {self.domain!r} with interface "
+                    f"{self.interface!r} requires fabrication.kind {expected_kind!r}, "
+                    f"got {self.fabrication.kind!r}"
+                )
 
     @property
     def spatial(self) -> bool:
@@ -737,6 +766,7 @@ class PhysicalConnectorSpec(StrictRecord):
             "provenance",
             "kinematics",
             "joint_coordinate_state",
+            "fabrication",
         )
         required = [
             "id",
@@ -762,6 +792,16 @@ class PhysicalConnectorSpec(StrictRecord):
         if body is not None:
             body = _identifier(body, "connector.body")
         local_pose = data["local_pose"]
+        try:
+            fabrication = (
+                None
+                if data.get("fabrication") is None
+                else ConnectorFabricationSpec.from_dict(
+                    _mapping(data["fabrication"], "connector.fabrication")
+                )
+            )
+        except FabricationSpecError as exc:
+            raise PhysicalSpecError(f"invalid connector.fabrication: {exc}") from exc
         return cls(
             _identifier(data["id"], "connector.id"),
             model_port,
@@ -783,6 +823,7 @@ class PhysicalConnectorSpec(StrictRecord):
                 data["joint_coordinate_state"],
                 "connector.joint_coordinate_state",
             ),
+            fabrication,
         )
 
 
@@ -1634,6 +1675,14 @@ def _validate_attachment_connectors(
             f"attachment {attachment.id!r} connects incompatible interfaces "
             f"{parent.interface!r} and {child.interface!r}"
         )
+    fabrication_issues = fabrication_compatibility_issues(
+        parent.fabrication, child.fabrication
+    )
+    if fabrication_issues:
+        raise ConnectorCompatibilityError(
+            f"attachment {attachment.id!r} has incompatible fabrication constraints: "
+            + "; ".join(fabrication_issues)
+        )
     if attachment.joint.kind == "revolute" and parent.interface != "rotational-shaft":
         raise ConnectorCompatibilityError(
             f"revolute attachment {attachment.id!r} requires interface "
@@ -1674,8 +1723,10 @@ def _validate_and_canonicalize_connections(
             )
         domains: set[str] = set()
         interfaces: set[str] = set()
+        endpoint_connectors: list[PhysicalConnectorSpec] = []
         for reference in endpoints:
             _part, connector = _connector_for(reference, component_map, parts)
+            endpoint_connectors.append(connector)
             if kind in {"power", "signal"} and connector.model_port is None:
                 raise ConnectorCompatibilityError(
                     f"{kind} endpoint {reference.key!r} must bind a non-null model_port"
@@ -1708,12 +1759,39 @@ def _validate_and_canonicalize_connections(
                 f"connections[{index}].metadata must be empty; physical semantics "
                 "require typed connection fields rather than opaque metadata"
             )
+        known_fabrication = [
+            connector.fabrication
+            for connector in endpoint_connectors
+            if connector.fabrication is not None
+        ]
+        if known_fabrication:
+            first = known_fabrication[0]
+            for other in known_fabrication[1:]:
+                issues = fabrication_compatibility_issues(first, other)
+                if issues:
+                    raise ConnectorCompatibilityError(
+                        f"{kind} connection {connection_id!r} has incompatible endpoint "
+                        "fabrication constraints: " + "; ".join(issues)
+                    )
+        if connection.implementation is not None:
+            for endpoint, connector in zip(endpoints, endpoint_connectors, strict=True):
+                issues = fabrication_compatibility_issues(
+                    connector.fabrication, connection.implementation
+                )
+                if issues:
+                    raise ConnectorCompatibilityError(
+                        f"{kind} connection {connection_id!r} implementation conflicts "
+                        f"with endpoint {endpoint.key!r}: " + "; ".join(issues)
+                    )
         normalized: dict[str, Any] = {
             "id": connection_id,
             "kind": kind,
             "endpoints": [endpoint.to_dict() for endpoint in endpoints],
             "domain": declared_domain,
             "metadata": {},
+            "implementation": None
+            if connection.implementation is None
+            else connection.implementation.to_dict(),
         }
         if kind == "attachment":
             assert connection.joint is not None

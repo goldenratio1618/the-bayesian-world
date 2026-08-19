@@ -27,8 +27,6 @@
     "notes": "Yageo RC0603FR-0710RL fixed-resistor nominal hypothesis."
   },
   "metadata": {
-    "manufacturer": "Yageo",
-    "product": "RC0603FR-0710RL",
     "published_tolerance_fraction": 0.01,
     "rated_power_w": 0.1
   }

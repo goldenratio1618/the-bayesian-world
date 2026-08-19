@@ -1,5 +1,5 @@
 {
-  "format": "static-part-1",
+  "format": "static-part-2",
   "id": "yageo-rc0603-10k",
   "name": "Yageo RC0603FR-0710KL 10 kOhm resistor",
   "version": "1.0.0",
@@ -9,15 +9,15 @@
       "id": "body",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "solids": [
@@ -36,20 +36,21 @@
           },
           "local_pose": {
             "translation_m": [
-              0,
-              0,
-              0
+              0.0,
+              0.0,
+              0.0
             ],
             "rotation_quaternion_wxyz": [
-              1,
-              0,
-              0,
-              0
+              1.0,
+              0.0,
+              0.0,
+              0.0
             ]
           },
           "provenance": {
             "kind": "vendor",
-            "source": "Published Yageo package dimensions"
+            "source": "Published Yageo package dimensions",
+            "reference": null
           }
         }
       ]
@@ -65,19 +66,30 @@
       "local_pose": {
         "translation_m": [
           -0.0008,
-          0,
-          0
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "Package-end terminal frame"
+        "source": "Package-end terminal frame",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -89,31 +101,39 @@
       "local_pose": {
         "translation_m": [
           0.0008,
-          0,
-          0
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "Package-end terminal frame"
+        "source": "Package-end terminal frame",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     }
   ],
   "parameter_bindings": [],
+  "optical_sensors": [],
   "provenance": {
     "kind": "vendor",
     "source": "Yageo product data for RC0603FR-0710KL",
     "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-0710KL"
-  },
-  "purchasing": {
-    "manufacturer": "Yageo",
-    "product": "RC0603FR-0710KL"
   },
   "metadata": {
     "package": "0603",

@@ -1,0 +1,52 @@
+{
+  "documents": [
+    {
+      "kind": "product_page",
+      "url": "https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/"
+    }
+  ],
+  "evidence": [
+    {
+      "locator": "$.products[0]",
+      "sha256": "sha256:45b51a0c32f2dff43c6ff25a025f6f5f9e0abfb886ec3f79da4d442fc349a1bf",
+      "source": "assembled_contraptions/scanner/component_inputs/camera_compute.json"
+    },
+    {
+      "locator": "$.manufacturer",
+      "sha256": "sha256:45b51a0c32f2dff43c6ff25a025f6f5f9e0abfb886ec3f79da4d442fc349a1bf",
+      "source": "assembled_contraptions/scanner/component_inputs/camera_compute.json"
+    },
+    {
+      "locator": "$.source_urls[0]",
+      "sha256": "sha256:45b51a0c32f2dff43c6ff25a025f6f5f9e0abfb886ec3f79da4d442fc349a1bf",
+      "source": "assembled_contraptions/scanner/component_inputs/camera_compute.json"
+    },
+    {
+      "locator": "$.provenance",
+      "sha256": "sha256:2e362b55bca10d02e82774ab50dcacf2e5b62ea0b91381e0b9266d053236c65c",
+      "source": "model_catalog/electrical/resistors/fixed_resistors/instantiations/scanner_compute_load/static.part"
+    }
+  ],
+  "format": "procurement-record-1",
+  "id": "raspberry-pi.raspberry-pi-zero-2-w",
+  "identifiers": [
+    {
+      "scheme": "product_name",
+      "value": "Raspberry Pi Zero 2 W"
+    }
+  ],
+  "lifecycle": {
+    "status": "unknown"
+  },
+  "manufacturer": "Raspberry Pi",
+  "offers": [],
+  "provides": [
+    {
+      "part": "scanner.compute",
+      "quantity": 1,
+      "static_sha256": "sha256:865f13f6b1b189abcb525e928ae89f01c66b918e7b13502def36a9bc8f4e4383",
+      "version": "1.0.0"
+    }
+  ],
+  "version": "1.0.0"
+}

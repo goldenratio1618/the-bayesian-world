@@ -1,5 +1,5 @@
 {
-  "format": "static-part-1",
+  "format": "static-part-2",
   "id": "scanner.electrical_reference",
   "name": "Zero-potential boundary",
   "version": "1.0.0",
@@ -15,15 +15,20 @@
       "local_pose": null,
       "provenance": {
         "kind": "boundary",
-        "source": "explicit electrical gauge boundary"
-      }
+        "source": "explicit electrical gauge boundary",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": null
     }
   ],
   "parameter_bindings": [],
+  "optical_sensors": [],
   "provenance": {
     "kind": "boundary",
-    "source": "simulation environment electrical reference"
+    "source": "simulation environment electrical reference",
+    "reference": null
   },
-  "purchasing": {},
   "metadata": {}
 }

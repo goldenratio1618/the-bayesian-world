@@ -1,5 +1,5 @@
 {
-  "format": "static-part-1",
+  "format": "static-part-2",
   "id": "scanner.wheel",
   "name": "Pololu Romi wheel",
   "version": "1.0.0",
@@ -9,15 +9,15 @@
       "id": "wheel",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "solids": [
@@ -36,15 +36,15 @@
           },
           "local_pose": {
             "translation_m": [
-              0,
-              0,
-              0
+              0.0,
+              0.0,
+              0.0
             ],
             "rotation_quaternion_wxyz": [
               0.7071067811865476,
               0.7071067811865475,
-              0,
-              0
+              0.0,
+              0.0
             ]
           },
           "provenance": {
@@ -63,23 +63,34 @@
       "body": "wheel",
       "domain": "mechanical",
       "interface": "rotational-shaft",
-      "joint_coordinate_state": "angle",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
           0.7071067811865476,
           0.7071067811865475,
-          0,
-          0
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "wheel-axis center with explicit PMDL angle-state binding"
+        "source": "wheel-axis center with explicit PMDL angle-state binding",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": "angle",
+      "fabrication": {
+        "kind": "rotary_support",
+        "missing": [
+          "retention",
+          "bearing",
+          "travel"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -90,24 +101,33 @@
       "interface": "hub-translation",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
           0.7071067811865476,
           0.7071067811865475,
-          0,
-          0
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "derived",
-        "source": "non-material rolling-reduced translation frame at wheel hub; local +z follows axle orientation"
+        "source": "non-material rolling-reduced translation frame at wheel hub; local +z follows axle orientation",
+        "reference": null
       },
       "kinematics": {
         "kind": "counter_rotation",
         "state": "angle"
+      },
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "fixed_mount",
+        "missing": [
+          "retention"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -118,20 +138,31 @@
       "interface": "logic-signal",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "derived",
-        "source": "ideal wheel-rate observation"
+        "source": "ideal wheel-rate observation",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     }
   ],
@@ -148,10 +179,11 @@
       }
     }
   ],
+  "optical_sensors": [],
   "provenance": {
     "kind": "catalog",
-    "source": "Pololu nominal dimensions plus derived contact point"
+    "source": "Pololu nominal dimensions plus derived contact point",
+    "reference": null
   },
-  "purchasing": {},
   "metadata": {}
 }

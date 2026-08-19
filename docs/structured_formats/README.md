@@ -19,8 +19,10 @@ For exact assembly-capture and reconstruction commands, see
 |---|---|---|
 | [PMDL](./PMDL.md) | `pmdl-1` | human or Luna model author |
 | [PMDL interfaces](./PMDL_INTERFACES.md) | `pmdl-interface-1` | catalog taxonomy/contract author |
-| [Static part](./STATIC_PART.md) | `static-part-1` | catalog author plus deterministic shape importer |
+| [Static part](./STATIC_PART.md) | `static-part-2` | catalog author plus deterministic shape importer |
+| [Fabrication](./FABRICATION.md) | connector fabrication constraints and connection implementations | catalog/assembly author plus deterministic importer |
 | [Model instance](./MODEL_INSTANCE.md) | `model-instance-1` | catalog author |
+| [Procurement](./PROCUREMENT.md) | `procurement-record-1` | deterministic identity/procurement importer or evidence-backed catalog author |
 | [Contraption](./CONTRAPTION.md) | `contraption-4` | assembly author |
 | [Control](./CONTROL.md) | `control-1` | controller author |
 | [Verification](./VERIFICATION.md) | `verification-1` | acceptance-test author |
@@ -52,6 +54,8 @@ Unless a guide explicitly says otherwise:
   not merely a filename or semantic version.
 - `metadata` is inert JSON. It may record information but cannot introduce
   physics, ports, validation exceptions, executable behavior, or hidden defaults.
+  Fabrication semantics belong in typed connector/connection fields; purchasing,
+  supplier, lifecycle, and product identity belong in `.procurement` records.
 - Provenance and uncertainty are capabilities, not decorations. A model may use
   a representation only for operations its quality/capability declaration supports.
 - Absence is explicit. A renderer, solver, or importer must not replace an
@@ -60,9 +64,11 @@ Unless a guide explicitly says otherwise:
 
 ## Authored and deterministic boundaries
 
-PMDL, interfaces, model instances, contraptions, controls, and verification
-programs are authored declarative records. Luna may propose the catalog formats
-that the modeling harness permits, subject to deterministic validation.
+PMDL, interfaces, static parts, model instances, contraptions, controls, and
+verification programs are authored declarative records. Luna may propose only
+the catalog formats that the modeling harness permits, subject to deterministic
+validation. Procurement records are host-owned evidence projections rather than
+dynamic facts embedded in physical parts.
 
 Source geometry and optical evidence never pass through Luna. The protected
 host declaration and staging contract is defined in
@@ -103,9 +109,11 @@ A complete closure is validated in this order:
 3. Resolve catalog/interface ancestry and exact PMDL identity.
 4. Validate ports, expressions, dimensions, initialization, and equation balance.
 5. Resolve physical bodies, connectors, shape references, and assemblies.
-6. Resolve optical material, sensor, scene, and observation capabilities.
-7. Validate control and verification bindings against the resolved closure.
-8. Admit a derived artifact only when every exact dependency and capability is present.
+6. Validate fabrication constraints and selected connection implementations.
+7. Validate procurement provisions against exact static-part versions/hashes.
+8. Resolve optical material, sensor, scene, and observation capabilities.
+9. Validate control and verification bindings against the resolved closure.
+10. Admit a derived artifact only when every exact dependency and capability is present.
 
 Use `contraption validate` for the complete project closure and the dedicated
 part-import validator for a staged catalog bundle. Passing syntax alone never

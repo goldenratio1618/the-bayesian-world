@@ -1,5 +1,5 @@
 {
-  "format": "static-part-1",
+  "format": "static-part-2",
   "id": "yageo_rc0603_10r",
   "name": "Yageo RC0603FR-0710RL 10 ohm resistor",
   "version": "1.0.0",
@@ -9,15 +9,15 @@
       "id": "body",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "solids": [
@@ -36,20 +36,21 @@
           },
           "local_pose": {
             "translation_m": [
-              0,
-              0,
-              0
+              0.0,
+              0.0,
+              0.0
             ],
             "rotation_quaternion_wxyz": [
-              1,
-              0,
-              0,
-              0
+              1.0,
+              0.0,
+              0.0,
+              0.0
             ]
           },
           "provenance": {
             "kind": "vendor",
-            "source": "Yageo published RC0603FR-0710RL package dimensions"
+            "source": "Yageo published RC0603FR-0710RL package dimensions",
+            "reference": null
           }
         }
       ]
@@ -65,19 +66,30 @@
       "local_pose": {
         "translation_m": [
           -0.0008,
-          0,
-          0
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "vendor",
-        "source": "Yageo RC0603FR-0710RL terminal layout"
+        "source": "Yageo RC0603FR-0710RL terminal layout",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -89,32 +101,41 @@
       "local_pose": {
         "translation_m": [
           0.0008,
-          0,
-          0
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "vendor",
-        "source": "Yageo RC0603FR-0710RL terminal layout"
+        "source": "Yageo RC0603FR-0710RL terminal layout",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     }
   ],
   "parameter_bindings": [],
+  "optical_sensors": [],
   "provenance": {
     "kind": "vendor",
     "source": "Yageo product data for RC0603FR-0710RL",
     "reference": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-0710RL"
   },
-  "purchasing": {},
   "metadata": {
-    "manufacturer": "Yageo",
-    "product": "RC0603FR-0710RL",
     "package": "0603"
   }
 }

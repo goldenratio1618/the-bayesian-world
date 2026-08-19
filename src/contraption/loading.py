@@ -8,6 +8,7 @@ from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from .catalog.instantiations import PartInstantiationRegistry
+from .catalog.procurement import ProcurementRegistry
 from .catalog.interfaces import load_interface_catalog
 from .control import ControlSpec, control_digest, load_control
 from .physics.dsl import ModelRegistry
@@ -117,11 +118,19 @@ def _load_catalogs(
             interfaces = load_interface_catalog(root)
             models.load_directory(root, interfaces=interfaces)
         values = []
+        procurement_records = []
         for root in roots:
-            values.extend(
-                PartInstantiationRegistry.load_catalog(root, models=models).values()
+            registry = PartInstantiationRegistry.load_catalog(
+                root,
+                models=models,
+                validate_procurement=False,
             )
-        instantiations = PartInstantiationRegistry(values)
+            values.extend(registry.values())
+            procurement_records.extend(registry.procurement.values())
+        instantiations = PartInstantiationRegistry(
+            values,
+            procurement=ProcurementRegistry(procurement_records),
+        )
         instantiations.validate_models(models)
     except Exception as exc:
         raise ContraptionLoadError(f"catalog closure validation failed: {exc}") from exc

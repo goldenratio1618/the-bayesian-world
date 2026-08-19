@@ -1,5 +1,5 @@
 {
-  "format": "static-part-1",
+  "format": "static-part-2",
   "id": "scanner.nimh_battery",
   "name": "Scanner NiMH battery pack",
   "version": "1.0.0",
@@ -9,15 +9,15 @@
       "id": "pack",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "solids": [
@@ -36,20 +36,21 @@
           },
           "local_pose": {
             "translation_m": [
-              0,
-              0,
-              0
+              0.0,
+              0.0,
+              0.0
             ],
             "rotation_quaternion_wxyz": [
-              1,
-              0,
-              0,
-              0
+              1.0,
+              0.0,
+              0.0,
+              0.0
             ]
           },
           "provenance": {
             "kind": "catalog",
-            "source": "six-cell AA holder nominal envelope"
+            "source": "six-cell AA holder nominal envelope",
+            "reference": null
           }
         }
       ]
@@ -64,20 +65,30 @@
       "interface": "scanner-fixed-mount",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
+          0.0,
+          0.0,
           -0.026
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "pack bottom mounting face"
+        "source": "pack bottom mounting face",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "fixed_mount",
+        "missing": [
+          "retention"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -90,18 +101,29 @@
         "translation_m": [
           0.043,
           0.012,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "holder lead exit"
+        "source": "holder lead exit",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -114,26 +136,38 @@
         "translation_m": [
           0.043,
           -0.012,
-          0
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "holder lead exit"
+        "source": "holder lead exit",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     }
   ],
   "parameter_bindings": [],
+  "optical_sensors": [],
   "provenance": {
     "kind": "catalog",
-    "source": "AA holder envelope with estimated leads"
+    "source": "AA holder envelope with estimated leads",
+    "reference": null
   },
-  "purchasing": {},
   "metadata": {}
 }

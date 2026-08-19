@@ -27,6 +27,12 @@ from .artifacts import (
 )
 from .mechanics import MassPropertyError, mass_properties
 from .mesh import MeshError, TriangleMesh
+from .backends import (
+    GeometryBackendError,
+    automatic_tessellator,
+    missing_backend_message,
+    native_ply_tessellator,
+)
 
 
 class ShapeImportError(ShapeArtifactError):
@@ -66,13 +72,17 @@ Tessellator = Callable[[Path, float], TessellatedShape]
 
 _MEDIA_TYPES = {
     ".obj": "model/obj", ".mtl": "model/mtl", ".stl": "model/stl", ".ply": "model/ply",
-    ".step": "model/step", ".stp": "model/step", ".brep": "model/brep", ".fcstd": "application/vnd.freecad",
+    ".step": "model/step", ".stp": "model/step", ".iges": "model/iges", ".igs": "model/iges",
+    ".brep": "model/brep", ".fcstd": "application/vnd.freecad",
     ".gltf": "model/gltf+json", ".glb": "model/gltf-binary", ".ctmesh": "application/vnd.contraption.ctmesh",
+    ".wrl": "model/vrml", ".vrml": "model/vrml",
     ".json": "application/json",
 }
 _SOURCE_FORMATS = {
-    ".obj": "obj", ".stl": "stl", ".ply": "ply", ".step": "step", ".stp": "step", ".brep": "brep",
-    ".fcstd": "fcstd", ".gltf": "gltf", ".glb": "glb", ".ctmesh": "ctmesh",
+    ".obj": "obj", ".stl": "stl", ".ply": "ply", ".step": "step", ".stp": "step",
+    ".iges": "iges", ".igs": "iges", ".brep": "brep",
+    ".fcstd": "fcstd", ".gltf": "gltf", ".glb": "glb", ".wrl": "wrl", ".vrml": "wrl",
+    ".ctmesh": "ctmesh",
 }
 
 
@@ -123,6 +133,18 @@ def _parse_mtl(path: Path) -> tuple[OpticalMaterial, ...]:
                 current[command] = float(values[0])
             elif command == "illum" and values:
                 current[command] = int(values[0])
+            elif command.startswith("map_") or command in {
+                "bump",
+                "decal",
+                "disp",
+                "refl",
+            }:
+                raise ShapeImportError(
+                    f"{path}:{line_number}: texture/UV material maps cannot be "
+                    "represented by canonical CTMESH"
+                )
+        except ShapeImportError:
+            raise
         except ValueError as exc:
             raise ShapeImportError(f"{path}:{line_number}: invalid MTL numeric value") from exc
     if current is not None:
@@ -274,13 +296,17 @@ def _load_mesh(path: Path, scale: float, tessellator: Tessellator | None) -> tup
         if scale != 1.0:
             mesh = TriangleMesh(mesh.vertices_m * scale, mesh.triangles, mesh.vertex_normals, mesh.vertex_rgba_linear, mesh.face_material)
         return mesh, (), ()
-    if suffix in {".step", ".stp", ".brep", ".fcstd", ".gltf", ".glb", ".ply"}:
-        if tessellator is None:
+    if suffix == ".ply":
+        result = native_ply_tessellator(path, scale)
+        return result.mesh, result.optical_materials, result.linked_sources
+    if suffix in {".step", ".stp", ".iges", ".igs", ".brep", ".fcstd", ".gltf", ".glb", ".wrl", ".vrml"}:
+        selected = tessellator or automatic_tessellator(path)
+        if selected is None:
             raise ShapeImportError(
-                f"{suffix} requires an explicit deterministic tessellator backend; "
-                "source evidence was not approximated or replaced by a bounding box"
+                missing_backend_message(path)
+                + "; source evidence was not approximated or replaced by a bounding box"
             )
-        result = tessellator(path, scale)
+        result = selected(path, scale)
         if not isinstance(result, TessellatedShape):
             raise ShapeImportError(
                 "tessellator must return TessellatedShape with canonical mesh and available optical materials"
@@ -330,7 +356,7 @@ def import_shape(
 
     try:
         mesh, discovered, linked_sources = _load_mesh(source_path, scale, tessellator)
-    except (OSError, UnicodeError, MeshError) as exc:
+    except (OSError, UnicodeError, MeshError, GeometryBackendError) as exc:
         raise ShapeImportError(f"cannot import {source_path}: {exc}") from exc
     explicit = tuple(optical_materials)
     sidecar = _sidecar_materials(source_path)

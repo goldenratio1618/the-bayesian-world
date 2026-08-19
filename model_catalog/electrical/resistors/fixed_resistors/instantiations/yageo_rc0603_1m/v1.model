@@ -10,31 +10,31 @@
     "sha256": "sha256:fd0f400ac7748f49c4e955bf44e8830185fccc2111591e2dbafcfe9b2e9a8344"
   },
   "parameters": {
-    "resistance": 1000000.0,
+    "parasitic_capacitance": 1e-13,
     "parasitic_inductance": 5e-10,
-    "parasitic_capacitance": 1e-13
+    "resistance": 1000000.0
   },
   "parameter_uncertainty": {
+    "parasitic_capacitance": {
+      "correlation_group": "yageo_rc0603_parasitics",
+      "distribution": "lognormal",
+      "parameters": {
+        "std": 0.5
+      }
+    },
+    "parasitic_inductance": {
+      "correlation_group": "yageo_rc0603_parasitics",
+      "distribution": "lognormal",
+      "parameters": {
+        "std": 0.5
+      }
+    },
     "resistance": {
+      "correlation_group": "yageo_rc0603_resistance",
       "distribution": "normal",
       "parameters": {
         "std": 10000.0
-      },
-      "correlation_group": "yageo_rc0603_resistance"
-    },
-    "parasitic_inductance": {
-      "distribution": "lognormal",
-      "parameters": {
-        "std": 0.5
-      },
-      "correlation_group": "yageo_rc0603_parasitics"
-    },
-    "parasitic_capacitance": {
-      "distribution": "lognormal",
-      "parameters": {
-        "std": 0.5
-      },
-      "correlation_group": "yageo_rc0603_parasitics"
+      }
     }
   },
   "condition": "unverified",
@@ -43,8 +43,6 @@
     "notes": "Lumped parasitic RLC hypothesis for fitting the supplied resistance, inductance, and capacitance unknowns."
   },
   "metadata": {
-    "manufacturer": "Yageo",
-    "product": "RC0603FR-071ML",
     "published_tolerance_fraction": 0.01,
     "rated_power_w": 0.1
   }

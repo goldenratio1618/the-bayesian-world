@@ -1,0 +1,57 @@
+{
+  "documents": [
+    {
+      "kind": "product_page",
+      "url": "https://www.pololu.com/product/3542"
+    }
+  ],
+  "evidence": [
+    {
+      "locator": "$.product",
+      "sha256": "sha256:d4f88dd2df05bad4d973167320c4b9f19bbd465515fd1b71aee966340a50cec7",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_encoders.json"
+    },
+    {
+      "locator": "$.manufacturer",
+      "sha256": "sha256:d4f88dd2df05bad4d973167320c4b9f19bbd465515fd1b71aee966340a50cec7",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_encoders.json"
+    },
+    {
+      "locator": "$.source_urls[0]",
+      "sha256": "sha256:d4f88dd2df05bad4d973167320c4b9f19bbd465515fd1b71aee966340a50cec7",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_encoders.json"
+    },
+    {
+      "locator": "$.provenance",
+      "sha256": "sha256:764a6404b27521a78489034bca09344e18da00ed3f802bdce0d2dd912ba0069c",
+      "source": "model_catalog/electromechanical/encoders/dual_shaft_encoders/instantiations/romi_encoder_pair/static.part"
+    }
+  ],
+  "format": "procurement-record-1",
+  "id": "pololu.record-3542",
+  "identifiers": [
+    {
+      "scheme": "product_name",
+      "value": "Romi Encoder Pair Kit, item 3542"
+    },
+    {
+      "issuer": "Pololu",
+      "scheme": "manufacturer_item_number",
+      "value": "3542"
+    }
+  ],
+  "lifecycle": {
+    "status": "unknown"
+  },
+  "manufacturer": "Pololu",
+  "offers": [],
+  "provides": [
+    {
+      "part": "scanner.encoder_pair",
+      "quantity": 1,
+      "static_sha256": "sha256:a0ae6b0800d7544060722c1dba8e1cc0d49b31bba95bd0f3a0610c64ed72505a",
+      "version": "1.0.0"
+    }
+  ],
+  "version": "1.0.0"
+}

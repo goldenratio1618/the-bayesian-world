@@ -85,22 +85,25 @@ The static record below is invariant across the model hypotheses listed later.
 |---|---|---|---|
 | `body.package` | `shape` | 0.0016000000000000001 × 0.00080000000000000004 × 0.00044999999999999999 | `catalog`: Yageo RC0603FR-07220RL published package dimensions |
 
-| Connector | Model port | Domain | Interface | Evidence |
-|---|---|---|---|---|
-| `p` | `p` | `electrical` | `catalog-generic-port` | `catalog`: 0603 package terminal p frame inferred from published package length |
-| `n` | `n` | `electrical` | `catalog-generic-port` | `catalog`: 0603 package terminal n frame inferred from published package length |
+| Connector | Model port | Domain | Interface | Fabrication | Evidence |
+|---|---|---|---|---|---|
+| `p` | `p` | `electrical` | `catalog-generic-port` | missing: conductor, termination | `catalog`: 0603 package terminal p frame inferred from published package length |
+| `n` | `n` | `electrical` | `catalog-generic-port` | missing: conductor, termination | `catalog`: 0603 package terminal n frame inferred from published package length |
 
 #### Static-part metadata
 
 ```json
 {
-  "manufacturer": "Yageo",
   "package": "0603",
-  "product": "RC0603FR-07220RL",
   "published_tolerance_fraction": 0.01,
   "rated_power_w": 0.1
 }
 ```
+
+### External procurement records
+
+- `yageo.rc0603fr-07220rl` (`sha256:46f1e94de11ae6198b2760102df5189870f7cae142f0f3bbef9d33fdde0b8431`): Yageo; product_name=RC0603FR-07220RL, manufacturer_part_number=RC0603FR-07220RL.
+  - product_page: [https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-07220RL](https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-07220RL)
 
 ## Model hypothesis v1: Fixed resistor with fitted parasitics
 
@@ -296,15 +299,10 @@ Trust labels are recorded claims, not automatic physical qualification:
 
 ```json
 {
-  "manufacturer": "Yageo",
   "package": "0603",
-  "product": "RC0603FR-07220RL",
   "published_resistance_ohm": 220.0,
   "published_tolerance_fraction": 0.01,
   "rated_power_w": 0.1,
-  "source_urls": [
-    "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-07220RL"
-  ],
   "unknowns_to_fit": [
     "actual resistance",
     "parasitic inductance",
@@ -324,8 +322,8 @@ These hashes bind the inputs used for this rendering. The generated README is ex
 | `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-220r/shape/package/runtime.glb` | `sha256:7e5df3e3066f971c3c956d51fe32c616489619872b035ee26e1d7d56e74f4997` |
 | `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-220r/shape/package/shape.artifact.json` | `sha256:978500e2979c28b19ffb3b1be08a0bbc686e91f5345fe0b800f757e1cfb8f0b9` |
 | `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-220r/shape/package/source/procedural-shape.json` | `sha256:1ca9ee45b5722e23bbd742051fe3ca524958fa81588f8c6a6bafa196f6ed5d82` |
-| `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-220r/static.part` | `sha256:95afc98d59046560977c0ab1c438fc7dbbb45d17a9b61b8e0315ded69bbe9799` |
-| `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-220r/v1.model` | `sha256:eeea91c134cf5311db43bb143f4d880cca8bae84c3f7916002bb285ffcfa0a09` |
+| `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-220r/static.part` | `sha256:fafd30ae1e5c39dd7ebe9638742128aba0cbd1932ee09fbc12da878cce5e4f9a` |
+| `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-220r/v1.model` | `sha256:481ecb49cd03470330542144bd1974e65a68cc45500f74b5ef8188709021065e` |
 | `electrical/resistors/fixed_resistors/interface.pmdl` | `sha256:96cb68346727c8e07114c334d569f1a9092291575995970d93870623d9a19e9a` |
 | `electrical/resistors/fixed_resistors/resistor_with_parasitics.pmdl` | `sha256:d74837b6e3361668057da6200c113ad26595080dbbe15edc34406d7b8572f4d8` |
 | `electrical/resistors/interface.pmdl` | `sha256:ae5de73b81f7f0c6c015f1df08e0ad2c2e95cb00101609bb7a773513ccfef66f` |

@@ -85,25 +85,28 @@ The static record below is invariant across the model hypotheses listed later.
 |---|---|---|---|
 | `body.package` | `shape` | 0.0016000000000000001 × 0.00080000000000000004 × 0.00044999999999999999 | `vendor`: Published nominal 0603 package envelope for Yageo RC0603FR-0747RL |
 
-| Connector | Model port | Domain | Interface | Evidence |
-|---|---|---|---|---|
-| `p` | `p` | `electrical` | `wire-terminal` | `estimated`: Terminal abstraction at the negative-X end of the published package envelope |
-| `n` | `n` | `electrical` | `wire-terminal` | `estimated`: Terminal abstraction at the positive-X end of the published package envelope |
+| Connector | Model port | Domain | Interface | Fabrication | Evidence |
+|---|---|---|---|---|---|
+| `p` | `p` | `electrical` | `wire-terminal` | missing: conductor, termination | `estimated`: Terminal abstraction at the negative-X end of the published package envelope |
+| `n` | `n` | `electrical` | `wire-terminal` | missing: conductor, termination | `estimated`: Terminal abstraction at the positive-X end of the published package envelope |
 
 #### Static-part metadata
 
 ```json
 {
   "geometry_basis": "Published nominal package dimensions; no source geometry artifact supplied",
-  "manufacturer": "Yageo",
   "package": "0603",
   "part_kind": "fixed thick-film chip resistor",
-  "product": "RC0603FR-0747RL",
   "published_resistance_ohm": 47,
   "rated_power_w": 0.1,
   "tolerance_fraction": 0.01
 }
 ```
+
+### External procurement records
+
+- `yageo.rc0603fr-0747rl` (`sha256:67e55f3710453776a29e96d013307cf5fa7681faefe271506c8b313efcafa37b`): Yageo; product_name=RC0603FR-0747RL, manufacturer_part_number=RC0603FR-0747RL.
+  - product_page: [https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-0747RL](https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-0747RL)
 
 ## Model hypothesis v1: Ideal uncertain resistor
 
@@ -209,8 +212,6 @@ Trust labels are recorded claims, not automatic physical qualification:
     "parasitic inductance",
     "parasitic capacitance"
   ],
-  "manufacturer": "Yageo",
-  "product": "RC0603FR-0747RL",
   "published_tolerance_fraction": 0.01,
   "rated_power_w": 0.1
 }
@@ -227,8 +228,8 @@ These hashes bind the inputs used for this rendering. The generated README is ex
 | `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-47r/shape/package/runtime.glb` | `sha256:7e5df3e3066f971c3c956d51fe32c616489619872b035ee26e1d7d56e74f4997` |
 | `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-47r/shape/package/shape.artifact.json` | `sha256:1d67b4e8d126e08b726cf4fd5e3f77bb67c2a0b06c799cb543e8678511027cc3` |
 | `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-47r/shape/package/source/procedural-shape.json` | `sha256:6efa5bd59b973928b8a13e7ffb881ea1e752dddb6522dd034af5341bdd3f77a5` |
-| `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-47r/static.part` | `sha256:d3ee267975c2b312fa5de39d6657cd39d3094b32197bdaf6b98aa4e8e09c2331` |
-| `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-47r/v1.model` | `sha256:5f713c3ce418ab577f6f31ec1facf32f18a16f8fcedcee625b82c92ee4369ee7` |
+| `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-47r/static.part` | `sha256:0c6b086d497a916d7c0805714ed5c66c238e55585fac86fd08686228fad348c4` |
+| `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-47r/v1.model` | `sha256:8b8881efb6397d40896cf5a6e2a2809bc64bfe2ed838c24aa45446ce6d8d4ce9` |
 | `electrical/resistors/fixed_resistors/interface.pmdl` | `sha256:96cb68346727c8e07114c334d569f1a9092291575995970d93870623d9a19e9a` |
 | `electrical/resistors/interface.pmdl` | `sha256:ae5de73b81f7f0c6c015f1df08e0ad2c2e95cb00101609bb7a773513ccfef66f` |
 | `electrical/resistors/resistor.pmdl` | `sha256:1dfdc80fdfc434efd9c7c172563b2e1f75b77cb79fd3d979384fabf932513bda` |

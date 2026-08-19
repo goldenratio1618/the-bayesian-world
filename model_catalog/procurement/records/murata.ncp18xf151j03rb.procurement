@@ -1,0 +1,45 @@
+{
+  "documents": [
+    {
+      "kind": "datasheet",
+      "url": "https://www.murata.com/-/media/webrenewal/products/thermistor/ntc/ncp/ncp18.ashx"
+    }
+  ],
+  "evidence": [
+    {
+      "locator": "$.product",
+      "sha256": "sha256:06222a33ac7897408502840e1386acd99cd96598b8513e33b01dff4de206edbb",
+      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/murata_ncp18_150r.json"
+    },
+    {
+      "locator": "$.manufacturer",
+      "sha256": "sha256:06222a33ac7897408502840e1386acd99cd96598b8513e33b01dff4de206edbb",
+      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/murata_ncp18_150r.json"
+    },
+    {
+      "locator": "$.source_urls[0]",
+      "sha256": "sha256:06222a33ac7897408502840e1386acd99cd96598b8513e33b01dff4de206edbb",
+      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/murata_ncp18_150r.json"
+    }
+  ],
+  "format": "procurement-record-1",
+  "id": "murata.ncp18xf151j03rb",
+  "identifiers": [
+    {
+      "scheme": "product_name",
+      "value": "NCP18XF151J03RB"
+    },
+    {
+      "issuer": "Murata",
+      "scheme": "manufacturer_part_number",
+      "value": "NCP18XF151J03RB"
+    }
+  ],
+  "lifecycle": {
+    "status": "unknown"
+  },
+  "manufacturer": "Murata",
+  "offers": [],
+  "provides": [],
+  "version": "1.0.0"
+}

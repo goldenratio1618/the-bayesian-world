@@ -24,14 +24,12 @@
     "notes": "Yageo RC0603FR-0747RL nominal 47 ohm ideal-resistor hypothesis; parasitic inductance and capacitance are outside this fidelity."
   },
   "metadata": {
-    "manufacturer": "Yageo",
-    "product": "RC0603FR-0747RL",
-    "published_tolerance_fraction": 0.01,
-    "rated_power_w": 0.1,
     "fit_unknowns": [
       "actual resistance",
       "parasitic inductance",
       "parasitic capacitance"
-    ]
+    ],
+    "published_tolerance_fraction": 0.01,
+    "rated_power_w": 0.1
   }
 }

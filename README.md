@@ -17,7 +17,11 @@ live at the category or device layer and declare which contract they implement.
 
 Physical part instantiations live below the relevant layer in
 `instantiations/<part-id>/`. `static.part` owns model-invariant geometry,
-connectors, provenance, purchasing information, and metadata. Each `vN.model`
+connectors, typed endpoint fabrication constraints, provenance, and
+non-procurement metadata. Central
+`model_catalog/procurement/records/*.procurement` files own evidenced product
+identifiers, documents, lifecycle observations, supplier offers, and exact
+static-part provisions. Each `vN.model`
 selects an exact-hash PMDL class and initializes all parameters, uncertainty,
 condition, and relative compute cost. Multiple competing model instances may
 describe the same physical part.
@@ -26,7 +30,8 @@ A contraption is a `contraption-4` bundle rooted at `contraption.json`. The
 manifest names its catalog roots and hash-binds every controller and verification
 artifact. Components contain only an id and model-instantiation id; the manifest
 owns topology, open-loop actuator wiring, controller pin wiring, the physical
-root, environment, and metadata. It cannot override part parameters or geometry.
+root, typed connection implementations, environment, and metadata. It cannot
+override part parameters, endpoint constraints, or geometry.
 
 `load_contraption(path)` verifies the complete filesystem closure and emits one
 `ResolvedAssembly` with an assembly SHA-256. The PMDL simulator, controller
@@ -244,6 +249,8 @@ and budget ledger are machine-local and gitignored.
 - [Online C99 compiler contract](docs/ONLINE_COMPILER.md)
 - [Component-agent safety contract](docs/COMPONENT_AGENTS.md)
 - [Structured data and DSL contracts](docs/structured_formats/README.md)
+- [Fabrication records](docs/structured_formats/FABRICATION.md)
+- [Procurement records](docs/structured_formats/PROCUREMENT.md)
 - [Offline optical capture and reconstruction](docs/structured_formats/OPTICAL_WORKFLOWS.md)
 - [Linux/GPU installation](docs/INSTALLATION.md)
 - [Purchasing and physical safety guidance](docs/PURCHASING.md)

@@ -23,6 +23,54 @@ class BudgetExceeded(RuntimeError):
 
 
 @dataclass(frozen=True)
+class ProvenPreInferenceProviderRejection:
+    """Typed proof authorizing the one post-dispatch zero-cost settlement.
+
+    Codex event parsing lives at the process boundary, but the ledger owns the
+    accounting invariant.  Requiring this exact proof object prevents callers
+    from obtaining a zero settlement with an arbitrary status string or an
+    unstructured diagnostic.  Every absence claim is deliberately explicit.
+    """
+
+    source: str
+    terminal_event: str
+    provider_error_type: str
+    provider_error_code: str
+    provider_status: int
+    provider_param: str
+    usage_observed: bool
+    completed_agent_message_observed: bool
+    candidate_artifact_observed: bool
+    validator_activity_observed: bool
+    malformed_event_observed: bool
+    unknown_failure_event_observed: bool
+
+    def __post_init__(self) -> None:
+        exact_provider_error = (
+            self.source == "codex_jsonl"
+            and self.terminal_event == "turn.failed"
+            and self.provider_error_type == "invalid_request_error"
+            and self.provider_error_code == "invalid_json_schema"
+            and self.provider_status == 400
+            and not isinstance(self.provider_status, bool)
+            and self.provider_param == "text.format.schema"
+        )
+        forbidden_activity = (
+            self.usage_observed
+            or self.completed_agent_message_observed
+            or self.candidate_artifact_observed
+            or self.validator_activity_observed
+            or self.malformed_event_observed
+            or self.unknown_failure_event_observed
+        )
+        if not exact_provider_error or forbidden_activity:
+            raise ValueError(
+                "pre-inference provider-rejection proof does not establish an "
+                "exact zero-usage invalid_json_schema rejection"
+            )
+
+
+@dataclass(frozen=True)
 class Usage:
     input_tokens: int = 0
     cached_input_tokens: int = 0
@@ -186,7 +234,10 @@ class BudgetLedger:
                 if usage is not None
                 else float(reservation["max_usd"])
             )
-            if actual > float(reservation["max_usd"]) + 1e-9:
+            usage_exceeded_reservation = (
+                actual > float(reservation["max_usd"]) + 1e-9
+            )
+            if usage_exceeded_reservation:
                 # This should be impossible when callers reserve at declared
                 # maxima. Charge the reservation and flag it rather than hiding
                 # an accounting invariant violation.
@@ -199,12 +250,53 @@ class BudgetLedger:
                     "status": status,
                     "charged_usd": actual,
                     "usage": asdict(usage) if usage is not None else None,
+                    "cost_basis": (
+                        "reported_usage_capped_at_reservation"
+                        if usage_exceeded_reservation
+                        else "reported_usage"
+                        if usage is not None
+                        else "full_reservation_conservative"
+                    ),
                     "metadata": reservation["metadata"],
                     "settled_unix": time.time(),
                 }
             )
             self._write(state)
             return actual
+
+    def settle_proven_pre_inference_provider_rejection(
+        self,
+        run_id: str,
+        *,
+        proof: ProvenPreInferenceProviderRejection,
+    ) -> float:
+        """Release a reservation only for a typed, exact pre-inference rejection."""
+
+        if type(proof) is not ProvenPreInferenceProviderRejection:
+            raise TypeError("a ProvenPreInferenceProviderRejection is required")
+        # Re-run validation even though the frozen dataclass validated at
+        # construction. This keeps the ledger boundary fail-closed if a caller
+        # bypasses normal construction through low-level object manipulation.
+        ProvenPreInferenceProviderRejection.__post_init__(proof)
+        with self._locked():
+            state = self._read()
+            reservation = state["reserved"].pop(run_id, None)
+            if reservation is None:
+                raise KeyError(f"unknown reservation: {run_id}")
+            state["events"].append(
+                {
+                    "run_id": run_id,
+                    "status": "provider_rejected_before_inference",
+                    "charged_usd": 0.0,
+                    "usage": None,
+                    "cost_basis": "proven_pre_inference_zero",
+                    "proof": asdict(proof),
+                    "metadata": reservation["metadata"],
+                    "settled_unix": time.time(),
+                }
+            )
+            self._write(state)
+        return 0.0
 
     def cancel(self, run_id: str, reason: str) -> None:
         with self._locked():
@@ -217,6 +309,7 @@ class BudgetLedger:
                     "run_id": run_id,
                     "status": "cancelled_before_dispatch",
                     "charged_usd": 0.0,
+                    "cost_basis": "not_dispatched_zero",
                     "reason": reason,
                     "metadata": reservation["metadata"],
                     "settled_unix": time.time(),

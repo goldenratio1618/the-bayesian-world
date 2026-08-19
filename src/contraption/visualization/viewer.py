@@ -20,6 +20,7 @@ import re
 from typing import Any, Mapping
 from urllib.parse import urlsplit
 
+from ..fabrication import ConnectorFabricationSpec, FabricationSpecError
 from ..paths import asset_root
 from ..physics.resolved import ResolvedAssembly
 from .render_bundle import (
@@ -425,7 +426,7 @@ def validate_physical_scene(scene: Mapping[str, Any] | Any) -> Mapping[str, Any]
                     "provenance",
                     "joint_coordinate_state",
                 },
-                optional=set(),
+                optional={"fabrication"},
                 label=connector_label,
             )
             connector_id = _identifier(connector["id"], f"{connector_label}.id")
@@ -468,6 +469,18 @@ def validate_physical_scene(scene: Mapping[str, Any] | Any) -> Mapping[str, Any]
                 )
             if body_id is not None:
                 spatial_connector_keys.add(f"{instance_id}.{connector_id}")
+            try:
+                fabrication = (
+                    None
+                    if connector.get("fabrication") is None
+                    else ConnectorFabricationSpec.from_dict(
+                        _mapping(connector["fabrication"], f"{connector_label}.fabrication")
+                    ).to_dict()
+                )
+            except FabricationSpecError as exc:
+                raise VisualizationError(
+                    f"{connector_label}.fabrication is invalid: {exc}"
+                ) from exc
             connectors.append(
                 {
                     "id": connector_id,
@@ -484,6 +497,7 @@ def validate_physical_scene(scene: Mapping[str, Any] | Any) -> Mapping[str, Any]
                         connector["provenance"], f"{connector_label}.provenance"
                     ),
                     "joint_coordinate_state": joint_coordinate_state,
+                    "fabrication": fabrication,
                 }
             )
         connector_ids_by_component[instance_id] = connector_ids
@@ -509,7 +523,7 @@ def validate_physical_scene(scene: Mapping[str, Any] | Any) -> Mapping[str, Any]
         _keys(
             connection,
             required={"id", "kind", "domain", "endpoints", "metadata"},
-            optional={"joint"},
+            optional={"joint", "implementation"},
             label=connection_label,
         )
         connection_id = _identifier(connection["id"], f"{connection_label}.id")
@@ -528,6 +542,21 @@ def validate_physical_scene(scene: Mapping[str, Any] | Any) -> Mapping[str, Any]
                 f"{connection_label}.metadata must be empty; physical semantics "
                 "require typed connection fields"
             )
+        try:
+            implementation = (
+                None
+                if connection.get("implementation") is None
+                else ConnectorFabricationSpec.from_dict(
+                    _mapping(
+                        connection["implementation"],
+                        f"{connection_label}.implementation",
+                    )
+                ).to_dict()
+            )
+        except FabricationSpecError as exc:
+            raise VisualizationError(
+                f"{connection_label}.implementation is invalid: {exc}"
+            ) from exc
         raw_endpoints = _list(connection["endpoints"], f"{connection_label}.endpoints")
         if len(raw_endpoints) < 2:
             raise VisualizationError(f"{connection_label}.endpoints must contain at least two endpoints")
@@ -666,6 +695,8 @@ def validate_physical_scene(scene: Mapping[str, Any] | Any) -> Mapping[str, Any]
             "endpoints": endpoints,
             "metadata": dict(metadata),
         }
+        if "implementation" in connection:
+            normalized_connection["implementation"] = implementation
         if kind == "attachment":
             normalized_connection["joint"] = joint
         connections.append(normalized_connection)

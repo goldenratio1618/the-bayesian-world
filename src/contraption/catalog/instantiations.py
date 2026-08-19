@@ -2,9 +2,11 @@
 
 An instantiation directory contains one ``static.part`` plus one or more
 ``vN.model`` files.  Static files own model-invariant geometry, connectors,
-provenance, purchasing data, and metadata.  Model files select an exact PMDL
-class and initialize every one of its parameters.  Contraptions reference the
-model-instance ID and never repeat those parameters.
+fabrication constraints, provenance, and non-procurement metadata.  Dynamic
+identity, document, and supplier information lives in the catalog's external
+``.procurement`` records.  Model files select an exact PMDL class and initialize
+every one of its parameters.  Contraptions reference the model-instance ID and
+never repeat those parameters.
 """
 
 from __future__ import annotations
@@ -38,6 +40,7 @@ from ..physics.physical import (
     _text,
 )
 from ..physics.specs import FrozenDict, ModelSpec
+from .procurement import ProcurementRegistry, ProcurementSpecError
 
 
 if TYPE_CHECKING:
@@ -48,6 +51,57 @@ _VARIANT_FILE = re.compile(r"^v[1-9][0-9]*\.model$")
 _CONDITIONS = frozenset(
     {"unverified", "inspected", "calibrated", "degraded", "retired"}
 )
+_PROCUREMENT_METADATA_FIELDS = frozenset(
+    {
+        "datasheet_url",
+        "datasheet_urls",
+        "item_number",
+        "manufacturer",
+        "manufacturer_item_number",
+        "manufacturer_part_number",
+        "mfr",
+        "mfr_part_number",
+        "mpn",
+        "part_number",
+        "product",
+        "products",
+        "purchase_url",
+        "purchase_urls",
+        "source_urls",
+        "supplier",
+        "supplier_sku",
+        "vendor",
+        "vendor_sku",
+    }
+)
+
+
+def _reserved_metadata_paths(value: Any, context: str) -> tuple[str, ...]:
+    """Return every recursively nested procurement/identity metadata path."""
+
+    found: list[str] = []
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            path = f"{context}.{key}"
+            if (
+                isinstance(key, str)
+                and key.casefold() in _PROCUREMENT_METADATA_FIELDS
+            ):
+                found.append(path)
+            found.extend(_reserved_metadata_paths(item, path))
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            found.extend(_reserved_metadata_paths(item, f"{context}[{index}]"))
+    return tuple(found)
+
+
+def _reject_procurement_metadata(value: Any, context: str) -> None:
+    reserved = _reserved_metadata_paths(value, context)
+    if reserved:
+        raise PhysicalSpecError(
+            f"{context} contains procurement/identity fields that belong in a "
+            ".procurement record: " + ", ".join(reserved)
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,13 +250,12 @@ class StaticPartSpec:
     parameter_bindings: tuple[PhysicalParameterBindingSpec, ...]
     optical_sensors: tuple[OpticalSensorBindingSpec, ...]
     provenance: ProvenanceSpec
-    purchasing: FrozenDict[Any] = FrozenDict()
     metadata: FrozenDict[Any] = FrozenDict()
 
     def __post_init__(self) -> None:
-        if self.format != "static-part-1":
+        if self.format != "static-part-2":
             raise PhysicalSpecError(
-                f"static part format must be 'static-part-1', got {self.format!r}"
+                f"static part format must be 'static-part-2', got {self.format!r}"
             )
         _identifier(self.id, "static_part.id")
         _text(self.name, "static_part.name")
@@ -230,7 +283,7 @@ class StaticPartSpec:
             raise PhysicalSpecError(
                 f"static part has duplicate optical sensor id(s): {', '.join(duplicates)}"
             )
-        object.__setattr__(self, "purchasing", _freeze_json(self.purchasing, "static_part.purchasing"))
+        _reject_procurement_metadata(self.metadata, "static_part.metadata")
         object.__setattr__(self, "metadata", _freeze_json(self.metadata, "static_part.metadata"))
 
     @classmethod
@@ -247,7 +300,6 @@ class StaticPartSpec:
             "parameter_bindings",
             "optical_sensors",
             "provenance",
-            "purchasing",
             "metadata",
         )
         _keys(data, names, "static part", ("format", "id", "name", "version", "physical_role", "bodies", "connectors", "parameter_bindings", "provenance"))
@@ -286,7 +338,6 @@ class StaticPartSpec:
                 for index, item in enumerate(_sequence(data.get("optical_sensors", []), "static_part.optical_sensors"))
             ),
             ProvenanceSpec.from_dict(_mapping(data["provenance"], "static_part.provenance")),
-            _freeze_json(_mapping(data.get("purchasing", {}), "static_part.purchasing"), "static_part.purchasing"),
             _freeze_json(_mapping(data.get("metadata", {}), "static_part.metadata"), "static_part.metadata"),
         )
 
@@ -306,9 +357,21 @@ class StaticPartSpec:
             "parameter_bindings": [item.to_dict() for item in self.parameter_bindings],
             "optical_sensors": [item.to_dict() for item in self.optical_sensors],
             "provenance": self.provenance.to_dict(),
-            "purchasing": _canonical_json_value(self.purchasing),
             "metadata": _canonical_json_value(self.metadata),
         }
+
+    @property
+    def sha256(self) -> str:
+        """Canonical content digest used by external procurement provisions."""
+
+        canonical = json.dumps(
+            self.to_dict(),
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+        return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -375,6 +438,7 @@ class ModelInstantiationSpec:
             "parameter_uncertainty",
             _freeze_json(self.parameter_uncertainty, "model_instance.parameter_uncertainty"),
         )
+        _reject_procurement_metadata(self.metadata, "model_instance.metadata")
         object.__setattr__(self, "metadata", _freeze_json(self.metadata, "model_instance.metadata"))
 
     @classmethod
@@ -484,13 +548,33 @@ class PartInstantiation:
 
 
 class PartInstantiationRegistry(Mapping[str, PartInstantiation]):
-    def __init__(self, values: Iterable[PartInstantiation] = ()) -> None:
+    def __init__(
+        self,
+        values: Iterable[PartInstantiation] = (),
+        *,
+        procurement: ProcurementRegistry | None = None,
+        validate_procurement: bool = True,
+    ) -> None:
         items: dict[str, PartInstantiation] = {}
+        static_parts: dict[str, StaticPartSpec] = {}
         for value in values:
             if value.id in items:
                 raise PhysicalSpecError(f"duplicate model instance id {value.id!r}")
+            existing = static_parts.get(value.static.id)
+            if existing is not None and existing.sha256 != value.static.sha256:
+                raise PhysicalSpecError(
+                    f"model instances for static part {value.static.id!r} disagree "
+                    "on canonical static.part content"
+                )
+            static_parts[value.static.id] = value.static
             items[value.id] = value
         self._items = FrozenDict(items)
+        self._static_parts = FrozenDict(static_parts)
+        self._procurement = ProcurementRegistry() if procurement is None else procurement
+        if not isinstance(self._procurement, ProcurementRegistry):
+            raise TypeError("procurement must be a ProcurementRegistry")
+        if validate_procurement:
+            self.validate_procurement()
 
     def __getitem__(self, key: str) -> PartInstantiation:
         return self._items[key]
@@ -504,6 +588,25 @@ class PartInstantiationRegistry(Mapping[str, PartInstantiation]):
     @property
     def resolved_parts(self) -> ResolvedPartRegistry:
         return ResolvedPartRegistry(item.resolved_part() for item in self.values())
+
+    @property
+    def static_parts(self) -> Mapping[str, StaticPartSpec]:
+        return self._static_parts
+
+    @property
+    def procurement(self) -> ProcurementRegistry:
+        return self._procurement
+
+    def validate_procurement(self) -> None:
+        try:
+            self._procurement.validate_provisions(
+                {
+                    part_id: (static.version, static.sha256)
+                    for part_id, static in self._static_parts.items()
+                }
+            )
+        except ProcurementSpecError as exc:
+            raise PhysicalSpecError(f"invalid procurement closure: {exc}") from exc
 
     def validate_models(self, models: Mapping[str, ModelSpec]) -> None:
         for item in self.values():
@@ -549,7 +652,11 @@ class PartInstantiationRegistry(Mapping[str, PartInstantiation]):
 
     @classmethod
     def load_catalog(
-        cls, root: str | Path, *, models: Mapping[str, ModelSpec] | None = None
+        cls,
+        root: str | Path,
+        *,
+        models: Mapping[str, ModelSpec] | None = None,
+        validate_procurement: bool = True,
     ) -> "PartInstantiationRegistry":
         catalog_root = Path(root).resolve()
         static_paths = sorted(catalog_root.rglob("static.part"))
@@ -634,7 +741,15 @@ class PartInstantiationRegistry(Mapping[str, PartInstantiation]):
                 raise PhysicalSpecError(
                     f"{directory}: unsupported instantiation files: {', '.join(extra)}"
                 )
-        registry = cls(values)
+        try:
+            procurement = ProcurementRegistry.load_catalog(catalog_root)
+        except ProcurementSpecError as exc:
+            raise PhysicalSpecError(f"invalid procurement catalog: {exc}") from exc
+        registry = cls(
+            values,
+            procurement=procurement,
+            validate_procurement=validate_procurement,
+        )
         if models is not None:
             registry.validate_models(models)
         return registry

@@ -1,5 +1,5 @@
 {
-  "format": "static-part-1",
+  "format": "static-part-2",
   "id": "scanner.position_servo",
   "name": "Generic position servo",
   "version": "1.0.0",
@@ -9,15 +9,15 @@
       "id": "case",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "solids": [
@@ -36,15 +36,15 @@
           },
           "local_pose": {
             "translation_m": [
-              0,
-              0,
-              0
+              0.0,
+              0.0,
+              0.0
             ],
             "rotation_quaternion_wxyz": [
-              1,
-              0,
-              0,
-              0
+              1.0,
+              0.0,
+              0.0,
+              0.0
             ]
           },
           "provenance": {
@@ -65,20 +65,30 @@
       "interface": "scanner-fixed-mount",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "case center mounting approximation"
+        "source": "case center mounting approximation",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "fixed_mount",
+        "missing": [
+          "retention"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -87,23 +97,34 @@
       "body": "case",
       "domain": "mechanical",
       "interface": "rotational-shaft",
-      "joint_coordinate_state": "angle",
       "local_pose": {
         "translation_m": [
-          0,
-          0,
+          0.0,
+          0.0,
           0.019
         ],
         "rotation_quaternion_wxyz": [
           0.7071067811865476,
           -0.7071067811865475,
-          0,
-          0
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "servo horn center with explicit PMDL angle-state binding"
+        "source": "servo horn center with explicit PMDL angle-state binding",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": "angle",
+      "fabrication": {
+        "kind": "rotary_support",
+        "missing": [
+          "retention",
+          "bearing",
+          "travel"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -119,15 +140,26 @@
           -0.01
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "servo lead origin"
+        "source": "servo lead origin",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -143,15 +175,26 @@
           -0.01
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "servo lead origin"
+        "source": "servo lead origin",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -163,19 +206,30 @@
       "local_pose": {
         "translation_m": [
           -0.0205,
-          0,
+          0.0,
           -0.01
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "servo lead origin"
+        "source": "servo lead origin",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor",
+          "termination"
+        ],
+        "status": "missing"
       }
     },
     {
@@ -191,24 +245,51 @@
           -0.01
         ],
         "rotation_quaternion_wxyz": [
-          1,
-          0,
-          0,
-          0
+          1.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "provenance": {
         "kind": "estimated",
-        "source": "feedback lead origin"
+        "source": "feedback lead origin",
+        "reference": null
+      },
+      "kinematics": null,
+      "joint_coordinate_state": null,
+      "fabrication": {
+        "conductor": {
+          "conductor_count": 1
+        },
+        "evidence": [
+          {
+            "kind": "component_input",
+            "source": "assembled_contraptions/scanner/component_inputs/romi_arm.json",
+            "locator": "$.features.feedback",
+            "sha256": "sha256:71181f6affed7b36e53bc77d637de781c498f41047a667d261a0eaa5947b0a8c"
+          }
+        ],
+        "kind": "electrical_termination",
+        "missing": [
+          "conductor.standard",
+          "conductor.material",
+          "conductor.cross_section_m2",
+          "conductor.insulation_standard",
+          "conductor.voltage_rating_v",
+          "conductor.temperature_rating_k",
+          "termination"
+        ],
+        "status": "partial"
       }
     }
   ],
   "parameter_bindings": [],
+  "optical_sensors": [],
   "provenance": {
     "kind": "catalog",
     "source": "kit envelope with estimated connector frames",
     "reference": "Pololu 3550"
   },
-  "purchasing": {},
   "metadata": {}
 }

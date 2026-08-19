@@ -1,0 +1,57 @@
+{
+  "documents": [
+    {
+      "kind": "product_page",
+      "url": "https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-07220RL"
+    }
+  ],
+  "evidence": [
+    {
+      "locator": "$.product",
+      "sha256": "sha256:5cf23982a1b795771710ce8a578a1465785094bc40e51b5c628bbd48674c5a5d",
+      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/yageo_rc0603_220r.json"
+    },
+    {
+      "locator": "$.manufacturer",
+      "sha256": "sha256:5cf23982a1b795771710ce8a578a1465785094bc40e51b5c628bbd48674c5a5d",
+      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/yageo_rc0603_220r.json"
+    },
+    {
+      "locator": "$.source_urls[0]",
+      "sha256": "sha256:5cf23982a1b795771710ce8a578a1465785094bc40e51b5c628bbd48674c5a5d",
+      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/yageo_rc0603_220r.json"
+    },
+    {
+      "locator": "$.provenance",
+      "sha256": "sha256:fafd30ae1e5c39dd7ebe9638742128aba0cbd1932ee09fbc12da878cce5e4f9a",
+      "source": "model_catalog/electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-220r/static.part"
+    }
+  ],
+  "format": "procurement-record-1",
+  "id": "yageo.rc0603fr-07220rl",
+  "identifiers": [
+    {
+      "scheme": "product_name",
+      "value": "RC0603FR-07220RL"
+    },
+    {
+      "issuer": "Yageo",
+      "scheme": "manufacturer_part_number",
+      "value": "RC0603FR-07220RL"
+    }
+  ],
+  "lifecycle": {
+    "status": "unknown"
+  },
+  "manufacturer": "Yageo",
+  "offers": [],
+  "provides": [
+    {
+      "part": "yageo-rc0603-220r",
+      "quantity": 1,
+      "static_sha256": "sha256:1665cb20a524abcdb0f72c4bda63858597ba5c4afbe78c7ca4f323d7b6e13b57",
+      "version": "1.0.0"
+    }
+  ],
+  "version": "1.0.0"
+}

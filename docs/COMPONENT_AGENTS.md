@@ -35,15 +35,30 @@ The requested configuration is preserved verbatim:
   `codex exec`, isolated workspace-write sandbox, JSON output schema.
 
 Both identifiers are constructor/CLI settings rather than hard-coded provider
-assumptions.
+assumptions. `xhigh` remains the production modeling default. The preserved
+20-input replay may explicitly override modeling to `low` as a Luna-low
+stress/cost benchmark; the chosen effort is included in input hashes and
+receipts. It is not an apples-to-apples reliability comparison with the
+recorded `xhigh` baseline (12 paid dispatches, 22 validator calls, 6 of 10
+targets passing on their first paid-dispatch validator call, and
+`$2.23477088` charged), because reasoning effort and replay isolation differ.
 
 ## Dollar limit
 
 `BudgetLedger` defaults to a lifetime limit of `$100.00` for its ledger path.
 Before every canary or full call it reserves the worst-case cost at conservative
-long-context rates. The reservation is settled from provider token usage. If a
-dispatched CLI call fails or does not report usage, its full reservation remains
-charged. This is intentionally stricter than best-effort token counting.
+long-context rates. The reservation is settled from provider token usage, even
+when the CLI exits nonzero. A dispatched failure without usable token usage keeps
+its full reservation charged. The sole post-dispatch zero-cost exception is a
+structurally parsed Codex JSONL `turn.failed` provider rejection with the exact
+`invalid_request_error` / `invalid_json_schema` / HTTP 400 /
+`text.format.schema` tuple, and only when there is no usage, completed agent
+message or output file, candidate write, validator activity, malformed event, or
+other failure event. Stderr text and matching substrings are never proof. Such an
+event is recorded as `provider_rejected_before_inference` with
+`cost_basis: proven_pre_inference_zero`; every ambiguous case remains a full
+conservative debit. This is intentionally stricter than best-effort token
+counting.
 
 The built-in `gpt-5.6-luna` standard-pricing snapshot is dated 2026-08-06:
 `$0.20/M` uncached input, `$0.02/M` cached input, `$0.25/M` cache writes,
@@ -55,29 +70,37 @@ Change these explicitly when using another tier, region, model, or price date.
 
 ## Required modeling workspace
 
-Every run copies, preserves the catalog-relative source label, then instructs
-the model to read fully:
+Before dispatch, the host builds a deterministic `IMPORT_PLAN.json`. It names
+the exact target ID and catalog root, published parameter facts, eligible
+reusable PMDL identities with canonical hashes, the preferred family model,
+the immutable-base policy, and the three-call validation limit. Every run then
+copies and preserves the catalog-relative source label for only the context
+relevant to that import:
 
 1. `prompts/model_constraints.md`;
-2. every authoritative guide in `docs/structured_formats/`, including PMDL,
-   physical assembly, shape, optical, control, verification, and derived
-   viewer records;
+2. the authoritative guides in `docs/structured_formats/` selected for the
+   component's declared domains and evidenced payload types;
 3. representative concrete PMDL, `static.part`, and `vN.model` gold records;
-4. all current domain/category/device `interface.pmdl` contracts;
+4. only domain/category/device `interface.pmdl` ancestors governing the target;
 5. only the direct ancestor and concrete-model hierarchy relevant to the item;
-6. the full component information record.
+6. the full component information record; and
+7. normalized, verified deterministic extraction JSON when host-owned document
+   or design-file ingestion produced relevant textual evidence.
 
 The numbered canonical copies and a SHA-256 context manifest live beside the
-writable `workspace/`, not inside it. The agent receives their complete text in
-`AGENTS.md`; it may write only below `workspace/candidate/`. The host verifies
-the protected input/control hashes before dispatch, immediately after Codex
-exits, and on error paths.
+writable `workspace/`, not inside it. `IMPORT_PLAN.json` is also protected. The
+agent receives the complete selected text in `AGENTS.md`; it may write only
+below `workspace/candidate/`. The host verifies protected input/control hashes
+before dispatch, immediately after Codex exits, and on error paths. Raw PDF,
+ECAD, archive, CAD, mesh, and other binary/source design payloads never enter
+the Luna workspace; deterministic host code validates and normalizes them
+first, and only its extraction JSON may become modeling context.
 
-The guides make the modeler aware of optical power/signal abstractions,
-`artifact_ports`, sensor timing, uncertainty, and the standardized artifact
-types. Geometry and optical source ingestion remain host-owned. The modeler is
-explicitly forbidden to inspect, convert, infer from, or emit CAD, mesh,
-texture, image, scan, shape, optical, observation, or reconstruction payloads.
+Relevant guides make the modeler aware of optical power/signal abstractions,
+`artifact_ports`, sensor timing, uncertainty, and standardized artifact types
+when those concepts apply. Geometry, optical, document, archive, CAD, and ECAD
+source ingestion remain host-owned. The modeler is explicitly forbidden to
+inspect, convert, infer from, or emit those raw payloads.
 
 This ownership rule is enforced before ordinary bundle validation. Both the
 structured response's artifact list and candidate-file recovery reject
@@ -109,11 +132,23 @@ protected hashes before and after parsing and never
 imports or executes generated host code. Isolated Python mode plus a
 trusted-interpreter-first `PATH` prevents workspace modules from shadowing the
 installed validator.
-Calls are recorded in `validation-calls.jsonl`; after the
-agent exits, the host writes `validation-activity.json` with successful/failed
-counts and flags more than five calls as a prompt/support-material smell. This
-telemetry is not trusted for admission: final structured-output shape checks,
-safe materialization, and full artifact validation still run independently.
+Calls are recorded in `validation-calls.jsonl`. A modeling workspace may make
+at most three calls: a fourth request is deterministically refused without
+being appended to the call log. After the agent exits, the host writes
+`validation-activity.json` with successful/failed counts. This telemetry is not
+trusted for admission: safe materialization and full host validation still run
+independently.
+
+The candidate tree is the artifact authority. Luna's final structured response
+is only a path manifest: strict output entries carry the path and a required
+`content: null` placeholder, never a second transcription of the bytes. A valid
+candidate can therefore be recovered even when the CLI exits nonzero or its
+last message is malformed. Proposed files that are byte-identical to the base
+catalog are stripped, while any changed file colliding with a base-catalog path
+is rejected. For new `.model` files, the host parses the referenced canonical
+PMDL and repairs a stale or missing PMDL hash to that exact identity before the
+final validation pass; it rejects unknown identities and duplicate model
+definitions rather than guessing.
 
 ### Derived standalone part documentation
 
@@ -183,6 +218,12 @@ non-secret model settings hash identically. `--force` deliberately dispatches
 again. A matching modeling receipt is skipped only if its staged artifacts
 still exist and pass validation. API keys are excluded from hashes, receipts,
 workspaces, logs written by the harness, and terminal output.
+
+Before a modeling reservation, deterministic preflight checks the component's
+required physics. Components requiring an unimplemented domain such as thermal
+physics are written as `deferred_unsupported_physics` receipts with
+`charged_usd: 0.0`; they do not reserve budget, authenticate Codex, or dispatch
+the modeling agent. `--force` does not bypass this physics boundary.
 
 `contraption doctor` reports the imported Torch version, its compiled CUDA
 runtime, CUDA availability, device count, and selected GPU. Torch discovery,

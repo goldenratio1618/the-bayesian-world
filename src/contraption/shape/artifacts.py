@@ -345,7 +345,7 @@ class SourceRepresentation:
 
     def __post_init__(self) -> None:
         _text(self.id, "source.id")
-        if self.format not in {"step", "brep", "fcstd", "cadquery", "openscad", "stl", "obj", "ply", "gltf", "glb", "point_cloud", "depth_frames", "scan_frames", "optical_sensor", "optical_observation", "ctmesh", "procedural", "material_library", "texture"}:
+        if self.format not in {"step", "iges", "brep", "fcstd", "cadquery", "openscad", "stl", "obj", "ply", "gltf", "glb", "wrl", "point_cloud", "depth_frames", "scan_frames", "optical_sensor", "optical_observation", "ctmesh", "procedural", "material_library", "texture"}:
             raise ShapeArtifactError(f"unsupported source format {self.format!r}")
         if _number(self.metres_per_source_unit, "source.metres_per_source_unit") <= 0.0:
             raise ShapeArtifactError("source unit scale must be positive")

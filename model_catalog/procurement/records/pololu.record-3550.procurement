@@ -1,0 +1,82 @@
+{
+  "documents": [
+    {
+      "kind": "product_page",
+      "url": "https://www.pololu.com/product/3550"
+    },
+    {
+      "kind": "product_page",
+      "url": "https://www.pololu.com/docs/0J76/4"
+    }
+  ],
+  "evidence": [
+    {
+      "locator": "$.product",
+      "sha256": "sha256:71181f6affed7b36e53bc77d637de781c498f41047a667d261a0eaa5947b0a8c",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_arm.json"
+    },
+    {
+      "locator": "$.manufacturer",
+      "sha256": "sha256:71181f6affed7b36e53bc77d637de781c498f41047a667d261a0eaa5947b0a8c",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_arm.json"
+    },
+    {
+      "locator": "$.source_urls[0]",
+      "sha256": "sha256:71181f6affed7b36e53bc77d637de781c498f41047a667d261a0eaa5947b0a8c",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_arm.json"
+    },
+    {
+      "locator": "$.source_urls[1]",
+      "sha256": "sha256:71181f6affed7b36e53bc77d637de781c498f41047a667d261a0eaa5947b0a8c",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_arm.json"
+    },
+    {
+      "locator": "$.provenance",
+      "sha256": "sha256:cb4f974ca493b83c2c94ca3ed77dff3b88981cf67b522492e7680e7a7f54ea7c",
+      "source": "model_catalog/mechanical/linkages/rotational_linkages/instantiations/scanner_arm_linkage/static.part"
+    },
+    {
+      "locator": "$.features.lift_and_tilt_servos",
+      "sha256": "sha256:71181f6affed7b36e53bc77d637de781c498f41047a667d261a0eaa5947b0a8c",
+      "source": "assembled_contraptions/scanner/component_inputs/romi_arm.json"
+    },
+    {
+      "locator": "$.provenance",
+      "sha256": "sha256:3901822e73b67d56be41491fc1c6286eba79ef9c238d83ce50224c195bfbfc5e",
+      "source": "model_catalog/electromechanical/servos/position_servos/instantiations/generic_position_servo/static.part"
+    }
+  ],
+  "format": "procurement-record-1",
+  "id": "pololu.record-3550",
+  "identifiers": [
+    {
+      "scheme": "product_name",
+      "value": "Robot Arm Kit for Romi, item 3550"
+    },
+    {
+      "issuer": "Pololu",
+      "scheme": "manufacturer_item_number",
+      "value": "3550"
+    }
+  ],
+  "lifecycle": {
+    "status": "unknown"
+  },
+  "manufacturer": "Pololu",
+  "offers": [],
+  "provides": [
+    {
+      "part": "scanner.arm_linkage",
+      "quantity": 1,
+      "static_sha256": "sha256:b09c7c0fb2b31b735b6d31b4ce8b32c698b257a3982e896cd9c53f7a4dd68c7e",
+      "version": "1.0.0"
+    },
+    {
+      "part": "scanner.position_servo",
+      "quantity": 2,
+      "static_sha256": "sha256:af57c8366c0c027c0b272409b4bbd8787f50371bb109ce77a640b97b775c8264",
+      "version": "1.0.0"
+    }
+  ],
+  "version": "1.0.0"
+}
