@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import hashlib
 import importlib.util
 import json
 import math
 import os
 from pathlib import Path
 import shutil
+import stat
 import sys
 from typing import Any, Mapping
+import uuid
 
 import numpy as np
 
@@ -22,12 +25,29 @@ from .loading import load_contraption
 from .manufacturing.build import generate_build_instructions
 from .part_import.agents import (
     ClassificationAgent,
+    DirectResponsesModelingAgent,
     ModelingAgent,
     ModelingInputs,
     load_dotenv_key,
     run_classification_batch,
     run_modeling_proposal,
     write_json_atomic,
+)
+from .part_import.ingestion import (
+    build_ingestion_report,
+    combine_ingestion_metrics,
+    combine_ingestion_metrics_with_carryovers,
+    complete_batch_targets,
+    failed_run_carryover,
+    prepare_isolated_replay,
+    replay_state_fingerprint,
+    run_part_ingestion,
+    validate_canary_gate,
+    validate_canary_report_evidence,
+    validate_failed_run_carryovers,
+    validate_matching_failed_run_carryovers,
+    validate_replay_state,
+    workflow_fingerprint,
 )
 from .part_import.part_markdown import write_part_markdown
 from .part_import.budget import BudgetLedger
@@ -46,13 +66,11 @@ WORK_ROOT = SOURCE_ROOT if PROJECT_ROOT == SOURCE_ROOT else Path.cwd().resolve()
 OUTPUT_ROOT = Path(
     os.environ.get("CONTRAPTION_OUTPUT_ROOT", str(WORK_ROOT / "outputs"))
 ).expanduser().resolve()
-PART_IMPORT_CANARY_ROOT = (
-    PROJECT_ROOT / "assembled_contraptions" / "examples" / "part_import_canary"
-)
+PART_IMPORT_CANARY_ROOT = OUTPUT_ROOT / "part-import-canary"
+PRIOR_FAILED_RUNS_BINDING = Path("outputs/part-ingestion-prior-failed-runs.json")
+INGESTION_LEDGER_BINDING_SCHEMA = "contraption.part-ingestion-ledger-binding/v1"
 DEFAULT_CATALOG = PROJECT_ROOT / "model_catalog"
 DEFAULT_OUTPUT = OUTPUT_ROOT / "contraption_run"
-AGENT_PROPOSALS = OUTPUT_ROOT / "agent-proposals"
-AGENT_STAGING = OUTPUT_ROOT / "agent-staging"
 
 
 def _controller_identities(assembly: ResolvedAssembly) -> list[dict[str, str]]:
@@ -835,10 +853,10 @@ def command_demo(args: argparse.Namespace) -> int:
     return 0
 
 
-def _agent_ledger(path: str | None) -> BudgetLedger:
+def _agent_ledger(path: str | None, *, limit_usd: float = 100.0) -> BudgetLedger:
     return BudgetLedger(
         Path(path).resolve() if path else OUTPUT_ROOT / "agent-budget.json",
-        limit_usd=100.0,
+        limit_usd=limit_usd,
     )
 
 
@@ -911,7 +929,7 @@ def command_agent_canary(args: argparse.Namespace) -> int:
             )
             agent = ModelingAgent(
                 ledger,
-                AGENT_STAGING,
+                PART_IMPORT_CANARY_ROOT / "agent-staging",
                 codex_binary=os.environ.get("CODEX_BIN"),
                 api_key=key,
             )
@@ -929,7 +947,7 @@ def command_agent_canary(args: argparse.Namespace) -> int:
                 "reason": _agent_failure_reason(exc, key),
             }
     results["budget"] = ledger.snapshot()
-    destination = OUTPUT_ROOT / "agent-canary-report.json"
+    destination = PART_IMPORT_CANARY_ROOT / "agent-canary-report.json"
     _write_json(destination, results)
     print(json.dumps({"report": str(destination), **results}, indent=2, sort_keys=True))
     return 0 if successes else 2
@@ -1057,15 +1075,198 @@ def _full_modeling_inputs(bundle: _AgentJobBundle, target: str) -> ModelingInput
     )
 
 
-def command_agent_run(args: argparse.Namespace) -> int:
-    """Run paid, non-canary jobs with resumable validated proposal receipts."""
+def _replay_direct_child(root: Path, name: str) -> Path:
+    child = root / name
+    if child.is_symlink():
+        raise ValueError(f"replay path cannot be a symlink: {child}")
+    resolved = child.resolve()
+    if resolved.parent != root:
+        raise ValueError(f"replay path escaped its run root: {child}")
+    return resolved
 
-    ledger = _agent_ledger(args.ledger)
+
+def _ingestion_ledger_binding(replay_root: str | Path) -> dict[str, Any]:
+    """Return the exact durable replay ledger identity without creating it."""
+
+    root = Path(replay_root).resolve()
+    path = _replay_direct_child(root, "agent-budget.json")
+    try:
+        mode = path.lstat().st_mode
+    except FileNotFoundError:
+        raise FileNotFoundError(f"ingestion replay ledger is missing: {path}") from None
+    if not stat.S_ISREG(mode):
+        raise ValueError(
+            f"ingestion replay ledger must be a regular non-symlink file: {path}"
+        )
+    payload = path.read_bytes()
+    return {
+        "schema": INGESTION_LEDGER_BINDING_SCHEMA,
+        "path": str(path),
+        "sha256": "sha256:" + hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def _validate_ingestion_ledger_binding(
+    value: Mapping[str, Any], replay_root: str | Path
+) -> dict[str, Any]:
+    """Re-read and exactly compare the canary's run-local ledger binding."""
+
+    if not isinstance(value, Mapping):
+        raise ValueError("canary report has no run-ledger binding")
+    actual = _ingestion_ledger_binding(replay_root)
+    if dict(value) != actual:
+        raise ValueError("ingestion replay ledger changed after the canary")
+    return actual
+
+
+def _prior_failed_run_bindings(
+    raw_ledgers: list[str],
+    *,
+    target: str,
+    component_sha256: str,
+    current_ledger: Path,
+) -> list[dict[str, Any]]:
+    bindings: list[dict[str, Any]] = []
+    for raw_prior in raw_ledgers:
+        prior_path = Path(raw_prior).expanduser()
+        if prior_path.is_symlink():
+            raise ValueError("prior failed ledger cannot be a symlink")
+        prior_path = prior_path.resolve()
+        if prior_path == current_ledger:
+            raise ValueError("prior failed ledger cannot be the new replay ledger")
+        if prior_path == OUTPUT_ROOT or OUTPUT_ROOT not in prior_path.parents:
+            raise ValueError(
+                "prior failed ledger must be a strict descendant of outputs/"
+            )
+        bindings.append(
+            failed_run_carryover(
+                prior_path,
+                expected_target=target,
+                expected_component_sha256=component_sha256,
+            )
+        )
+    return validate_failed_run_carryovers(bindings)
+
+
+def _prior_failed_binding_path(data_root: str | Path) -> Path:
+    root = Path(data_root).resolve()
+    directory = root / PRIOR_FAILED_RUNS_BINDING.parent
+    path = root / PRIOR_FAILED_RUNS_BINDING
+    if directory.is_symlink() or path.is_symlink():
+        raise ValueError("prior failed-run binding cannot be a symlink")
+    if path.resolve().parents[1] != root:
+        raise ValueError("prior failed-run binding escaped the isolated data root")
+    return path
+
+
+def command_agent_run(args: argparse.Namespace) -> int:
+    """Run paid importer jobs with resumable receipts and guarded promotion."""
+
     key, dotenv = _agent_key(args.env_file)
-    proposal_root = Path(args.output_root).resolve()
-    jobs = _load_agent_job_bundle(args.job_file)
+    job_file = Path(args.job_file).expanduser().resolve()
+    if OUTPUT_ROOT == job_file.parent or OUTPUT_ROOT in job_file.parent.parents:
+        run_root = job_file.parent
+    else:
+        run_root = OUTPUT_ROOT / "part-import" / job_file.stem
+    ingestion_job = args.agent_job in {"ingestion-canary", "ingestion-batch"}
+    raw_proposal_root = (
+        Path(args.output_root).expanduser()
+        if args.output_root
+        else run_root / "agent-proposals"
+    )
+    if ingestion_job and raw_proposal_root.is_symlink():
+        raise ValueError("ingestion --output-root cannot be a symlink")
+    proposal_root = raw_proposal_root.resolve()
+    ingestion_staging_root: Path | None = None
+    if ingestion_job:
+        if proposal_root == OUTPUT_ROOT or OUTPUT_ROOT not in proposal_root.parents:
+            raise ValueError(
+                "ingestion --output-root must be a strict descendant of outputs/"
+            )
+        if (
+            proposal_root == job_file.parent
+            or job_file.parent in proposal_root.parents
+            or proposal_root in job_file.parent.parents
+        ):
+            raise ValueError(
+                "ingestion --output-root must be a fresh replay run, not the source job run"
+            )
+        if args.agent_job == "ingestion-canary" and proposal_root.exists():
+            if not proposal_root.is_dir() or any(proposal_root.iterdir()):
+                raise ValueError(
+                    "ingestion canary --output-root must be absent or an empty directory"
+                )
+        ingestion_staging_root = _replay_direct_child(
+            proposal_root, "agent-staging"
+        )
+        if ingestion_staging_root.exists() and not ingestion_staging_root.is_dir():
+            raise ValueError("ingestion staging path must be a directory")
+        raw_supplied_staging = (
+            Path(args.staging_root).expanduser()
+            if args.staging_root
+            else ingestion_staging_root
+        )
+        if raw_supplied_staging.is_symlink():
+            raise ValueError("ingestion staging cannot be a symlink")
+        supplied_staging = raw_supplied_staging.resolve()
+        if supplied_staging != ingestion_staging_root:
+            raise ValueError(
+                "ingestion staging must be <output-root>/agent-staging"
+            )
+    ledger_path: str | Path | None = args.ledger
+    preloaded_canary_report_path: Path | None = None
+    preloaded_canary_report: dict[str, Any] | None = None
+    if ingestion_job:
+        expected_ledger = _replay_direct_child(proposal_root, "agent-budget.json")
+        raw_supplied_ledger = (
+            Path(args.ledger).expanduser() if args.ledger else expected_ledger
+        )
+        if raw_supplied_ledger.is_symlink():
+            raise ValueError("ingestion ledger cannot be a symlink")
+        supplied_ledger = raw_supplied_ledger.resolve()
+        if supplied_ledger != expected_ledger:
+            raise ValueError(
+                "ingestion ledger must be <output-root>/agent-budget.json"
+            )
+        ledger_path = supplied_ledger
+        if args.agent_job == "ingestion-batch":
+            raw_canary_report = Path(args.canary_report).expanduser()
+            if raw_canary_report.is_symlink():
+                raise ValueError("canary report cannot be a symlink")
+            preloaded_canary_report_path = raw_canary_report.resolve()
+            preloaded_canary_report = _load_json(preloaded_canary_report_path)
+            raw_replay_root = preloaded_canary_report.get("replay_run_root")
+            if not isinstance(raw_replay_root, str) or not raw_replay_root:
+                raise ValueError("canary report has no replay run root")
+            recorded_replay_root = Path(raw_replay_root).expanduser()
+            if recorded_replay_root.is_symlink():
+                raise ValueError("recorded replay run root cannot be a symlink")
+            if recorded_replay_root.resolve() != proposal_root:
+                raise ValueError(
+                    "batch --output-root differs from the canary replay run root"
+                )
+            expected_canary_report = _replay_direct_child(
+                proposal_root, "ingestion-canary-report.json"
+            )
+            if preloaded_canary_report_path != expected_canary_report:
+                raise ValueError("canary report is outside its replay run root")
+            _validate_ingestion_ledger_binding(
+                preloaded_canary_report.get("run_ledger"), proposal_root
+            )
+    ledger = _agent_ledger(
+        str(ledger_path) if ledger_path is not None else None,
+        limit_usd=float(getattr(args, "ledger_limit_usd", 100.0)),
+    )
+    if preloaded_canary_report is not None:
+        # Construction validates the existing state but must not recreate or
+        # change the exact canary ledger before the batch gate.
+        _validate_ingestion_ledger_binding(
+            preloaded_canary_report.get("run_ledger"), proposal_root
+        )
+    exit_code = 0
     try:
         if args.agent_job == "classification-all":
+            jobs = _load_agent_job_bundle(job_file)
             if not key:
                 raise RuntimeError(
                     f"OPENAI_API_KEY is absent and {dotenv} has no key; "
@@ -1085,9 +1286,14 @@ def command_agent_run(args: argparse.Namespace) -> int:
                 "budget": ledger.snapshot(),
             }
         elif args.agent_job == "modeling-one":
+            jobs = _load_agent_job_bundle(job_file)
             agent = ModelingAgent(
                 ledger,
-                Path(args.staging_root).resolve(),
+                (
+                    Path(args.staging_root).expanduser().resolve()
+                    if args.staging_root
+                    else run_root / "agent-staging"
+                ),
                 codex_binary=os.environ.get("CODEX_BIN"),
                 api_key=key,
             )
@@ -1103,12 +1309,372 @@ def command_agent_run(args: argparse.Namespace) -> int:
                 "result": result,
                 "budget": ledger.snapshot(),
             }
+        elif args.agent_job in {"ingestion-canary", "ingestion-batch"}:
+            if not key:
+                raise RuntimeError(
+                    f"OPENAI_API_KEY is absent and {dotenv} has no key; "
+                    f"{args.agent_job} was not dispatched"
+                )
+            job_sha256 = "sha256:" + hashlib.sha256(job_file.read_bytes()).hexdigest()
+            prior_failed_runs: list[dict[str, Any]] = []
+            if args.agent_job == "ingestion-canary":
+                source_inputs = _full_modeling_inputs(
+                    _load_agent_job_bundle(job_file), args.target
+                )
+                component_sha256 = "sha256:" + hashlib.sha256(
+                    Path(source_inputs.component_information).read_bytes()
+                ).hexdigest()
+                prior_failed_runs = _prior_failed_run_bindings(
+                    args.prior_failed_ledger,
+                    target=args.target,
+                    component_sha256=component_sha256,
+                    current_ledger=(proposal_root / "agent-budget.json").resolve(),
+                )
+                isolation = prepare_isolated_replay(
+                    job_file, proposal_root / "isolated-data-root"
+                )
+                isolation_manifest = _replay_direct_child(
+                    proposal_root, "isolation-manifest.json"
+                )
+                prior_failed_binding = _prior_failed_binding_path(
+                    isolation["data_root"]
+                )
+                write_json_atomic(
+                    prior_failed_binding,
+                    {
+                        "schema": "contraption.part-ingestion-prior-failed-runs/v1",
+                        "runs": prior_failed_runs,
+                    },
+                )
+                os.environ["CONTRAPTION_DATA_ROOT"] = isolation["data_root"]
+                jobs = _load_agent_job_bundle(isolation["isolated_job_file"])
+            else:
+                if (
+                    preloaded_canary_report_path is None
+                    or preloaded_canary_report is None
+                ):  # pragma: no cover - ingestion-batch invariant.
+                    raise RuntimeError("batch canary report was not preloaded")
+                canary_report_path = preloaded_canary_report_path
+                canary_report = preloaded_canary_report
+                raw_prior_failed_runs = canary_report.get("prior_failed_runs", [])
+                if not isinstance(raw_prior_failed_runs, list):
+                    raise ValueError("canary report has invalid prior failed runs")
+                prior_failed_runs = validate_failed_run_carryovers(
+                    raw_prior_failed_runs
+                )
+                replay_root = proposal_root
+                expected_canary_report = _replay_direct_child(
+                    replay_root, "ingestion-canary-report.json"
+                )
+                if canary_report_path != expected_canary_report:
+                    raise ValueError("canary report is outside its replay run root")
+                raw_manifest = canary_report.get("isolation_manifest")
+                if not isinstance(raw_manifest, str):
+                    raise ValueError("canary report has no isolation manifest")
+                recorded_manifest = Path(raw_manifest).expanduser()
+                if recorded_manifest.is_symlink():
+                    raise ValueError("isolation manifest cannot be a symlink")
+                isolation_manifest = recorded_manifest.resolve()
+                expected_manifest = _replay_direct_child(
+                    replay_root, "isolation-manifest.json"
+                )
+                if isolation_manifest != expected_manifest:
+                    raise ValueError("canary isolation manifest is outside its replay root")
+                expected_state = canary_report.get("replay_state")
+                if not isinstance(expected_state, Mapping):
+                    raise ValueError("canary report has no bound replay state")
+                excluded = canary_report.get("canary_target")
+                if not isinstance(excluded, str) or not excluded:
+                    raise ValueError("canary report has no target binding")
+                data_root = _replay_direct_child(replay_root, "isolated-data-root")
+                if not data_root.is_dir():
+                    raise FileNotFoundError("isolated replay data root is missing")
+                state_job = expected_state.get("isolated_job")
+                if not isinstance(state_job, Mapping) or not isinstance(
+                    state_job.get("path"), str
+                ):
+                    raise ValueError("canary replay state has no isolated job binding")
+                recorded_job = Path(state_job["path"]).expanduser()
+                if recorded_job.is_symlink():
+                    raise ValueError("isolated job inventory cannot be a symlink")
+                isolated_job_file = recorded_job.resolve()
+                if data_root not in isolated_job_file.parents:
+                    raise ValueError("isolated job inventory escaped its data root")
+                validate_replay_state(
+                    expected_state,
+                    data_root=data_root,
+                    isolated_job_file=isolated_job_file,
+                    isolation_manifest=isolation_manifest,
+                    run_ledger=expected_ledger,
+                    canary_target=excluded,
+                )
+                isolation = _load_json(isolation_manifest)
+                if isolation.get("schema") != "contraption.part-import-replay-isolation/v2":
+                    raise ValueError("unsupported replay isolation manifest")
+                if isolation.get("source_job_sha256") != job_sha256:
+                    raise ValueError("isolation manifest belongs to another job inventory")
+                manifest_data_root = Path(str(isolation.get("data_root", ""))).expanduser()
+                if manifest_data_root.is_symlink() or manifest_data_root != data_root:
+                    raise ValueError("isolation manifest data root changed after canary")
+                manifest_job = Path(
+                    str(isolation.get("isolated_job_file", ""))
+                ).expanduser()
+                if manifest_job.is_symlink() or manifest_job != isolated_job_file:
+                    raise ValueError("isolation manifest job path changed after canary")
+                os.environ["CONTRAPTION_DATA_ROOT"] = str(data_root)
+                jobs = _load_agent_job_bundle(isolated_job_file)
+                prior_failed_binding = _prior_failed_binding_path(data_root)
+                binding_value = _load_json(prior_failed_binding)
+                if (
+                    binding_value.get("schema")
+                    != "contraption.part-ingestion-prior-failed-runs/v1"
+                    or not isinstance(binding_value.get("runs"), list)
+                ):
+                    raise ValueError("isolated prior failed-run binding is malformed")
+                bound_prior_failed_runs = validate_failed_run_carryovers(
+                    binding_value["runs"]
+                )
+                batch_canary_inputs = _full_modeling_inputs(jobs, excluded)
+                batch_component_sha256 = "sha256:" + hashlib.sha256(
+                    Path(batch_canary_inputs.component_information).read_bytes()
+                ).hexdigest()
+                supplied_prior_failed_runs = _prior_failed_run_bindings(
+                    args.prior_failed_ledger,
+                    target=excluded,
+                    component_sha256=batch_component_sha256,
+                    current_ledger=(proposal_root / "agent-budget.json").resolve(),
+                )
+                prior_failed_runs = validate_matching_failed_run_carryovers(
+                    prior_failed_runs,
+                    bound_prior_failed_runs,
+                    supplied_prior_failed_runs,
+                )
+
+            if ingestion_staging_root is None:  # pragma: no cover - branch invariant.
+                raise RuntimeError("ingestion staging root was not initialized")
+            staging_root = ingestion_staging_root
+            classifier = ClassificationAgent(ledger, api_key=key)
+            modeler = DirectResponsesModelingAgent(
+                ledger, staging_root, api_key=key
+            )
+            interface_data = load_interface_catalog(jobs.catalog).to_dict()
+            workflow_sha256 = workflow_fingerprint(
+                classifier, modeler, interface_data
+            )
+            if args.agent_job == "ingestion-canary":
+                ingestion_run_id = f"ingestion-canary-{uuid.uuid4()}"
+                canary_failure: str | None = None
+                prior_target_charged_usd = sum(
+                    float(item["total_importer_charged_usd"])
+                    for item in prior_failed_runs
+                    if item.get("target") == args.target
+                )
+                try:
+                    result = run_part_ingestion(
+                        classifier,
+                        modeler,
+                        _full_modeling_inputs(jobs, args.target),
+                        args.target,
+                        jobs.catalog,
+                        proposal_root / "proposals",
+                        ingestion_run_id=ingestion_run_id,
+                        canary=True,
+                        force=args.force,
+                        prior_target_charged_usd=prior_target_charged_usd,
+                    )
+                except Exception as exc:
+                    canary_failure = _agent_failure_reason(exc, key)
+                    result = {
+                        "target": args.target,
+                        "status": "failed",
+                        "fully_ingested": False,
+                        "reason": canary_failure,
+                    }
+                report = build_ingestion_report(
+                    mode="canary",
+                    results=(result,),
+                    ledger=ledger,
+                    ingestion_run_id=ingestion_run_id,
+                    workflow_sha256=workflow_sha256,
+                    job_file_sha256=job_sha256,
+                    expected_target_count=1,
+                )
+                report.update(
+                    {
+                        "canary_target": args.target,
+                        "inventory_targets": [job.id for job in jobs.jobs],
+                        "replay_run_root": str(proposal_root),
+                        "isolation_manifest": str(isolation_manifest),
+                        "isolation_data_root": isolation["data_root"],
+                        "prior_failed_runs": prior_failed_runs,
+                        "prior_failed_runs_binding": str(prior_failed_binding),
+                        "prior_target_charged_usd": prior_target_charged_usd,
+                        "remaining_part_scope_limit_usd": (
+                            0.05 - prior_target_charged_usd
+                        ),
+                        "run_ledger": _ingestion_ledger_binding(proposal_root),
+                    }
+                )
+                try:
+                    replay_state = replay_state_fingerprint(
+                        isolation["data_root"],
+                        isolation["isolated_job_file"],
+                        isolation_manifest,
+                        expected_ledger,
+                        args.target,
+                    )
+                    expected_state_ledger = {
+                        "path": report["run_ledger"]["path"],
+                        "sha256": report["run_ledger"]["sha256"],
+                    }
+                    if replay_state.get("run_ledger") != expected_state_ledger:
+                        raise ValueError(
+                            "run ledger changed while binding canary replay state"
+                        )
+                    report["replay_state"] = replay_state
+                except Exception as exc:
+                    replay_state_error = _agent_failure_reason(exc, key)
+                    report["replay_state_error"] = replay_state_error
+                    result = {
+                        **result,
+                        "status": "failed",
+                        "fully_ingested": False,
+                        "reason": replay_state_error,
+                    }
+                    report["results"] = [result]
+                    report["metrics"] = build_ingestion_report(
+                        mode="canary",
+                        results=(result,),
+                        ledger=ledger,
+                        ingestion_run_id=ingestion_run_id,
+                        workflow_sha256=workflow_sha256,
+                        job_file_sha256=job_sha256,
+                        expected_target_count=1,
+                    )["metrics"]
+                    if canary_failure is None:
+                        canary_failure = replay_state_error
+                if canary_failure is not None:
+                    report["failure_reason"] = canary_failure
+                report_path = write_json_atomic(
+                    proposal_root / "ingestion-canary-report.json", report
+                )
+                if canary_failure is not None:
+                    exit_code = 2
+            else:
+                validate_canary_report_evidence(
+                    canary_report,
+                    ledger_snapshot=ledger.snapshot(),
+                    catalog_root=jobs.catalog,
+                    expected_target=excluded,
+                )
+                validate_canary_gate(
+                    canary_report,
+                    workflow_sha256=workflow_sha256,
+                    job_file_sha256=job_sha256,
+                )
+                bound_inventory = canary_report.get("inventory_targets")
+                actual_inventory = [job.id for job in jobs.jobs]
+                if not isinstance(bound_inventory, list) or bound_inventory != actual_inventory:
+                    raise ValueError(
+                        "isolated job inventory differs from the passing canary"
+                    )
+                expected_targets = complete_batch_targets(
+                    actual_inventory, excluded
+                )
+                targets = complete_batch_targets(
+                    actual_inventory, excluded, args.target or ()
+                )
+                ingestion_run_id = f"ingestion-batch-{uuid.uuid4()}"
+                results = []
+                for target in targets:
+                    try:
+                        results.append(
+                            run_part_ingestion(
+                                classifier,
+                                modeler,
+                                _full_modeling_inputs(jobs, target),
+                                target,
+                                jobs.catalog,
+                                proposal_root / "proposals",
+                                ingestion_run_id=ingestion_run_id,
+                                force=args.force,
+                            )
+                        )
+                    except Exception as exc:
+                        results.append(
+                            {
+                                "target": target,
+                                "status": "failed",
+                                "fully_ingested": False,
+                                "reason": _agent_failure_reason(exc, key),
+                            }
+                        )
+                        break
+                report = build_ingestion_report(
+                    mode="batch",
+                    results=results,
+                    ledger=ledger,
+                    ingestion_run_id=ingestion_run_id,
+                    workflow_sha256=workflow_sha256,
+                    job_file_sha256=job_sha256,
+                    expected_target_count=len(expected_targets),
+                )
+                report.update(
+                    {
+                        "canary_report": str(canary_report_path),
+                        "isolation_manifest": str(isolation_manifest),
+                        "isolation_data_root": isolation["data_root"],
+                        "requested_targets": targets,
+                        "combined_canary_and_batch": combine_ingestion_metrics(
+                            canary_report["metrics"], report["metrics"]
+                        ),
+                        "prior_failed_runs": prior_failed_runs,
+                        "combined_canary_batch_and_prior_failures": (
+                            combine_ingestion_metrics_with_carryovers(
+                                canary_report["metrics"],
+                                report["metrics"],
+                                prior_failed_runs,
+                            )
+                        ),
+                        "cumulative_canary_target_charged_usd": (
+                            sum(
+                                float(item["total_importer_charged_usd"])
+                                for item in prior_failed_runs
+                                if item.get("target") == excluded
+                            )
+                            + sum(
+                                float(item.get("charged_usd", 0.0))
+                                for item in canary_report.get("results", [])
+                                if isinstance(item, Mapping)
+                                and item.get("target") == excluded
+                            )
+                        ),
+                        "run_ledger": _ingestion_ledger_binding(proposal_root),
+                    }
+                )
+                report_path = write_json_atomic(
+                    proposal_root / "ingestion-batch-report.json", report
+                )
+            payload = {
+                "job": args.agent_job,
+                "report": str(report_path),
+                **report,
+                "budget": ledger.snapshot(),
+            }
+            if report["metrics"]["passed"] is not True:
+                exit_code = 2
+            if (
+                args.agent_job == "ingestion-batch"
+                and report["combined_canary_batch_and_prior_failures"]["passed"]
+                is not True
+            ):
+                exit_code = 2
         else:  # pragma: no cover - argparse enforces this boundary.
             raise ValueError(f"unsupported agent job {args.agent_job!r}")
     except Exception as exc:
         raise RuntimeError(_agent_failure_reason(exc, key)) from None
     print(json.dumps(payload, indent=2, sort_keys=True, allow_nan=False))
-    return 0
+    return exit_code
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1336,11 +1902,13 @@ def build_parser() -> argparse.ArgumentParser:
     canary.set_defaults(handler=command_agent_canary)
     actual = commands.add_parser(
         "agent-run",
-        help="run paid, resumable classification or modeling jobs without promotion",
+        help="run paid, resumable classification, modeling, or promoted ingestion jobs",
     )
     actual_jobs = actual.add_subparsers(dest="agent_job", required=True)
 
-    def actual_common(command: argparse.ArgumentParser) -> None:
+    def actual_common(
+        command: argparse.ArgumentParser, *, output_root_required: bool = False
+    ) -> None:
         command.add_argument("--ledger")
         command.add_argument("--env-file")
         command.add_argument(
@@ -1348,7 +1916,7 @@ def build_parser() -> argparse.ArgumentParser:
             required=True,
             help="path to a portable agent-jobs-1 inventory",
         )
-        command.add_argument("--output-root", default=str(AGENT_PROPOSALS))
+        command.add_argument("--output-root", required=output_root_required)
         command.add_argument(
             "--force",
             action="store_true",
@@ -1365,7 +1933,61 @@ def build_parser() -> argparse.ArgumentParser:
     )
     actual_common(modeling_one)
     modeling_one.add_argument("--target", required=True)
-    modeling_one.add_argument("--staging-root", default=str(AGENT_STAGING))
+    modeling_one.add_argument("--staging-root")
+    ingestion_canary = actual_jobs.add_parser(
+        "ingestion-canary",
+        help=(
+            "run one fresh classification+direct-modeling canary in an isolated "
+            "catalog and write the inclusive cost/validation gate"
+        ),
+    )
+    actual_common(ingestion_canary, output_root_required=True)
+    ingestion_canary.add_argument(
+        "--ledger-limit-usd",
+        type=float,
+        default=0.50,
+        help="lifetime limit for this replay ledger (default: 0.50)",
+    )
+    ingestion_canary.add_argument("--target", required=True)
+    ingestion_canary.add_argument(
+        "--prior-failed-ledger",
+        action="append",
+        default=[],
+        help=(
+            "dedicated failed ingestion ledger to bind into final cumulative KPIs; "
+            "repeat for multiple prior failed runs"
+        ),
+    )
+    ingestion_canary.add_argument("--staging-root")
+    ingestion_batch = actual_jobs.add_parser(
+        "ingestion-batch",
+        help=(
+            "run an isolated direct-Responses batch only after a matching canary gate"
+        ),
+    )
+    actual_common(ingestion_batch, output_root_required=True)
+    ingestion_batch.add_argument(
+        "--ledger-limit-usd",
+        type=float,
+        default=0.50,
+        help="lifetime limit for this replay ledger (default: 0.50)",
+    )
+    ingestion_batch.add_argument("--canary-report", required=True)
+    ingestion_batch.add_argument(
+        "--prior-failed-ledger",
+        action="append",
+        default=[],
+        help=(
+            "same failed ingestion ledger binding supplied to the canary; repeat "
+            "for multiple prior failed runs"
+        ),
+    )
+    ingestion_batch.add_argument(
+        "--target",
+        action="append",
+        help="target id to ingest; repeat, or omit for every non-canary target",
+    )
+    ingestion_batch.add_argument("--staging-root")
     return parser
 
 

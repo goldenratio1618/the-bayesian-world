@@ -555,28 +555,23 @@ class ProcurementRegistry(Mapping[str, ProcurementRecord]):
     @classmethod
     def load_catalog(cls, root: str | Path) -> "ProcurementRegistry":
         catalog_root = Path(root).resolve()
-        records_root = catalog_root / "procurement" / "records"
-        if not records_root.exists():
-            return cls()
-        if records_root.is_symlink() or not records_root.is_dir():
-            raise ProcurementSpecError(f"procurement records root is not a regular directory: {records_root}")
         records: list[ProcurementRecord] = []
-        for path in sorted(records_root.rglob("*.procurement")):
+        for path in sorted(catalog_root.rglob("*.procurement")):
             if path.is_symlink() or not path.is_file():
                 raise ProcurementSpecError(f"procurement record is not a regular file: {path}")
-            if path.parent != records_root:
-                raise ProcurementSpecError("procurement records must be directly below procurement/records")
+            try:
+                relative = path.relative_to(catalog_root)
+            except ValueError as exc:  # pragma: no cover - rglob guarantees this.
+                raise ProcurementSpecError(f"procurement record escapes catalog: {path}") from exc
+            if path.parent.parent.name != "instantiations":
+                raise ProcurementSpecError(
+                    f"{relative.as_posix()}: procurement records must be directly "
+                    "inside a part instantiation directory"
+                )
             record = ProcurementRecord.from_json(path.read_text(encoding="utf-8"))
             if path.stem != record.id:
                 raise ProcurementSpecError(f"{path.name}: filename stem must equal record id {record.id!r}")
             records.append(record)
-        unsupported = sorted(
-            path.name for path in records_root.iterdir() if path.is_file() and path.suffix != ".procurement"
-        )
-        if unsupported:
-            raise ProcurementSpecError(
-                "unsupported procurement record files: " + ", ".join(unsupported)
-            )
         return cls(records)
 
 

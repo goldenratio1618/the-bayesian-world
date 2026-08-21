@@ -1,0 +1,30 @@
+{
+  "assembly_id": "apartment-scanner-robot",
+  "assembly_sha256": "sha256:38a23a7d1833f51c898d7fa4dc0f546a6f16c7afef0b5df9540c0f75c7499e1f",
+  "backend": "torch-differentiable",
+  "device": "cuda",
+  "external_scene_sha256": null,
+  "format": "assembly-optical-capture-1",
+  "observations": [
+    {
+      "artifact_sha256": "2a30f242931006214e141974ad9a4883161878e80d906d1a6d321d6df27ad86a",
+      "id": "camera-scanner.camera.optical-frame-00000475",
+      "path": "assembled_contraptions/scanner/simulations/full-orbit-v3/optical/frame-00000475/observations/camera-scanner.camera.optical-frame-00000475.optical-observation.json"
+    }
+  ],
+  "runtime_scene_sha256": "4606e7292e636e082fa69a8e5cb53f857e7ba701306c7849ddbf29af05e00501",
+  "sample_index": 0,
+  "sensors": [
+    {
+      "binding_id": "camera:scanner.camera.optical",
+      "descriptor_path": "assembled_contraptions/scanner/simulations/full-orbit-v3/optical/frame-00000475/sensors/camera-scanner.camera.optical.optical.json",
+      "mount_connector": "camera.optical_axis",
+      "pose_sha256": "64dab333ea90159a99625d8f2302d35aecc95bbe5bc3c89561066f8a2f72ec44",
+      "sensor_id": "scanner.camera.optical",
+      "sensor_sha256": "0843aa58569b1aaaa84ad43e3520c6592dbb9f9d6994d482edbb571eeca8aa3c",
+      "source_sensor_sha256": "bae031b2866afe5504ecd9db62336417b6116871c3e0cb0774438d608168cbce"
+    }
+  ],
+  "time_index": 475,
+  "time_s": 23.75
+}

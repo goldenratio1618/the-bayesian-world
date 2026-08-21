@@ -21,7 +21,7 @@ SERVO_STATIC = REPOSITORY / (
     "generic_position_servo/static.part"
 )
 ROMI_INPUT = REPOSITORY / (
-    "assembled_contraptions/scanner/component_inputs/romi_arm.json"
+    "outputs/scanner-part-import/component_inputs/romi_arm.json"
 )
 EXPECTED_INPUT_SHA256 = (
     "sha256:71181f6affed7b36e53bc77d637de781c498f41047a667d261a0eaa5947b0a8c"
@@ -100,7 +100,7 @@ class FabricationEvidenceMigrationTests(unittest.TestCase):
             [
                 {
                     "kind": "component_input",
-                    "source": "assembled_contraptions/scanner/component_inputs/romi_arm.json",
+                    "source": "outputs/scanner-part-import/component_inputs/romi_arm.json",
                     "locator": "$.features.feedback",
                     "sha256": EXPECTED_INPUT_SHA256,
                 }

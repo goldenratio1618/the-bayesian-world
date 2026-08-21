@@ -18,10 +18,11 @@ live at the category or device layer and declare which contract they implement.
 Physical part instantiations live below the relevant layer in
 `instantiations/<part-id>/`. `static.part` owns model-invariant geometry,
 connectors, typed endpoint fabrication constraints, provenance, and
-non-procurement metadata. Central
-`model_catalog/procurement/records/*.procurement` files own evidenced product
-identifiers, documents, lifecycle observations, supplier offers, and exact
-static-part provisions. Each `vN.model`
+non-procurement metadata. Adjacent `*.procurement` files in instantiation
+directories own evidenced product identifiers, documents, lifecycle
+observations, supplier offers, and exact static-part provisions. The adjacent
+directory is organizational only; `provides[]` is the sole binding authority.
+Each `vN.model`
 selects an exact-hash PMDL class and initializes all parameters, uncertainty,
 condition, and relative compute cost. Multiple competing model instances may
 describe the same physical part.
@@ -224,24 +225,38 @@ See [the controller compiler contract](docs/ONLINE_COMPILER.md).
 
 ## Guarded component agents
 
-Agent operations share a hard `$100` lifetime ledger under `outputs/` and never
-promote their own results:
+Legacy classification and staged-modeling operations share a hard `$100`
+lifetime ledger under `outputs/`:
 
 ```bash
 contraption budget
 contraption agent-canary --kind both --env-file ../.env
-contraption agent-run classification-all --job-file assembled_contraptions/scanner/agent_jobs.json --env-file ../.env
-contraption agent-run modeling-one --job-file assembled_contraptions/scanner/agent_jobs.json --target romi_drive --env-file ../.env
+contraption agent-run classification-all --job-file outputs/scanner-part-import/agent_jobs.json --env-file ../.env
+contraption agent-run modeling-one --job-file outputs/scanner-part-import/agent_jobs.json --target romi_drive --env-file ../.env
 ```
 
-The modeling agent writes complete inert catalog bundles: any required
-interfaces, `static.part`, and at least `v1.model`. It reuses an exact existing
-PMDL class/hash when its physics fits, and adds a concrete PMDL only when needed. It may
-call the dedicated bundle validator repeatedly for path, interface, PMDL,
-parameter, physical, and property feedback. Protected inputs are hash-checked
-before and after a run. PMDL math uses a portable allow-list; arbitrary Python
-imports are not executed. The parent `../.env`, agent receipts, staging data,
-and budget ledger are machine-local and gitignored.
+The measured importer instead uses Luna-low direct Responses calls, a dedicated
+`$0.50` replay ledger, and one atomic `<$0.05` scope across classification plus
+all modeling attempts for each part. It first runs `agent-run ingestion-canary`
+for one eligible target in a clean isolated catalog. Only a passing canary can
+unlock `agent-run ingestion-batch`; that report also records combined
+canary-plus-batch cost and failed-validation KPIs. Unsupported thermal targets
+are deterministic zero-dispatch deferrals. Validated direct proposals are
+promoted only into the isolated replay catalog and reloaded before they count
+as fully ingested. See [the component-agent contract](docs/COMPONENT_AGENTS.md)
+for the exact guarded commands and report paths.
+
+The selected import run owns its `agent-proposals/` and ignored sibling
+`agent-staging/` directories.
+
+Both modeling backends produce inert catalog bundles containing `static.part`,
+`v1.model`, and at most the required new concrete PMDL. The legacy CLI backend
+may use the dedicated validator in its isolated candidate workspace. The direct
+backend has no tools: it returns complete file strings and the host materializes
+and validates each attempt, including paths, interfaces, PMDL, parameters,
+physical records, and properties. PMDL math uses a portable allow-list;
+arbitrary Python imports are not executed. Credentials, receipts, staging data,
+and budget ledgers are machine-local and gitignored.
 
 ## Design records and limits
 
@@ -253,7 +268,7 @@ and budget ledger are machine-local and gitignored.
 - [Procurement records](docs/structured_formats/PROCUREMENT.md)
 - [Offline optical capture and reconstruction](docs/structured_formats/OPTICAL_WORKFLOWS.md)
 - [Linux/GPU installation](docs/INSTALLATION.md)
-- [Purchasing and physical safety guidance](docs/PURCHASING.md)
+- [Scanner purchasing and physical safety guidance](assembled_contraptions/scanner/PURCHASING.md)
 
 The current mechanics are deliberately bounded: planar chassis motion plus a
 declared rigid attachment/joint tree, not general 3D contact, flexible bodies,

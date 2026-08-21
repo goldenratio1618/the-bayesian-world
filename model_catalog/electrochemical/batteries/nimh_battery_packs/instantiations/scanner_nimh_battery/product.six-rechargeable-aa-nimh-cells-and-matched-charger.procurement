@@ -4,7 +4,7 @@
     {
       "locator": "$.products[0]",
       "sha256": "sha256:681438a1a754b8b0a53bb72127e39f22a48e1c0d24982a90cb303227bbf50413",
-      "source": "assembled_contraptions/scanner/component_inputs/power.json"
+      "source": "outputs/scanner-part-import/component_inputs/power.json"
     }
   ],
   "format": "procurement-record-1",

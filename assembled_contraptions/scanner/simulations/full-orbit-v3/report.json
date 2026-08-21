@@ -1,0 +1,417 @@
+{
+  "artifacts": {
+    "optical_captures": [
+      "assembled_contraptions/scanner/simulations/full-orbit-v3/optical/frame-00000000/report.json",
+      "assembled_contraptions/scanner/simulations/full-orbit-v3/optical/frame-00000079/report.json",
+      "assembled_contraptions/scanner/simulations/full-orbit-v3/optical/frame-00000158/report.json",
+      "assembled_contraptions/scanner/simulations/full-orbit-v3/optical/frame-00000237/report.json",
+      "assembled_contraptions/scanner/simulations/full-orbit-v3/optical/frame-00000316/report.json",
+      "assembled_contraptions/scanner/simulations/full-orbit-v3/optical/frame-00000395/report.json",
+      "assembled_contraptions/scanner/simulations/full-orbit-v3/optical/frame-00000475/report.json",
+      "assembled_contraptions/scanner/simulations/full-orbit-v3/optical/frame-00000554/report.json",
+      "assembled_contraptions/scanner/simulations/full-orbit-v3/optical/frame-00000633/report.json",
+      "assembled_contraptions/scanner/simulations/full-orbit-v3/optical/frame-00000712/report.json",
+      "assembled_contraptions/scanner/simulations/full-orbit-v3/optical/frame-00000791/report.json",
+      "assembled_contraptions/scanner/simulations/full-orbit-v3/optical/frame-00000870/report.json"
+    ],
+    "physical_scene": "assembled_contraptions/scanner/simulations/full-orbit-v3/physical-scene.json",
+    "trajectory": "assembled_contraptions/scanner/simulations/full-orbit-v3/trajectory.json",
+    "viewer": "assembled_contraptions/scanner/simulations/full-orbit-v3/viewer/index.html"
+  },
+  "assembly_sha256": "sha256:38a23a7d1833f51c898d7fa4dc0f546a6f16c7afef0b5df9540c0f75c7499e1f",
+  "controllers": [
+    {
+      "id": "scanner_orbit_controller",
+      "program_id": "scanner_orbit_controller",
+      "sha256": "sha256:bf8fcf4431d100a318c4018fb8819b9bb17bf22e7b38b039b0548f71926f9317",
+      "version": "2.2.0"
+    }
+  ],
+  "dynamics_completeness": {
+    "gates": [
+      {
+        "id": "fixed_payload_mass_inertia",
+        "reason": "Fixed battery, electronics, motor cases, servo cases, and compute payload mass, center of mass, and inertia are not included in planar chassis dynamics.",
+        "status": "open"
+      },
+      {
+        "id": "moving_arm_camera_inertial_derivation",
+        "reason": "Arm and camera inertia and gravity terms are component-local estimates, not derived from downstream body mass properties, parent motion, or configuration.",
+        "status": "open"
+      },
+      {
+        "id": "servo_case_reaction_coupling",
+        "reason": "One-port servo shaft models do not transmit actuator case-reaction torque through their fixed case attachments to the arm or chassis.",
+        "status": "open"
+      },
+      {
+        "id": "caster_floor_contact",
+        "reason": "The physical ball caster and its floor contact, drag, load transfer, and lift constraints are not represented as a component interaction.",
+        "status": "open"
+      },
+      {
+        "id": "full_body_keepout",
+        "reason": "The current keep-out evidence checks only the planar root position; it does not test canonical chassis, arm, camera, or payload solids against the object volume.",
+        "status": "open"
+      },
+      {
+        "id": "controller_sensor_observation_binding",
+        "reason": "The controller now uses hash-bound encoder inference and explicit localization wires, but the localization channels are still ideal chassis outputs rather than a qualified physical sensor package.",
+        "status": "open"
+      },
+      {
+        "id": "electrical_supply_and_fault_coupling",
+        "reason": "Actuator and sensor behavior is not supply-voltage-limited, and drive-fault and brownout generation are outside the current component PMDL fidelity.",
+        "status": "open"
+      }
+    ],
+    "modeled_scope": "bare_chassis_planar_plus_component_local_dynamics",
+    "parameter_basis": {
+      "component": "chassis",
+      "mass_parameter": "mass",
+      "mass_scope": "published_bare_chassis_without_batteries",
+      "yaw_inertia_estimate": {
+        "formula": "mass * (length^2 + width^2) / 12",
+        "kind": "uniform_box_about_center_z",
+        "part_body": "body",
+        "part_solid": "deck",
+        "source": "Pololu Romi chassis catalog envelope and published 0.160 kg mass without batteries"
+      },
+      "yaw_inertia_parameter": "yaw_inertia"
+    },
+    "schema": "contraption.dynamics-completeness/v1",
+    "status": "incomplete"
+  },
+  "metrics": {
+    "controllers": [
+      "scanner_orbit_controller"
+    ],
+    "duration_s": 43.5,
+    "dynamics_completeness": {
+      "gates": [
+        {
+          "id": "fixed_payload_mass_inertia",
+          "reason": "Fixed battery, electronics, motor cases, servo cases, and compute payload mass, center of mass, and inertia are not included in planar chassis dynamics.",
+          "status": "open"
+        },
+        {
+          "id": "moving_arm_camera_inertial_derivation",
+          "reason": "Arm and camera inertia and gravity terms are component-local estimates, not derived from downstream body mass properties, parent motion, or configuration.",
+          "status": "open"
+        },
+        {
+          "id": "servo_case_reaction_coupling",
+          "reason": "One-port servo shaft models do not transmit actuator case-reaction torque through their fixed case attachments to the arm or chassis.",
+          "status": "open"
+        },
+        {
+          "id": "caster_floor_contact",
+          "reason": "The physical ball caster and its floor contact, drag, load transfer, and lift constraints are not represented as a component interaction.",
+          "status": "open"
+        },
+        {
+          "id": "full_body_keepout",
+          "reason": "The current keep-out evidence checks only the planar root position; it does not test canonical chassis, arm, camera, or payload solids against the object volume.",
+          "status": "open"
+        },
+        {
+          "id": "controller_sensor_observation_binding",
+          "reason": "The controller now uses hash-bound encoder inference and explicit localization wires, but the localization channels are still ideal chassis outputs rather than a qualified physical sensor package.",
+          "status": "open"
+        },
+        {
+          "id": "electrical_supply_and_fault_coupling",
+          "reason": "Actuator and sensor behavior is not supply-voltage-limited, and drive-fault and brownout generation are outside the current component PMDL fidelity.",
+          "status": "open"
+        }
+      ],
+      "modeled_scope": "bare_chassis_planar_plus_component_local_dynamics",
+      "parameter_basis": {
+        "component": "chassis",
+        "mass_parameter": "mass",
+        "mass_scope": "published_bare_chassis_without_batteries",
+        "yaw_inertia_estimate": {
+          "formula": "mass * (length^2 + width^2) / 12",
+          "kind": "uniform_box_about_center_z",
+          "part_body": "body",
+          "part_solid": "deck",
+          "source": "Pololu Romi chassis catalog envelope and published 0.160 kg mass without batteries"
+        },
+        "yaw_inertia_parameter": "yaw_inertia"
+      },
+      "schema": "contraption.dynamics-completeness/v1",
+      "status": "incomplete"
+    },
+    "optical_capture": {
+      "backend": "torch-differentiable",
+      "device": "cuda",
+      "frame_count": 12,
+      "frames": [
+        {
+          "external_scene_sha256": null,
+          "runtime_scene_sha256": "34d4f2deea79b2fb434c984d16bf888953cd1749a11030a01aa962635561552a",
+          "time_index": 0,
+          "time_s": 0.0
+        },
+        {
+          "external_scene_sha256": null,
+          "runtime_scene_sha256": "467c153c76b54cd7d1c7f66dade7f4b21ed75307bbbca790081d2a3d250ea11b",
+          "time_index": 79,
+          "time_s": 3.95
+        },
+        {
+          "external_scene_sha256": null,
+          "runtime_scene_sha256": "ea83cf7f226bc4ff4e1f7b751fe9118dd8596adfaca66f4cf96572b5f29503eb",
+          "time_index": 158,
+          "time_s": 7.9
+        },
+        {
+          "external_scene_sha256": null,
+          "runtime_scene_sha256": "e14351d7ca9e75bf79eb9e1000db87fcd166669b8c679e9560ab48554f9eb31e",
+          "time_index": 237,
+          "time_s": 11.850000000000001
+        },
+        {
+          "external_scene_sha256": null,
+          "runtime_scene_sha256": "56bffc3de5dcd78c6ee0b8b12d98fe6972a12602761fe3c872da26bdd207f0b7",
+          "time_index": 316,
+          "time_s": 15.8
+        },
+        {
+          "external_scene_sha256": null,
+          "runtime_scene_sha256": "e47426059148fc3f786c5b5b4ac27badbdae37eddeb7b47e9ec96624c23218d2",
+          "time_index": 395,
+          "time_s": 19.75
+        },
+        {
+          "external_scene_sha256": null,
+          "runtime_scene_sha256": "4606e7292e636e082fa69a8e5cb53f857e7ba701306c7849ddbf29af05e00501",
+          "time_index": 475,
+          "time_s": 23.75
+        },
+        {
+          "external_scene_sha256": null,
+          "runtime_scene_sha256": "078501f413860c89b227f64c6bf28a864cf4e0dda4a4466e2419948143baa27c",
+          "time_index": 554,
+          "time_s": 27.700000000000003
+        },
+        {
+          "external_scene_sha256": null,
+          "runtime_scene_sha256": "6562d20d99ac8f498f142f4cd43acecd474b1131f13b6949f9e01e1b133dbaeb",
+          "time_index": 633,
+          "time_s": 31.650000000000002
+        },
+        {
+          "external_scene_sha256": null,
+          "runtime_scene_sha256": "29958a485f9aa490175d9617330b90fbde9b15f935465bde0fb996fba6f410cf",
+          "time_index": 712,
+          "time_s": 35.6
+        },
+        {
+          "external_scene_sha256": null,
+          "runtime_scene_sha256": "079088fce002868fdfd6088cb363917a45feb53723b5d8d325e0d80a355bb20b",
+          "time_index": 791,
+          "time_s": 39.550000000000004
+        },
+        {
+          "external_scene_sha256": null,
+          "runtime_scene_sha256": "38ca1a359bb5e3160b28d3204ad7c65c396419ef7aa73eee08a3647f5ab0a40c",
+          "time_index": 870,
+          "time_s": 43.5
+        }
+      ],
+      "observation_count": 12,
+      "sensor_count": 1
+    },
+    "output_count": 117,
+    "sample_count": 1,
+    "state_count": 117,
+    "verifications": {
+      "scanner.orbit_acceptance": {
+        "accepted": false,
+        "criteria": {
+          "camera_pointing": {
+            "accepted": false,
+            "confidence_level": 0.95,
+            "effective_sample_count": 1.0,
+            "expression": "pointing_rmse <= pointing_rmse_limit",
+            "minimum_probability": 0.95,
+            "name": "camera_pointing",
+            "pass_count": 1,
+            "passes": [
+              true
+            ],
+            "probability_estimate": 1.0,
+            "probability_lower_bound": 0.2698659487840544,
+            "probability_upper_bound": 1.0,
+            "sample_count": 1
+          },
+          "full_orbit_extent": {
+            "accepted": false,
+            "confidence_level": 0.95,
+            "effective_sample_count": 1.0,
+            "expression": "minimum_x <= negative_extent and maximum_x >= positive_extent and minimum_y <= negative_extent and maximum_y >= positive_extent",
+            "minimum_probability": 0.95,
+            "name": "full_orbit_extent",
+            "pass_count": 1,
+            "passes": [
+              true
+            ],
+            "probability_estimate": 1.0,
+            "probability_lower_bound": 0.2698659487840544,
+            "probability_upper_bound": 1.0,
+            "sample_count": 1
+          },
+          "loop_closure": {
+            "accepted": false,
+            "confidence_level": 0.95,
+            "effective_sample_count": 1.0,
+            "expression": "sqrt((final_x - initial_x) ** 2 + (final_y - initial_y) ** 2) <= closure_limit",
+            "minimum_probability": 0.95,
+            "name": "loop_closure",
+            "pass_count": 1,
+            "passes": [
+              true
+            ],
+            "probability_estimate": 1.0,
+            "probability_lower_bound": 0.2698659487840544,
+            "probability_upper_bound": 1.0,
+            "sample_count": 1
+          },
+          "radial_tracking": {
+            "accepted": false,
+            "confidence_level": 0.95,
+            "effective_sample_count": 1.0,
+            "expression": "radius_rmse <= radius_rmse_limit",
+            "minimum_probability": 0.95,
+            "name": "radial_tracking",
+            "pass_count": 1,
+            "passes": [
+              true
+            ],
+            "probability_estimate": 1.0,
+            "probability_lower_bound": 0.2698659487840544,
+            "probability_upper_bound": 1.0,
+            "sample_count": 1
+          },
+          "root_keepout": {
+            "accepted": false,
+            "confidence_level": 0.99,
+            "effective_sample_count": 1.0,
+            "expression": "minimum_radius >= keepout_radius",
+            "minimum_probability": 0.999,
+            "name": "root_keepout",
+            "pass_count": 1,
+            "passes": [
+              true
+            ],
+            "probability_estimate": 1.0,
+            "probability_lower_bound": 0.1559601473094691,
+            "probability_upper_bound": 1.0,
+            "sample_count": 1
+          }
+        },
+        "metrics": {
+          "final_x": {
+            "name": "final_x",
+            "reducer": "final",
+            "unit": "m",
+            "values": [
+              0.920095674412006
+            ]
+          },
+          "final_y": {
+            "name": "final_y",
+            "reducer": "final",
+            "unit": "m",
+            "values": [
+              0.010080694087567463
+            ]
+          },
+          "initial_x": {
+            "name": "initial_x",
+            "reducer": "initial",
+            "unit": "m",
+            "values": [
+              0.85
+            ]
+          },
+          "initial_y": {
+            "name": "initial_y",
+            "reducer": "initial",
+            "unit": "m",
+            "values": [
+              0.0
+            ]
+          },
+          "maximum_x": {
+            "name": "maximum_x",
+            "reducer": "max",
+            "unit": "m",
+            "values": [
+              0.9201382623830915
+            ]
+          },
+          "maximum_y": {
+            "name": "maximum_y",
+            "reducer": "max",
+            "unit": "m",
+            "values": [
+              0.8938959973786331
+            ]
+          },
+          "minimum_radius": {
+            "name": "minimum_radius",
+            "reducer": "min",
+            "unit": "m",
+            "values": [
+              0.85
+            ]
+          },
+          "minimum_x": {
+            "name": "minimum_x",
+            "reducer": "min",
+            "unit": "m",
+            "values": [
+              -0.9113436149999328
+            ]
+          },
+          "minimum_y": {
+            "name": "minimum_y",
+            "reducer": "min",
+            "unit": "m",
+            "values": [
+              -0.917817419848843
+            ]
+          },
+          "pointing_rmse": {
+            "name": "pointing_rmse",
+            "reducer": "rmse",
+            "unit": "rad",
+            "values": [
+              0.07217819671789635
+            ]
+          },
+          "radius_rmse": {
+            "name": "radius_rmse",
+            "reducer": "rmse",
+            "unit": "m",
+            "values": [
+              0.05662470297344321
+            ]
+          }
+        },
+        "program": {
+          "id": "scanner.orbit_acceptance",
+          "sha256": "sha256:e51bc445961c2c3d0e9b970665b8fcb6d13ece6d59020d07cfb4f30b1855991a",
+          "version": "1.1.0"
+        },
+        "sample_count": 1,
+        "schema": "contraption.verification-report/v2",
+        "time_count": 871
+      }
+    }
+  },
+  "pmdl_sha256": "sha256:e1b2fd007e727fe79ff9e237c8e6b4b69e6ca7385bf27c70be73ea48b51a7761",
+  "schema": "contraption.simulation-report/v2"
+}

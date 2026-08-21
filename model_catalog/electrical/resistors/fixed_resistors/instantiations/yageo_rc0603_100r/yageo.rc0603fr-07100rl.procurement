@@ -9,17 +9,17 @@
     {
       "locator": "$.product",
       "sha256": "sha256:4db93f41673248c83fed968b93fb802c2a1778596b2f9503b784776ae2438542",
-      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/yageo_rc0603_100r.json"
+      "source": "outputs/part-import-2026-08-18/component_inputs/yageo_rc0603_100r.json"
     },
     {
       "locator": "$.manufacturer",
       "sha256": "sha256:4db93f41673248c83fed968b93fb802c2a1778596b2f9503b784776ae2438542",
-      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/yageo_rc0603_100r.json"
+      "source": "outputs/part-import-2026-08-18/component_inputs/yageo_rc0603_100r.json"
     },
     {
       "locator": "$.source_urls[0]",
       "sha256": "sha256:4db93f41673248c83fed968b93fb802c2a1778596b2f9503b784776ae2438542",
-      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/yageo_rc0603_100r.json"
+      "source": "outputs/part-import-2026-08-18/component_inputs/yageo_rc0603_100r.json"
     },
     {
       "locator": "$.provenance",

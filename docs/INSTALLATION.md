@@ -177,13 +177,15 @@ directory, but requires `--env-file` if both locations contain a file:
 
 ```bash
 contraption agent-canary --kind both --env-file ../.env
-contraption agent-run classification-all --job-file assembled_contraptions/scanner/agent_jobs.json --env-file ../.env
+contraption agent-run classification-all --job-file outputs/scanner-part-import/agent_jobs.json --env-file ../.env
 ```
 
 Never commit `.env`. Paid runs use the persistent
-`outputs/agent-budget.json` ledger and write validated receipts beneath
-`outputs/agent-proposals`; the entire `outputs/` tree is intentionally local
-and gitignored.
+`outputs/agent-budget.json` ledger. Each import run writes validated receipts
+beneath its own `agent-proposals/` directory and disposable workspaces beneath
+its ignored `agent-staging/` directory. Runtime output is ignored; the checked-in
+input corpora beneath `outputs/` are deliberate reproducibility fixtures and do
+not depend on ignored-only files.
 
 ## 6. Build package artifacts
 

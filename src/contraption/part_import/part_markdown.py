@@ -60,6 +60,18 @@ def _json(value: Any) -> str:
     )
 
 
+def _inline_json(value: Any) -> str:
+    """Return canonical JSON that is safe to place in one Markdown table row."""
+
+    return json.dumps(
+        _plain(value),
+        sort_keys=True,
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(", ", ": "),
+    )
+
+
 def _markdown_text(value: Any) -> str:
     return str(value).replace("|", "\\|").replace("\r", " ").replace("\n", "<br>")
 
@@ -90,31 +102,68 @@ def _latex_escape(value: str) -> str:
     return "".join(replacements.get(character, character) for character in value)
 
 
+_GREEK_SYMBOLS = {
+    "alpha": r"\alpha",
+    "beta": r"\beta",
+    "gamma": r"\gamma",
+    "delta": r"\delta",
+    "epsilon": r"\epsilon",
+    "varepsilon": r"\varepsilon",
+    "zeta": r"\zeta",
+    "eta": r"\eta",
+    "theta": r"\theta",
+    "vartheta": r"\vartheta",
+    "iota": r"\iota",
+    "kappa": r"\kappa",
+    "lambda": r"\lambda",
+    "mu": r"\mu",
+    "nu": r"\nu",
+    "xi": r"\xi",
+    "omicron": "o",
+    "rho": r"\rho",
+    "sigma": r"\sigma",
+    "tau": r"\tau",
+    "upsilon": r"\upsilon",
+    "phi": r"\phi",
+    "varphi": r"\varphi",
+    "chi": r"\chi",
+    "psi": r"\psi",
+    "omega": r"\omega",
+}
+
+
 def _latex_symbol(name: str) -> str:
     if name in {"pi", "e"}:
         return r"\pi" if name == "pi" else "e"
-    if "." in name:
-        return r"\mathrm{" + _latex_escape(name) + "}"
     head, *tail = name.split("_")
-    rendered = _latex_escape(head)
-    if tail:
-        rendered += r"_{\mathrm{" + _latex_escape("_".join(tail)) + "}}"
-    return rendered
+    if head in _GREEK_SYMBOLS:
+        rendered = _GREEK_SYMBOLS[head]
+        if tail:
+            rendered += r"_{\mathrm{" + _latex_escape("_".join(tail)) + "}}"
+        return rendered
+    # Treat an authored identifier as one symbol, not as an accidental product
+    # of italic letters. Escaping every underscore keeps long PMDL names valid
+    # in KaTeX/MathJax even when no short display alias is available.
+    return r"\mathrm{" + _latex_escape(name) + "}"
 
 
-def _latex_expression(expression: Expression) -> str:
+def _latex_expression(
+    expression: Expression, symbols: Mapping[str, str] | None = None
+) -> str:
     if isinstance(expression, Literal):
         return _number(expression.value)
     if isinstance(expression, Symbol):
+        if symbols is not None and expression.name in symbols:
+            return symbols[expression.name]
         return _latex_symbol(expression.name)
     if isinstance(expression, Unary):
-        operand = _latex_expression(expression.operand)
+        operand = _latex_expression(expression.operand, symbols)
         if expression.operator == "not":
             return r"\neg\left(" + operand + r"\right)"
         return expression.operator + r"\left(" + operand + r"\right)"
     if isinstance(expression, Binary):
-        left = _latex_expression(expression.left)
-        right = _latex_expression(expression.right)
+        left = _latex_expression(expression.left, symbols)
+        right = _latex_expression(expression.right, symbols)
         if expression.operator == "/":
             return r"\frac{" + left + "}{" + right + "}"
         if expression.operator == "**":
@@ -138,23 +187,23 @@ def _latex_expression(expression: Expression) -> str:
         }[expression.operator]
         return (
             r"\left("
-            + _latex_expression(expression.left)
+            + _latex_expression(expression.left, symbols)
             + f" {operator} "
-            + _latex_expression(expression.right)
+            + _latex_expression(expression.right, symbols)
             + r"\right)"
         )
     if isinstance(expression, Conditional):
         return (
             r"\begin{cases}"
-            + _latex_expression(expression.when_true)
+            + _latex_expression(expression.when_true, symbols)
             + r", & \text{if } "
-            + _latex_expression(expression.condition)
+            + _latex_expression(expression.condition, symbols)
             + r" \\ "
-            + _latex_expression(expression.when_false)
+            + _latex_expression(expression.when_false, symbols)
             + r", & \text{otherwise}\end{cases}"
         )
     if isinstance(expression, Call):
-        arguments = [_latex_expression(item) for item in expression.arguments]
+        arguments = [_latex_expression(item, symbols) for item in expression.arguments]
         if expression.function == "der":
             return r"\frac{d " + arguments[0] + r"}{d t}"
         if expression.function == "sqrt":
@@ -191,10 +240,12 @@ def _latex_expression(expression: Expression) -> str:
     raise TypeError(f"unsupported expression node {type(expression).__name__}")
 
 
-def expression_to_latex(source: str) -> str:
+def expression_to_latex(
+    source: str, *, symbols: Mapping[str, str] | None = None
+) -> str:
     """Render one admitted scalar DSL expression as deterministic LaTeX."""
 
-    return _latex_expression(parse_expression(source))
+    return _latex_expression(parse_expression(source), symbols)
 
 
 def expression_comments(source: str) -> tuple[str, ...]:
@@ -482,6 +533,101 @@ def _annotation_rows(model: ModelSpec) -> list[tuple[str, str, str]]:
     return rows
 
 
+def _equation_symbol_map(
+    model: ModelSpec,
+) -> tuple[dict[str, str], tuple[tuple[str, str, str, str], ...]]:
+    """Build collision-free, presentation-only aliases for one PMDL model."""
+
+    symbols: dict[str, str] = {}
+    rows: list[tuple[str, str, str, str]] = []
+    displays: set[str] = set()
+
+    def add(name: str, display: str, role: str, description: str) -> None:
+        if name in symbols:
+            raise ValueError(f"duplicate equation symbol {name!r} in PMDL {model.id!r}")
+        if display in displays:
+            raise ValueError(
+                f"duplicate equation display {display!r} in PMDL {model.id!r}"
+            )
+        symbols[name] = display
+        displays.add(display)
+        rows.append((display, name, role, description))
+
+    for index, state in enumerate(model.states, start=1):
+        display = rf"x_{{{index}}}"
+        add(state.name, display, "state", state.description)
+        derivative = state.derivative or f"{state.name}_dot"
+        add(
+            derivative,
+            rf"\dot{{x}}_{{{index}}}",
+            "state derivative",
+            f"Time derivative of {state.name}.",
+        )
+    for index, algebraic in enumerate(model.algebraics, start=1):
+        add(
+            algebraic.name,
+            rf"z_{{{index}}}",
+            "algebraic",
+            algebraic.description,
+        )
+    for index, parameter in enumerate(model.parameters, start=1):
+        add(
+            parameter.name,
+            rf"\theta_{{{index}}}",
+            "parameter",
+            parameter.description,
+        )
+    for index, port in enumerate(model.power_ports, start=1):
+        detail = port.description or port.reference
+        add(
+            port.effort,
+            rf"\varepsilon_{{{index}}}",
+            f"power-port effort ({port.name})",
+            detail,
+        )
+        add(
+            port.flow,
+            rf"\phi_{{{index}}}",
+            f"power-port flow ({port.name})",
+            port.description,
+        )
+    input_index = 0
+    output_index = 0
+    for port in model.signal_ports:
+        if port.direction == "input":
+            input_index += 1
+            display = rf"u_{{{input_index}}}"
+        else:
+            output_index += 1
+            display = rf"y_{{{output_index}}}"
+        add(
+            port.name,
+            display,
+            f"signal {port.direction}",
+            port.description,
+        )
+    for index, channel in enumerate(model.process_noise.channels, start=1):
+        add(
+            channel.name,
+            rf"\xi_{{{index}}}",
+            "process-noise channel",
+            channel.description,
+        )
+
+    for name, display in (
+        ("t", "t"),
+        ("dt", r"\Delta t"),
+        ("pi", r"\pi"),
+        ("e", "e"),
+    ):
+        if name in symbols:
+            raise ValueError(
+                f"PMDL {model.id!r} collides with reserved equation symbol {name!r}"
+            )
+        symbols[name] = display
+    return symbols, tuple(rows)
+
+
 def _render_expression(
     lines: list[str],
     label: str,
@@ -489,8 +635,18 @@ def _render_expression(
     *,
     suffix: str = "",
     description: str = "",
+    symbols: Mapping[str, str] | None = None,
 ) -> None:
-    lines.extend((f"#### {label}", "", "$$", expression_to_latex(source) + suffix, "$$", ""))
+    lines.extend(
+        (
+            f"#### {label}",
+            "",
+            "$$",
+            expression_to_latex(source, symbols=symbols) + suffix,
+            "$$",
+            "",
+        )
+    )
     lines.append(f"DSL source: {_code(source)}")
     if description:
         lines.append(f"Annotation: {description}")
@@ -507,6 +663,7 @@ def _render_model(
     catalog_root: Path,
 ) -> None:
     spec = instance.model_instance
+    symbols, symbol_rows = _equation_symbol_map(model)
     lines.extend(
         (
             f"## Model hypothesis {spec.variant}: {model.name}",
@@ -534,14 +691,39 @@ def _render_model(
         value = spec.parameters[parameter.name]
         scalar = value.get("value") if isinstance(value, Mapping) else value
         uncertainty = spec.parameter_uncertainty.get(parameter.name)
+        uncertainty_cell = (
+            _markdown_text(_code(_inline_json(uncertainty)))
+            if uncertainty is not None
+            else "fixed/not separately declared"
+        )
         lines.append(
             f"| {_code(parameter.name)} | {_markdown_text(scalar)} | {_code(parameter.unit)} | "
             f"{_bounds(parameter.bounds.lower, parameter.bounds.upper)} | "
-            f"{_code(_json(uncertainty)) if uncertainty is not None else 'fixed/not separately declared'} | "
-            f"{_code(parameter.learnable)} |"
+            f"{uncertainty_cell} | {_code(parameter.learnable)} |"
         )
     if not model.parameters:
         lines.append("| _None_ | — | — | — | — | — |")
+    lines.append("")
+    lines.extend(
+        (
+            "### Equation symbol key",
+            "",
+            "For readable equations, this README assigns deterministic short display "
+            "symbols by declaration role. These aliases are unique within this PMDL "
+            "file and affect presentation only; the exact authoritative identifier is "
+            "shown here and in the DSL source below each equation.",
+            "",
+            "| Display | PMDL identifier | Role | Meaning |",
+            "|---|---|---|---|",
+        )
+    )
+    for display, name, role, description in symbol_rows:
+        lines.append(
+            f"| ${display}$ | {_code(name)} | {_markdown_text(role)} | "
+            f"{_markdown_text(description) if description else '—'} |"
+        )
+    if not symbol_rows:
+        lines.append("| — | _None_ | — | — |")
     lines.append("")
     for relation in model.relations:
         _render_expression(
@@ -550,6 +732,7 @@ def _render_model(
             relation.expression,
             suffix=" = 0",
             description=relation.description,
+            symbols=symbols,
         )
     for heading, values in (
         ("Stored energy", model.stored_energy),
@@ -562,6 +745,7 @@ def _render_model(
                 f"{heading}: {value.name} [{value.unit}]",
                 value.expression,
                 description=value.description,
+                symbols=symbols,
             )
     for constraint in model.initialization.constraints:
         _render_expression(
@@ -570,6 +754,7 @@ def _render_model(
             constraint.expression,
             suffix=" = 0",
             description=constraint.description,
+            symbols=symbols,
         )
     for increment in model.process_noise.increments:
         _render_expression(
@@ -577,6 +762,7 @@ def _render_model(
             f"Accepted-step stochastic increment for {increment.target}",
             increment.expression,
             description=increment.description,
+            symbols=symbols,
         )
     if model.modes:
         lines.extend(("### Programmatically enforced discrete modes", ""))
@@ -589,11 +775,12 @@ def _render_model(
             for transition in mode.transitions:
                 lines.append(
                     f"  - Transition to {_code(transition.target)} when "
-                    f"${expression_to_latex(transition.guard)}$."
+                    f"${expression_to_latex(transition.guard, symbols=symbols)}$."
                 )
                 for target, reset in transition.resets.items():
                     lines.append(
-                        f"    - Reset {_code(target)} to ${expression_to_latex(reset)}$."
+                        f"    - Reset {_code(target)} to "
+                        f"${expression_to_latex(reset, symbols=symbols)}$."
                     )
         lines.append("")
     lines.extend(("### Additional machine-checked declarations", ""))
@@ -614,7 +801,7 @@ def _render_model(
         lines.append(
             f"- Property {_code(prop.name)} ({_code(prop.kind)}), expected {_code(prop.expected)}, "
             f"sample count {prop.samples}, tolerance {_number(prop.tolerance)}: "
-            f"${expression_to_latex(prop.expression)}$."
+            f"${expression_to_latex(prop.expression, symbols=symbols)}$."
         )
     if not (
         model.validity.ranges

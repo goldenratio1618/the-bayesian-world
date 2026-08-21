@@ -33,6 +33,14 @@ SERVO = (
     / "instantiations"
     / "generic_position_servo"
 )
+YAGEO_1M = (
+    CATALOG_ROOT
+    / "electrical"
+    / "resistors"
+    / "fixed_resistors"
+    / "instantiations"
+    / "yageo_rc0603_1m"
+)
 
 
 class PartMarkdownTests(unittest.TestCase):
@@ -50,6 +58,20 @@ class PartMarkdownTests(unittest.TestCase):
         self.assertIn("## Authoritative source manifest", first)
         self.assertIn("each displayed residual is enforced as equal to zero", first)
         self.assertNotIn(str(PROJECT_ROOT), first)
+
+    def test_every_checked_in_part_readme_matches_the_deterministic_renderer(self):
+        readmes = tuple(
+            path
+            for path in sorted(CATALOG_ROOT.rglob("README.md"))
+            if path.parent.parent.name == "instantiations"
+        )
+        self.assertTrue(readmes)
+        for readme in readmes:
+            with self.subTest(readme=readme.relative_to(CATALOG_ROOT)):
+                self.assertEqual(
+                    readme.read_text(encoding="utf-8"),
+                    render_part_markdown(readme.parent, catalog_root=CATALOG_ROOT),
+                )
 
     def test_every_model_variant_and_human_model_name_is_rendered(self):
         markdown = render_part_markdown(SERVO)
@@ -69,9 +91,44 @@ class PartMarkdownTests(unittest.TestCase):
 
         self.assertEqual(expression_comments(source), ("Ohm's law",))
         latex = expression_to_latex(source)
-        self.assertIn("v_{\\mathrm{p}}", latex)
-        self.assertIn("resistance", latex)
-        self.assertIn("i_{\\mathrm{p}}", latex)
+        self.assertIn(r"\mathrm{v\_p}", latex)
+        self.assertIn(r"\mathrm{resistance}", latex)
+        self.assertIn(r"\mathrm{i\_p}", latex)
+
+        greek = expression_to_latex("alpha + gamma_i")
+        self.assertIn(r"\alpha", greek)
+        self.assertIn(r"\gamma_{\mathrm{i}}", greek)
+
+    def test_parameter_table_and_equation_aliases_are_markdown_safe(self):
+        markdown = render_part_markdown(YAGEO_1M)
+        parameter_section = markdown.split(
+            "### Programmatically enforced parameters and constraints", 1
+        )[1].split("### Equation symbol key", 1)[0]
+        table_rows = [
+            line for line in parameter_section.splitlines() if line.startswith("|")
+        ]
+
+        self.assertEqual(len(table_rows), 5)
+        self.assertTrue(all(line.count("|") == 7 for line in table_rows))
+        self.assertIn(
+            '`{"correlation_group": "yageo_rc0603_resistance", '
+            '"distribution": "normal", "parameters": {"std": 10000.0}}`',
+            parameter_section,
+        )
+        self.assertIn("| $\\theta_{1}$ | `resistance` | parameter |", markdown)
+        self.assertIn(
+            "| $\\dot{x}_{1}$ | `branch_current_dot` | state derivative |",
+            markdown,
+        )
+        self.assertIn(
+            "authoritative identifier is shown here and in the DSL source", markdown
+        )
+        relation = markdown.split("#### Residual relation: series_branch_voltage", 1)[
+            1
+        ].split("DSL source:", 1)[0]
+        self.assertIn(r"\theta_{2}", relation)
+        self.assertIn(r"\dot{x}_{1}", relation)
+        self.assertNotIn(r"parasitic_{\mathrm{inductance}}", relation)
 
     def test_writer_supports_an_explicit_output_without_mutating_catalog(self):
         with tempfile.TemporaryDirectory() as temporary:

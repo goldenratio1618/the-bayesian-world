@@ -100,7 +100,7 @@ The static record below is invariant across the model hypotheses listed later.
 
 ### External procurement records
 
-- `yageo.rc0603fr-0710rl` (`sha256:7c609b3ffaa6fff7acbf5ac95c6512c53f1356429f3034a2040d5acb2df134c0`): Yageo; product_name=RC0603FR-0710RL, manufacturer_part_number=RC0603FR-0710RL.
+- `yageo.rc0603fr-0710rl` (`sha256:1a972242ad6c049887e1403287d3df204f8d8043c8b0540100e96096e8175b5e`): Yageo; product_name=RC0603FR-0710RL, manufacturer_part_number=RC0603FR-0710RL.
   - product_page: [https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-0710RL](https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-0710RL)
 
 ## Model hypothesis v1: Ideal uncertain resistor
@@ -122,18 +122,24 @@ Every declared PMDL parameter must be initialized exactly once. Values are check
 
 | Parameter | Value | Unit | Allowed bounds | Instance uncertainty | Learnable |
 |---|---:|---|---|---|---|
-| `resistance` | 10.0 | `ohm` | $[1.0000000000000001e-09, 1000000000000]$ | `{
-  "distribution": "uniform",
-  "parameters": {
-    "lower": 9.9,
-    "upper": 10.1
-  }
-}` | `True` |
+| `resistance` | 10.0 | `ohm` | $[1.0000000000000001e-09, 1000000000000]$ | `{"distribution": "uniform", "parameters": {"lower": 9.9, "upper": 10.1}}` | `True` |
+
+### Equation symbol key
+
+For readable equations, this README assigns deterministic short display symbols by declaration role. These aliases are unique within this PMDL file and affect presentation only; the exact authoritative identifier is shown here and in the DSL source below each equation.
+
+| Display | PMDL identifier | Role | Meaning |
+|---|---|---|---|
+| $\theta_{1}$ | `resistance` | parameter | Terminal resistance. |
+| $\varepsilon_{1}$ | `v_p` | power-port effort (p) | v_p relative to circuit reference |
+| $\phi_{1}$ | `i_p` | power-port flow (p) | — |
+| $\varepsilon_{2}$ | `v_n` | power-port effort (n) | v_n relative to circuit reference |
+| $\phi_{2}$ | `i_n` | power-port flow (n) | — |
 
 #### Residual relation: ohms_law
 
 $$
-\left(\left(v_{\mathrm{p}} - v_{\mathrm{n}}\right) - \left(resistance \, i_{\mathrm{p}}\right)\right) = 0
+\left(\left(\varepsilon_{1} - \varepsilon_{2}\right) - \left(\theta_{1} \, \phi_{1}\right)\right) = 0
 $$
 
 DSL source: `v_p - v_n - resistance * i_p`
@@ -142,7 +148,7 @@ Annotation: Voltage drop equals resistance times current.
 #### Residual relation: charge_conservation
 
 $$
-\left(i_{\mathrm{p}} + i_{\mathrm{n}}\right) = 0
+\left(\phi_{1} + \phi_{2}\right) = 0
 $$
 
 DSL source: `i_p + i_n`
@@ -151,7 +157,7 @@ Annotation: Terminal currents sum to zero.
 #### Dissipation: joule_heating [W]
 
 $$
-\left(resistance \, \left(i_{\mathrm{p}}\right)^{2}\right)
+\left(\theta_{1} \, \left(\phi_{1}\right)^{2}\right)
 $$
 
 DSL source: `resistance * i_p ** 2`
@@ -161,8 +167,8 @@ Annotation: Irreversible electrical loss.
 
 - Validity range for `resistance`: $[1.0000000000000001e-09, 1000000000000]$.
 - Maximum supported timestep: 0.001 s.
-- Property `positive_resistance` (`parameter_bounds`), expected `True`, sample count 32, tolerance 0: $\left(resistance > \left(0 \, resistance\right)\right)$.
-- Property `nonnegative_joule_loss` (`nonnegative_dissipation`), expected `True`, sample count 64, tolerance 9.9999999999999998e-13: $\left(\left(resistance \, \left(i_{\mathrm{p}}\right)^{2}\right) \ge \left(0 \, \left(resistance \, \left(i_{\mathrm{p}}\right)^{2}\right)\right)\right)$.
+- Property `positive_resistance` (`parameter_bounds`), expected `True`, sample count 32, tolerance 0: $\left(\theta_{1} > \left(0 \, \theta_{1}\right)\right)$.
+- Property `nonnegative_joule_loss` (`nonnegative_dissipation`), expected `True`, sample count 64, tolerance 9.9999999999999998e-13: $\left(\left(\theta_{1} \, \left(\phi_{1}\right)^{2}\right) \ge \left(0 \, \left(\theta_{1} \, \left(\phi_{1}\right)^{2}\right)\right)\right)$.
 
 ### Text-based desires, assumptions, and explanatory notes
 
@@ -223,6 +229,7 @@ These hashes bind the inputs used for this rendering. The generated README is ex
 | `electrical/resistors/fixed_resistors/instantiations/yageo_rc0603_10r/shape/envelope/source/procedural-shape.json` | `sha256:6ee5f13aa4942edc531e002b2cb9103b13969e3c05e2ff8f11993f359bf02e84` |
 | `electrical/resistors/fixed_resistors/instantiations/yageo_rc0603_10r/static.part` | `sha256:c8c080b3d6d29ac1905b59ec91073c72783857d12253b8e2636fba710262f59a` |
 | `electrical/resistors/fixed_resistors/instantiations/yageo_rc0603_10r/v1.model` | `sha256:d9f2aca4ccdd7d50feb5df7823cc551d6155b2bbd4e363555c9b09d44b04b2f5` |
+| `electrical/resistors/fixed_resistors/instantiations/yageo_rc0603_10r/yageo.rc0603fr-0710rl.procurement` | `sha256:a5210b0789c5e8fa917cf0b9ce12bbdfb8839078a8be6bc5499bef50fce5c02a` |
 | `electrical/resistors/fixed_resistors/interface.pmdl` | `sha256:96cb68346727c8e07114c334d569f1a9092291575995970d93870623d9a19e9a` |
 | `electrical/resistors/interface.pmdl` | `sha256:ae5de73b81f7f0c6c015f1df08e0ad2c2e95cb00101609bb7a773513ccfef66f` |
 | `electrical/resistors/resistor.pmdl` | `sha256:1dfdc80fdfc434efd9c7c172563b2e1f75b77cb79fd3d979384fabf932513bda` |

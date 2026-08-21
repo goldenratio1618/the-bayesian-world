@@ -1321,8 +1321,9 @@ def materialize_proposal_procurement(
     pdf_fallback: ProcurementTextFallbackConfig | None = None,
     client: Any | None = None,
     _allow_unbound_without_static: bool = False,
+    _unbound_directory: str | None = None,
 ) -> tuple[tuple[Path, ...], dict[str, Any] | None]:
-    """Add evidence-only central records to a validated temporary proposal.
+    """Add evidence-only adjacent records to a validated temporary proposal.
 
     The caller must run this after deterministic host assets have finalized the
     candidate static part.  A singleton identity source is bound only when the
@@ -1338,13 +1339,14 @@ def materialize_proposal_procurement(
     from ..catalog.instantiations import StaticPartSpec
 
     static_specs: list[StaticPartSpec] = []
+    static_paths: dict[str, Path] = {}
     for path in sorted(candidate.rglob("static.part")):
         if path.is_symlink() or not path.is_file():
             raise ProcurementExtractionError(f"candidate static part is unsafe: {path}")
         try:
-            static_specs.append(
-                StaticPartSpec.from_json(path.read_text(encoding="utf-8"))
-            )
+            static = StaticPartSpec.from_json(path.read_text(encoding="utf-8"))
+            static_specs.append(static)
+            static_paths[static.id] = path
         except Exception as exc:
             raise ProcurementExtractionError(
                 f"candidate static part is invalid: {path}: {exc}"
@@ -1392,13 +1394,32 @@ def materialize_proposal_procurement(
         raise ProcurementExtractionError(
             f"proposal procurement registry is invalid: {exc}"
         ) from exc
-    records_root = candidate / "procurement" / "records"
-    if records_root.exists() and (records_root.is_symlink() or not records_root.is_dir()):
-        raise ProcurementExtractionError("candidate procurement records root is unsafe")
     written: list[Path] = []
     artifacts: list[dict[str, Any]] = []
     for record in registry.values():
-        target = records_root / f"{record.id}.procurement"
+        if record.provides:
+            primary = record.provides[0].part
+            try:
+                record_directory = static_paths[primary].parent
+            except KeyError as exc:  # validate_provisions should already catch this.
+                raise ProcurementExtractionError(
+                    f"procurement record {record.id!r} has no candidate primary part"
+                ) from exc
+        elif len(static_paths) == 1:
+            # Location records the import context only; provides[] remains the
+            # sole authority for whether the product supplies this part.
+            record_directory = next(iter(static_paths.values())).parent
+        elif _allow_unbound_without_static and _unbound_directory is not None:
+            record_directory = _below(
+                candidate, _unbound_directory, "unbound procurement directory"
+            )
+        else:
+            raise ProcurementExtractionError(
+                f"procurement record {record.id!r} has no deterministic instantiation directory"
+            )
+        if record_directory.parent.name != "instantiations":
+            raise ProcurementExtractionError("procurement directory is not an instantiation")
+        target = record_directory / f"{record.id}.procurement"
         if target.exists():
             raise ProcurementExtractionError(
                 f"candidate already contains procurement artifact {target}"
@@ -1435,6 +1456,7 @@ def materialize_deferred_procurement(
     *,
     pdf_fallback: ProcurementTextFallbackConfig | None = None,
     client: Any | None = None,
+    unbound_directory: str | None,
 ) -> tuple[tuple[Path, ...], dict[str, Any] | None]:
     """Materialize evidence-only, unbound records for a deferred model import.
 
@@ -1452,6 +1474,7 @@ def materialize_deferred_procurement(
         pdf_fallback=pdf_fallback,
         client=client,
         _allow_unbound_without_static=True,
+        _unbound_directory=unbound_directory,
     )
 
 
@@ -1539,8 +1562,8 @@ def verify_proposal_procurement_receipt(
                 f"host procurement receipt artifact[{index}] is invalid"
             )
         path = _below(candidate, artifact.get("path"), f"receipt.artifacts[{index}].path")
-        if path.parent != candidate / "procurement" / "records" or path.suffix != ".procurement":
-            raise ProcurementExtractionError("host procurement artifact path is not central")
+        if path.parent.parent.name != "instantiations" or path.suffix != ".procurement":
+            raise ProcurementExtractionError("host procurement artifact path is not adjacent to an instantiation")
         payload = path.read_bytes()
         if artifact.get("sha256") != "sha256:" + hashlib.sha256(payload).hexdigest():
             raise ProcurementExtractionError("host procurement artifact hash changed")
@@ -1606,14 +1629,78 @@ def write_procurement_records(
     records: Iterable[ProcurementRecord],
     *,
     overwrite: bool = False,
+    unbound_locations: Mapping[str, str | Path] | None = None,
 ) -> ProcurementRegistry:
-    """Write canonical central ``.procurement`` files with collision checks."""
+    """Write records beside their canonical or explicitly planned part.
 
+    A bound record is stored beside the first provision, which is the
+    deterministic primary part for multi-part kits.  An unbound record must
+    have an explicit catalog-relative instantiation directory.  Its location
+    is organizational only: ``provides`` remains the sole binding authority.
+    """
+
+    from ..catalog.instantiations import StaticPartSpec
+
+    catalog = Path(catalog_root).resolve()
     registry = ProcurementRegistry(records)
-    records_root = Path(catalog_root) / "procurement" / "records"
-    records_root.mkdir(parents=True, exist_ok=True)
+    static_locations: dict[str, tuple[StaticPartSpec, Path]] = {}
+    for static_path in sorted(catalog.rglob("static.part")):
+        if static_path.is_symlink() or not static_path.is_file():
+            raise ProcurementExtractionError(f"static part is unsafe: {static_path}")
+        static = StaticPartSpec.from_json(static_path.read_text(encoding="utf-8"))
+        if static.id in static_locations:
+            raise ProcurementExtractionError(f"duplicate static part id {static.id!r}")
+        static_locations[static.id] = (static, static_path.parent)
+    try:
+        registry.validate_provisions(
+            {
+                part_id: (static.version, static.sha256)
+                for part_id, (static, _directory) in static_locations.items()
+            }
+        )
+    except ProcurementSpecError as exc:
+        raise ProcurementExtractionError(f"invalid procurement provision: {exc}") from exc
+
+    supplied = {} if unbound_locations is None else dict(unbound_locations)
+    unknown_locations = sorted(set(supplied) - set(registry))
+    if unknown_locations:
+        raise ProcurementExtractionError(
+            "unbound locations reference records outside the write set: "
+            + ", ".join(unknown_locations)
+        )
     for record in registry.values():
-        path = records_root / f"{record.id}.procurement"
+        if record.provides:
+            if record.id in supplied:
+                raise ProcurementExtractionError(
+                    f"bound procurement record {record.id!r} must not have an unbound location"
+                )
+            directory = static_locations[record.provides[0].part][1]
+        else:
+            try:
+                raw_location = supplied[record.id]
+            except KeyError as exc:
+                raise ProcurementExtractionError(
+                    f"unbound procurement record {record.id!r} requires an explicit "
+                    "instantiation directory"
+                ) from exc
+            location = Path(raw_location)
+            if location.is_absolute() or any(part in {"", ".", ".."} for part in location.parts):
+                raise ProcurementExtractionError(
+                    f"unbound procurement location for {record.id!r} must be a safe "
+                    "catalog-relative path"
+                )
+            directory = (catalog / location).resolve()
+            if catalog != directory and catalog not in directory.parents:
+                raise ProcurementExtractionError(
+                    f"unbound procurement location for {record.id!r} escapes the catalog"
+                )
+        if directory.parent.name != "instantiations":
+            raise ProcurementExtractionError(
+                f"procurement record {record.id!r} location is not directly below "
+                "an instantiations directory"
+            )
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{record.id}.procurement"
         rendered = record.to_json()
         if path.exists():
             if path.is_symlink() or not path.is_file():
@@ -1644,6 +1731,7 @@ def migrate_component_inputs(
     ]
     | None = None,
     overwrite: bool = False,
+    unbound_locations: Mapping[str, str | Path] | None = None,
 ) -> ProcurementRegistry:
     """Extract and write records from component inputs using explicit bindings.
 
@@ -1684,7 +1772,10 @@ def migrate_component_inputs(
             + ", ".join(unused)
         )
     return write_procurement_records(
-        catalog_root, records, overwrite=overwrite
+        catalog_root,
+        records,
+        overwrite=overwrite,
+        unbound_locations=unbound_locations,
     )
 
 

@@ -43,7 +43,7 @@ RESERVED_IDENTITY = frozenset(
 )
 
 _ROMI_ARM_INPUT = Path(
-    "assembled_contraptions/scanner/component_inputs/romi_arm.json"
+    "outputs/scanner-part-import/component_inputs/romi_arm.json"
 )
 _ROMI_FEEDBACK_TEXT = "separate potentiometer feedback wire on each servo"
 _ROMI_FEEDBACK_LOCATOR = "$.features.feedback"

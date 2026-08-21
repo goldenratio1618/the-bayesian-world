@@ -616,6 +616,20 @@ class VisualizationTests(unittest.TestCase):
             )
             self.assertEqual(data["assembly_sha256"], self.assembly.assembly_sha256)
 
+    def test_browser_contract_accepts_canonical_fabrication_records(self) -> None:
+        artifact = generate_viewer(self.assembly)
+        connector_records = [
+            connector["fabrication"]
+            for component in artifact.data["scene"]["components"]
+            for connector in component["connectors"]
+            if connector.get("fabrication") is not None
+        ]
+        self.assertTrue(connector_records)
+        self.assertTrue(all({"kind", "status", "missing"} <= set(item) for item in connector_records))
+        self.assertIn("validateFabricationRecord(connector.fabrication", artifact.javascript)
+        self.assertIn("validateFabricationRecord(connection.implementation", artifact.javascript)
+        self.assertIn('"implementation"], label', artifact.javascript)
+
     def test_rejects_non_finite_browser_data(self) -> None:
         scene = self.assembly_scene()
         scene["body_pose_frames"]["frames"][0]["time_s"] = float("nan")

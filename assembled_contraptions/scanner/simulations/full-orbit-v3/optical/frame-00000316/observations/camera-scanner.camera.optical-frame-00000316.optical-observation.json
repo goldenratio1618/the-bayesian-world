@@ -1,0 +1,100 @@
+{
+  "assembly_frame": "world",
+  "assembly_id": "apartment-scanner-robot",
+  "assembly_sha256": "38a23a7d1833f51c898d7fa4dc0f546a6f16c7afef0b5df9540c0f75c7499e1f",
+  "exposure_duration_s": 0.01,
+  "exposure_started_at_s": 15.8,
+  "format": "optical-observation-1",
+  "frame_index": 316,
+  "id": "camera-scanner.camera.optical-frame-00000316",
+  "metadata": {
+    "backend": "torch-differentiable"
+  },
+  "mount_connector": "camera.optical_axis",
+  "mount_transform_sha256": "633c33f59ee349eac9db6345c56770a6e04275516c3a5310c255d343f948086c",
+  "outputs": [
+    {
+      "content": {
+        "byte_length": 172928,
+        "media_type": "application/vnd.numpy.npy",
+        "sha256": "f8e18c20ff01b8aedf0e72e917ed53a669dda13b5c4a1a4bffb420c18742b87e",
+        "uri": "camera-scanner.camera.optical-frame-00000316.optical-observation.rgb_linear.npy"
+      },
+      "dtype": "float32",
+      "name": "rgb_linear",
+      "shape": [
+        90,
+        160,
+        3
+      ]
+    },
+    {
+      "content": {
+        "byte_length": 57728,
+        "media_type": "application/vnd.numpy.npy",
+        "sha256": "5fcbc2136cdb1cff4934cfddcf4eb2235603a23e120326d8bc7ae7284b2d0fe3",
+        "uri": "camera-scanner.camera.optical-frame-00000316.optical-observation.depth_m.npy"
+      },
+      "dtype": "float32",
+      "name": "depth_m",
+      "shape": [
+        90,
+        160
+      ]
+    },
+    {
+      "content": {
+        "byte_length": 57728,
+        "media_type": "application/vnd.numpy.npy",
+        "sha256": "d075216606f6061b8494ab4781825c459ec59f22e46899b1ca16922ab9f8d62a",
+        "uri": "camera-scanner.camera.optical-frame-00000316.optical-observation.segmentation.npy"
+      },
+      "dtype": "int32",
+      "name": "segmentation",
+      "shape": [
+        90,
+        160
+      ]
+    },
+    {
+      "content": {
+        "byte_length": 57728,
+        "media_type": "application/vnd.numpy.npy",
+        "sha256": "e9941e2039ca5ea6fefb9f1418dfc2148cb47e212f0e89abd8c5990f9214ed1c",
+        "uri": "camera-scanner.camera.optical-frame-00000316.optical-observation.uncertainty.npy"
+      },
+      "dtype": "float32",
+      "name": "uncertainty",
+      "shape": [
+        90,
+        160
+      ]
+    }
+  ],
+  "pose": {
+    "transform_world_from_sensor_row_major": [
+      -0.17617509044011692,
+      -0.7399807292945599,
+      0.6491462529978186,
+      -0.5705844162733309,
+      0.19381613370319672,
+      -0.672628069792431,
+      -0.7141475940193689,
+      0.6064728652585294,
+      0.9650894486133196,
+      2.220446049250313e-16,
+      0.26192051499498625,
+      0.3050064739069166,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "ready_at_s": 15.84,
+  "requested_at_s": 15.8,
+  "scene_sha256": "56bffc3de5dcd78c6ee0b8b12d98fe6972a12602761fe3c872da26bdd207f0b7",
+  "seed": 20264806,
+  "sensor_id": "scanner.camera.optical",
+  "sensor_sha256": "0843aa58569b1aaaa84ad43e3520c6592dbb9f9d6994d482edbb571eeca8aa3c"
+}

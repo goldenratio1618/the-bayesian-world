@@ -51,7 +51,10 @@ _VARIANT_FILE = re.compile(r"^v[1-9][0-9]*\.model$")
 _CONDITIONS = frozenset(
     {"unverified", "inspected", "calibrated", "degraded", "retired"}
 )
-_PROCUREMENT_METADATA_FIELDS = frozenset(
+# Public because importer-side deterministic normalization must use the exact
+# same case-insensitive field vocabulary as catalog admission.  Keeping one
+# schema-owned set prevents the normalizer and validator from drifting.
+PROCUREMENT_METADATA_FIELDS = frozenset(
     {
         "datasheet_url",
         "datasheet_urls",
@@ -85,7 +88,7 @@ def _reserved_metadata_paths(value: Any, context: str) -> tuple[str, ...]:
             path = f"{context}.{key}"
             if (
                 isinstance(key, str)
-                and key.casefold() in _PROCUREMENT_METADATA_FIELDS
+                and key.casefold() in PROCUREMENT_METADATA_FIELDS
             ):
                 found.append(path)
             found.extend(_reserved_metadata_paths(item, path))
@@ -736,6 +739,7 @@ class PartInstantiationRegistry(Mapping[str, PartInstantiation]):
                 and path.name
                 not in {"static.part", "sensor.optical.json", "README.md"}
                 and path.suffix != ".model"
+                and path.suffix != ".procurement"
             )
             if extra:
                 raise PhysicalSpecError(

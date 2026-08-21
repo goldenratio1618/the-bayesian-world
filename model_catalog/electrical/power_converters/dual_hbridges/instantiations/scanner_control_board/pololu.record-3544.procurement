@@ -13,22 +13,22 @@
     {
       "locator": "$.product",
       "sha256": "sha256:64372a30ac1b16dfb28c89d1fe098cd1299b41c084dabd4f0fe9bb51d4b73098",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_control.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_control.json"
     },
     {
       "locator": "$.manufacturer",
       "sha256": "sha256:64372a30ac1b16dfb28c89d1fe098cd1299b41c084dabd4f0fe9bb51d4b73098",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_control.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_control.json"
     },
     {
       "locator": "$.source_urls[0]",
       "sha256": "sha256:64372a30ac1b16dfb28c89d1fe098cd1299b41c084dabd4f0fe9bb51d4b73098",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_control.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_control.json"
     },
     {
       "locator": "$.source_urls[1]",
       "sha256": "sha256:64372a30ac1b16dfb28c89d1fe098cd1299b41c084dabd4f0fe9bb51d4b73098",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_control.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_control.json"
     },
     {
       "locator": "$.provenance",

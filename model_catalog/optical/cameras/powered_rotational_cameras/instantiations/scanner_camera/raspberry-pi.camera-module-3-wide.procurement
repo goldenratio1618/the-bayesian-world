@@ -9,17 +9,17 @@
     {
       "locator": "$.products[1]",
       "sha256": "sha256:45b51a0c32f2dff43c6ff25a025f6f5f9e0abfb886ec3f79da4d442fc349a1bf",
-      "source": "assembled_contraptions/scanner/component_inputs/camera_compute.json"
+      "source": "outputs/scanner-part-import/component_inputs/camera_compute.json"
     },
     {
       "locator": "$.manufacturer",
       "sha256": "sha256:45b51a0c32f2dff43c6ff25a025f6f5f9e0abfb886ec3f79da4d442fc349a1bf",
-      "source": "assembled_contraptions/scanner/component_inputs/camera_compute.json"
+      "source": "outputs/scanner-part-import/component_inputs/camera_compute.json"
     },
     {
       "locator": "$.source_urls[1]",
       "sha256": "sha256:45b51a0c32f2dff43c6ff25a025f6f5f9e0abfb886ec3f79da4d442fc349a1bf",
-      "source": "assembled_contraptions/scanner/component_inputs/camera_compute.json"
+      "source": "outputs/scanner-part-import/component_inputs/camera_compute.json"
     },
     {
       "locator": "$.provenance",

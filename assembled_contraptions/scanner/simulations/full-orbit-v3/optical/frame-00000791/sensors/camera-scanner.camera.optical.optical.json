@@ -1,0 +1,91 @@
+{
+  "display_name": "Raspberry Pi Camera Module 3 Wide",
+  "exposure_duration_s": 0.01,
+  "far_clip_m": 20.0,
+  "focal_length_px": [
+    52.99371031861561,
+    52.99371031861561
+  ],
+  "format": "optical-sensor-1",
+  "id": "scanner.camera.optical",
+  "metadata": {
+    "acquisition_override": {
+      "intrinsics_scaling": "independent pixel-axis scale",
+      "resolution_px": [
+        160,
+        90
+      ],
+      "source_resolution_px": [
+        1920,
+        1080
+      ],
+      "source_sensor_sha256": "bae031b2866afe5504ecd9db62336417b6116871c3e0cb0774438d608168cbce"
+    },
+    "calibration_status": "catalog_nominal",
+    "configured_video_mode": "1080p50",
+    "depth_semantics": "simulated or inferred range along the normalized pinhole ray; the physical RGB module does not directly measure depth",
+    "focal_length_derivation": "native_pixel_diagonal / (2*tan(120 deg / 2)), uniformly scaled from 4608x2592 to 1920x1080",
+    "manufacturer": "Raspberry Pi",
+    "native_diagonal_field_of_view_deg": 120.0,
+    "native_resolution_px": [
+      4608,
+      2592
+    ],
+    "noise_provenance": "engineering priors pending checkerboard, dark-frame, radiometric, and depth-pipeline calibration",
+    "product": "Camera Module 3 Wide"
+  },
+  "mount_connector": "optical_axis",
+  "near_clip_m": 0.05,
+  "noise": {
+    "depth_noise_std_m": 0.005,
+    "depth_quantization_m": 0.001,
+    "dropout_probability": 0.0,
+    "model": "gaussian_poisson",
+    "read_noise_std_linear": 0.002,
+    "seed": 314159,
+    "shot_noise_scale": 0.001
+  },
+  "outputs": [
+    "rgb_linear",
+    "depth_m",
+    "segmentation",
+    "uncertainty"
+  ],
+  "principal_point_px": [
+    80.0,
+    45.0
+  ],
+  "processing_latency_s": 0.02,
+  "projection": "pinhole",
+  "readout_duration_s": 0.01,
+  "resolution_px": [
+    160,
+    90
+  ],
+  "spectral_channels": [
+    {
+      "bandwidth_nm": 100.0,
+      "center_wavelength_nm": 620.0,
+      "id": "red",
+      "relative_response": 1.0
+    },
+    {
+      "bandwidth_nm": 100.0,
+      "center_wavelength_nm": 540.0,
+      "id": "green",
+      "relative_response": 1.0
+    },
+    {
+      "bandwidth_nm": 100.0,
+      "center_wavelength_nm": 460.0,
+      "id": "blue",
+      "relative_response": 1.0
+    }
+  ],
+  "wire": {
+    "encoding": "raw-chunks",
+    "max_frame_rate_hz": 50.0,
+    "max_payload_bytes": 8388608,
+    "schema": "contraption.optical-frame/v1"
+  }
+}

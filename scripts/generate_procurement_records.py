@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Generate the central evidence-backed procurement catalog.
+"""Generate the adjacent evidence-backed procurement catalog.
 
-The generator is intentionally closed over checked-in component inputs,
+The generator is intentionally closed over tracked component inputs,
 explicit kit contents/quantities, current static-part provenance, and one
 preserved legacy KEMET identity snapshot.  It never performs network access or
 creates offers, prices, availability claims, or non-unknown lifecycle status.
@@ -33,13 +33,47 @@ from contraption.part_import.procurement_extraction import (
 )
 
 
-PRIOR_INPUT_ROOT = Path(
-    "assembled_contraptions/part_import_2026_08_18/component_inputs"
-)
-SCANNER_INPUT_ROOT = Path("assembled_contraptions/scanner/component_inputs")
+PRIOR_INPUT_ROOT = Path("outputs/part-import-2026-08-18/component_inputs")
+SCANNER_INPUT_ROOT = Path("outputs/scanner-part-import/component_inputs")
 LEGACY_EVIDENCE = Path(
     "model_catalog/procurement/evidence/legacy_static_part_identities.json"
 )
+UNBOUND_LOCATIONS: Mapping[str, Path] = {
+    "murata.ncp18xf101j03rb": Path(
+        "thermoelectric/thermistors/instantiations/murata_ncp18_100r"
+    ),
+    "murata.ncp18xf151j03rb": Path(
+        "thermoelectric/thermistors/instantiations/murata_ncp18_150r"
+    ),
+    "murata.ncp18xm221j03rb": Path(
+        "thermoelectric/thermistors/instantiations/murata_ncp18_220r"
+    ),
+    "murata.ncp18xm331j03rb": Path(
+        "thermoelectric/thermistors/instantiations/murata_ncp18_330r"
+    ),
+    "murata.ncp18xq471j03rb": Path(
+        "thermoelectric/thermistors/instantiations/murata_ncp18_470r"
+    ),
+    "murata.ncp18xq681j03rb": Path(
+        "thermoelectric/thermistors/instantiations/murata_ncp18_680r"
+    ),
+    "murata.ncp18xq102j03rb": Path(
+        "thermoelectric/thermistors/instantiations/murata_ncp18_1k"
+    ),
+    "murata.ncp18xw152j03rb": Path(
+        "thermoelectric/thermistors/instantiations/murata_ncp18_1k5"
+    ),
+    "murata.ncp18xw222j03rb": Path(
+        "thermoelectric/thermistors/instantiations/murata_ncp18_2k2"
+    ),
+    "murata.ncp18xw332j03rb": Path(
+        "thermoelectric/thermistors/instantiations/murata_ncp18_3k3"
+    ),
+    "product.six-rechargeable-aa-nimh-cells-and-matched-charger": Path(
+        "electrochemical/batteries/nimh_battery_packs/instantiations/"
+        "scanner_nimh_battery"
+    ),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -521,35 +555,68 @@ def expected_registry(repository: Path) -> ProcurementRegistry:
     return registry
 
 
+def _record_paths(
+    repository: Path,
+    registry: ProcurementRegistry,
+    statics: Mapping[str, StaticEntry],
+) -> dict[str, Path]:
+    catalog = repository / "model_catalog"
+    result: dict[str, Path] = {}
+    for record in registry.values():
+        if record.provides:
+            directory = statics[record.provides[0].part].path.parent
+        else:
+            try:
+                directory = catalog / UNBOUND_LOCATIONS[record.id]
+            except KeyError as exc:
+                raise ValueError(
+                    f"unbound procurement record {record.id!r} has no reviewed location"
+                ) from exc
+        path = directory / f"{record.id}.procurement"
+        relative = _source_name(repository, path)
+        if relative in result:
+            raise ValueError(f"duplicate procurement output path: {relative}")
+        result[relative] = path
+    unused = sorted(set(UNBOUND_LOCATIONS) - set(registry))
+    if unused:
+        raise ValueError(
+            "unbound procurement locations reference missing records: "
+            + ", ".join(unused)
+        )
+    return result
+
+
 def generate(repository: Path, *, check: bool) -> dict[str, Any]:
     repository = repository.resolve()
     registry = expected_registry(repository)
     catalog = repository / "model_catalog"
-    records_root = catalog / "procurement" / "records"
+    statics = _load_static_parts(repository)
+    record_paths = _record_paths(repository, registry, statics)
     expected = {
-        f"{record.id}.procurement": record.to_json()
-        for record in registry.values()
+        relative: registry[path.stem].to_json()
+        for relative, path in record_paths.items()
     }
     changed: list[str] = []
-    if records_root.exists():
-        if records_root.is_symlink() or not records_root.is_dir():
-            raise ValueError(f"unsafe procurement records directory: {records_root}")
-        extra = sorted(
-            path.name
-            for path in records_root.iterdir()
-            if path.name not in expected
+    actual = {
+        _source_name(repository, path): path
+        for path in sorted(catalog.rglob("*.procurement"))
+    }
+    extra = sorted(set(actual) - set(expected))
+    if extra:
+        raise ValueError(
+            "unexpected procurement record files: " + ", ".join(extra)
         )
-        if extra:
-            raise ValueError(
-                "unexpected files in generated procurement directory: "
-                + ", ".join(extra)
-            )
-    for name, rendered in sorted(expected.items()):
-        path = records_root / name
+    for relative, rendered in sorted(expected.items()):
+        path = record_paths[relative]
         if not path.is_file() or path.read_text(encoding="utf-8") != rendered:
-            changed.append(_source_name(repository, path))
+            changed.append(relative)
     if not check:
-        write_procurement_records(catalog, registry.values(), overwrite=True)
+        write_procurement_records(
+            catalog,
+            registry.values(),
+            overwrite=True,
+            unbound_locations=UNBOUND_LOCATIONS,
+        )
 
     bound = [record for record in registry.values() if record.provides]
     provision_count = sum(len(record.provides) for record in registry.values())
@@ -572,6 +639,12 @@ def generate(repository: Path, *, check: bool) -> dict[str, Any]:
             record.id: [item.to_dict() for item in record.provides]
             for record in registry.values()
             if record.provides
+        },
+        "locations": {
+            record_id: _source_name(repository, path)
+            for record_id, path in sorted(
+                (path.stem, path) for path in record_paths.values()
+            )
         },
     }
 

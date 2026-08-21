@@ -13,27 +13,27 @@
     {
       "locator": "$.product",
       "sha256": "sha256:1b27a7d2b50ca3dbb0b8044b37185e68c514a93a954fe55121cfce1716c26a7c",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_drive.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_drive.json"
     },
     {
       "locator": "$.manufacturer",
       "sha256": "sha256:1b27a7d2b50ca3dbb0b8044b37185e68c514a93a954fe55121cfce1716c26a7c",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_drive.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_drive.json"
     },
     {
       "locator": "$.source_urls[0]",
       "sha256": "sha256:1b27a7d2b50ca3dbb0b8044b37185e68c514a93a954fe55121cfce1716c26a7c",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_drive.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_drive.json"
     },
     {
       "locator": "$.source_urls[1]",
       "sha256": "sha256:1b27a7d2b50ca3dbb0b8044b37185e68c514a93a954fe55121cfce1716c26a7c",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_drive.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_drive.json"
     },
     {
       "locator": "$.included[4]",
       "sha256": "sha256:1b27a7d2b50ca3dbb0b8044b37185e68c514a93a954fe55121cfce1716c26a7c",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_drive.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_drive.json"
     },
     {
       "locator": "$.provenance",
@@ -43,7 +43,7 @@
     {
       "locator": "$.included[1]",
       "sha256": "sha256:1b27a7d2b50ca3dbb0b8044b37185e68c514a93a954fe55121cfce1716c26a7c",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_drive.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_drive.json"
     },
     {
       "locator": "$.provenance",
@@ -53,7 +53,7 @@
     {
       "locator": "$.included[0]",
       "sha256": "sha256:1b27a7d2b50ca3dbb0b8044b37185e68c514a93a954fe55121cfce1716c26a7c",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_drive.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_drive.json"
     },
     {
       "locator": "$.provenance",

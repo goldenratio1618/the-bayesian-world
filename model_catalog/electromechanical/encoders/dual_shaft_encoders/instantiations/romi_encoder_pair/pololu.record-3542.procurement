@@ -9,17 +9,17 @@
     {
       "locator": "$.product",
       "sha256": "sha256:d4f88dd2df05bad4d973167320c4b9f19bbd465515fd1b71aee966340a50cec7",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_encoders.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_encoders.json"
     },
     {
       "locator": "$.manufacturer",
       "sha256": "sha256:d4f88dd2df05bad4d973167320c4b9f19bbd465515fd1b71aee966340a50cec7",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_encoders.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_encoders.json"
     },
     {
       "locator": "$.source_urls[0]",
       "sha256": "sha256:d4f88dd2df05bad4d973167320c4b9f19bbd465515fd1b71aee966340a50cec7",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_encoders.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_encoders.json"
     },
     {
       "locator": "$.provenance",

@@ -171,6 +171,9 @@ class _Responses:
     def __init__(self, values: list[dict] | None = None):
         self.values = list(values or [])
         self.calls = 0
+        self.input_tokens = types.SimpleNamespace(
+            count=lambda **_kwargs: types.SimpleNamespace(input_tokens=1_000)
+        )
 
     def create(self, **kwargs):
         self.kwargs = kwargs
@@ -412,8 +415,8 @@ def _real_modeling_inputs() -> ModelingInputs:
         direct_hierarchy=(CATALOG_ROOT / "electromechanical" / "motors" / "brushed_dc_motors" / "dc_motor.pmdl",),
         component_information=(
             PROJECT_ROOT
-            / "assembled_contraptions"
-            / "scanner"
+            / "outputs"
+            / "scanner-part-import"
             / "component_inputs"
             / "romi_drive.json"
         ),
@@ -746,7 +749,7 @@ class BudgetTests(unittest.TestCase):
 
     def test_actual_agent_cli_requires_a_declarative_job_file_and_target(self):
         job_file = (
-            PROJECT_ROOT / "assembled_contraptions" / "scanner" / "agent_jobs.json"
+            PROJECT_ROOT / "outputs" / "scanner-part-import" / "agent_jobs.json"
         )
         args = build_parser().parse_args(
             [
@@ -761,13 +764,15 @@ class BudgetTests(unittest.TestCase):
         self.assertEqual(args.agent_job, "modeling-one")
         self.assertEqual(args.target, "romi_drive")
         self.assertFalse(args.force)
+        self.assertIsNone(args.output_root)
+        self.assertIsNone(args.staging_root)
         bundle = _load_agent_job_bundle(args.job_file)
         inputs = _full_modeling_inputs(bundle, args.target)
         self.assertEqual(
             inputs.component_information,
             PROJECT_ROOT
-            / "assembled_contraptions"
-            / "scanner"
+            / "outputs"
+            / "scanner-part-import"
             / "component_inputs"
             / "romi_drive.json",
         )
@@ -1051,7 +1056,10 @@ class AgentWorkflowTests(unittest.TestCase):
         self.assertEqual(event["status"], "failed_after_dispatch")
         self.assertAlmostEqual(event["charged_usd"], expected)
         self.assertLess(event["charged_usd"], reservation)
-        self.assertEqual(event["cost_basis"], "reported_usage")
+        self.assertEqual(
+            event["cost_basis"],
+            "estimated_from_provider_tokens_cache_writes_unknown_conservative",
+        )
         self.assertEqual(event["usage"]["input_tokens"], 100)
 
     def test_post_inference_activity_prevents_zero_settlement(self):
@@ -1329,7 +1337,7 @@ class AgentWorkflowTests(unittest.TestCase):
 
 class PriorTwentyOfflineReplayTests(unittest.TestCase):
     def test_prior_twenty_preflight_and_family_plan_are_deterministic(self):
-        session = PROJECT_ROOT / "assembled_contraptions" / "part_import_2026_08_18"
+        session = PROJECT_ROOT / "outputs" / "part-import-2026-08-18"
         bundle = _load_agent_job_bundle(session / "agent_jobs.json")
         component_paths = sorted((session / "component_inputs").glob("*.json"))
         self.assertEqual(len(component_paths), 20)
@@ -1408,6 +1416,11 @@ class PriorTwentyOfflineReplayTests(unittest.TestCase):
                 artifacts = Path(item["staging_artifacts"])
                 trusted = verify_proposal_procurement_receipt(artifacts)
                 self.assertEqual(len(trusted), 1)
+                self.assertEqual(trusted[0].parent.parent.name, "instantiations")
+                self.assertIn(
+                    "thermoelectric/thermistors/instantiations/",
+                    trusted[0].relative_to(artifacts).as_posix(),
+                )
                 record = ProcurementRecord.from_json(
                     trusted[0].read_text(encoding="utf-8")
                 )
@@ -1861,10 +1874,10 @@ class ModelingRecoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             proposed = root / "run" / "workspace" / "proposed"
-            records = proposed / "procurement" / "records"
+            records = proposed / "electrical" / "widgets" / "instantiations" / "example"
             records.mkdir(parents=True)
             source = next(
-                (CATALOG_ROOT / "procurement" / "records").glob("*.procurement")
+                CATALOG_ROOT.rglob("*.procurement")
             )
             (records / "untrusted.PROCUREMENT").write_bytes(source.read_bytes())
             with self.assertRaisesRegex(ValueError, "protected host receipt"):
@@ -2393,7 +2406,10 @@ class ModelingRecoveryTests(unittest.TestCase):
             event = ledger.snapshot()["events"][-1]
             self.assertEqual(event["status"], "recovered_after_nonzero_exit")
             self.assertEqual(event["usage"]["input_tokens"], 100)
-            self.assertEqual(event["cost_basis"], "reported_usage")
+            self.assertEqual(
+                event["cost_basis"],
+                "estimated_from_provider_tokens_cache_writes_unknown_conservative",
+            )
             command = run_mock.call_args.args[0]
             self.assertIn("authoritative-target.json", command[-1])
             self.assertIn("exactly one minimal complete catalog import bundle", command[-1])

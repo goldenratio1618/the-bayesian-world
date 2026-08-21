@@ -9,17 +9,17 @@
     {
       "locator": "$.product",
       "sha256": "sha256:35a3628039f6cc28f838c82403bd7812125ce317bb1207e8f866a9378a6a5518",
-      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/murata_ncp18_680r.json"
+      "source": "outputs/part-import-2026-08-18/component_inputs/murata_ncp18_680r.json"
     },
     {
       "locator": "$.manufacturer",
       "sha256": "sha256:35a3628039f6cc28f838c82403bd7812125ce317bb1207e8f866a9378a6a5518",
-      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/murata_ncp18_680r.json"
+      "source": "outputs/part-import-2026-08-18/component_inputs/murata_ncp18_680r.json"
     },
     {
       "locator": "$.source_urls[0]",
       "sha256": "sha256:35a3628039f6cc28f838c82403bd7812125ce317bb1207e8f866a9378a6a5518",
-      "source": "assembled_contraptions/part_import_2026_08_18/component_inputs/murata_ncp18_680r.json"
+      "source": "outputs/part-import-2026-08-18/component_inputs/murata_ncp18_680r.json"
     }
   ],
   "format": "procurement-record-1",

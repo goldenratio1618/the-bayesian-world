@@ -12,6 +12,7 @@ from contextlib import nullcontext
 from dataclasses import asdict, dataclass
 import hashlib
 import json
+import math
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -22,6 +23,7 @@ import tempfile
 import uuid
 from typing import Any, Iterable, Mapping
 
+from ..catalog.instantiations import PROCUREMENT_METADATA_FIELDS
 from .budget import (
     BudgetLedger,
     ProvenPreInferenceProviderRejection,
@@ -103,10 +105,37 @@ MODELING_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+# Direct Responses calls must carry exact artifact bytes because they have no
+# filesystem tools. The nullable form above remains necessary for Codex CLI
+# manifests, where the host-valid candidate directory is authoritative.
+RESPONSES_MODELING_SCHEMA: dict[str, Any] = json.loads(json.dumps(MODELING_SCHEMA))
+RESPONSES_MODELING_SCHEMA["properties"]["artifacts"]["items"]["properties"][
+    "content"
+]["type"] = "string"
+
 
 IMPORT_PLAN_FILENAME = "IMPORT_PLAN.json"
 MAX_MODELING_VALIDATION_ATTEMPTS = 3
+MAX_FULLY_INGESTED_PART_COST_USD = 0.05
 UNIMPLEMENTED_MODELING_PHYSICS = frozenset({"thermal"})
+MODEL_INSTANCE_REQUIRED_FIELDS = (
+    "format",
+    "id",
+    "variant",
+    "part",
+    "version",
+    "model",
+    "parameters",
+    "parameter_uncertainty",
+    "condition",
+    "compute",
+)
+PROCUREMENT_IDENTITY_FIELD_CONTRACT = tuple(sorted(PROCUREMENT_METADATA_FIELDS))
+RECTANGULAR_CHIP_RESISTOR_RECIPE_SCHEMA = (
+    "contraption.host-recipe.rectangular-chip-resistor/v1"
+)
+RECTANGULAR_CHIP_RESISTOR_RECIPE_ID = "rectangular-chip-resistor-0603-ideal-v1"
+RECTANGULAR_CHIP_RESISTOR_DIMENSIONS_M = (0.0016, 0.0008, 0.00045)
 _KNOWN_ROLLOUT_WARNING = re.compile(
     r"Under-development features enabled: rollout_budget\. "
     r"Under-development features are incomplete and may behave unpredictably\. "
@@ -514,15 +543,79 @@ def agent_input_hash(
     return "sha256:" + digest.hexdigest()
 
 
-def _usage_from_response(response: Any) -> Usage:
+def _usage_from_response(response: Any) -> Usage | None:
     raw = getattr(response, "usage", None)
     if raw is None:
-        return Usage()
-    input_tokens = int(getattr(raw, "input_tokens", 0) or 0)
-    output_tokens = int(getattr(raw, "output_tokens", 0) or 0)
+        return None
+    input_tokens = getattr(raw, "input_tokens", None)
+    output_tokens = getattr(raw, "output_tokens", None)
+    if any(
+        isinstance(value, bool) or not isinstance(value, int) or value < 0
+        for value in (input_tokens, output_tokens)
+    ):
+        return None
     details = getattr(raw, "input_tokens_details", None)
-    cached = int(getattr(details, "cached_tokens", 0) or 0) if details else 0
-    return Usage(input_tokens, min(cached, input_tokens), output_tokens)
+    cached = getattr(details, "cached_tokens", 0) if details else 0
+    if isinstance(cached, bool) or not isinstance(cached, int) or cached < 0:
+        return None
+    if cached > input_tokens:
+        return None
+    cache_write_raw = (
+        getattr(details, "cache_write_tokens", None)
+        if details is not None
+        else None
+    )
+    if cache_write_raw is None and details is not None:
+        cache_write_raw = getattr(details, "cache_creation_tokens", None)
+    if cache_write_raw is not None and (
+        isinstance(cache_write_raw, bool)
+        or not isinstance(cache_write_raw, int)
+        or cache_write_raw < 0
+    ):
+        return None
+    cache_writes = cache_write_raw
+    if cache_writes is not None and cached + cache_writes > input_tokens:
+        return None
+    return Usage(
+        input_tokens,
+        cached,
+        output_tokens,
+        cache_write_input_tokens=cache_writes,
+    )
+
+
+def _count_response_input_tokens(
+    client: Any,
+    request: Mapping[str, Any],
+    *,
+    maximum: int,
+) -> int:
+    """Count the exact request input before inference when the SDK supports it.
+
+    The direct paid workflows fail closed when the SDK does not expose the
+    counter. A counter failure is never hidden as a guessed reservation.
+    """
+
+    input_tokens = getattr(getattr(client, "responses", None), "input_tokens", None)
+    count = getattr(input_tokens, "count", None)
+    if not callable(count):
+        raise RuntimeError(
+            "Responses input-token counter is required for hard cost gating"
+        )
+    counted = count(
+        model=request["model"],
+        reasoning=request["reasoning"],
+        input=request["input"],
+        text=request["text"],
+    )
+    value = getattr(counted, "input_tokens", None)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError("Responses input-token counter returned an invalid count")
+    if value > maximum:
+        raise ValueError(
+            f"Responses request has {value} input tokens; hard maximum is {maximum}"
+        )
+    return value
 
 
 def load_dotenv_key(path: str | Path) -> str | None:
@@ -557,8 +650,8 @@ class ClassificationAgent:
         ledger: BudgetLedger,
         *,
         model: str = "gpt-5.6-luna",
-        reasoning_effort: str = "medium",
-        limits: AgentLimits = AgentLimits(150_000, 4_000),
+        reasoning_effort: str = "low",
+        limits: AgentLimits = AgentLimits(12_000, 2_000),
         pricing: TokenPricing = TokenPricing(),
         api_key: str | None = None,
     ) -> None:
@@ -619,7 +712,11 @@ class ClassificationAgent:
         *,
         client: Any | None = None,
         canary: bool = False,
-    ) -> tuple[dict[str, Any], Usage, float]:
+        target: str | None = None,
+        ingestion_run_id: str | None = None,
+        cost_scope: str | None = None,
+        cost_scope_limit_usd: float | None = None,
+    ) -> tuple[dict[str, Any], Usage | None, float]:
         _validate_strict_output_schema(
             CLASSIFICATION_SCHEMA, source="classification output schema"
         )
@@ -629,15 +726,6 @@ class ClassificationAgent:
         # output cap; a smaller cap can terminate before any structured JSON is
         # emitted and would not test the workflow it is meant to guard.
         output_cap = self.limits.max_output_tokens
-        reserved = self.pricing.worst_case(
-            max_input_tokens=self.limits.max_input_tokens,
-            max_output_tokens=output_cap,
-        )
-        self.ledger.reserve(
-            run_id,
-            reserved,
-            {"kind": "classification-canary" if canary else "classification", "model": self.model},
-        )
         dispatched = False
         settled = False
         try:
@@ -647,11 +735,10 @@ class ClassificationAgent:
                 except ImportError as exc:
                     raise RuntimeError("install the 'agents' extra to run the API agent") from exc
                 client = OpenAI(api_key=self.api_key) if self.api_key else OpenAI()
-            dispatched = True
-            response = client.responses.create(
-                model=self.model,
-                reasoning={"effort": self.reasoning_effort},
-                input=[
+            request = {
+                "model": self.model,
+                "reasoning": {"effort": self.reasoning_effort},
+                "input": [
                     {"role": "system", "content": self.system_prompt(interface_catalog)},
                     {
                         "role": "user",
@@ -659,10 +746,37 @@ class ClassificationAgent:
                         + json.dumps(component_information, sort_keys=True),
                     },
                 ],
-                max_output_tokens=output_cap,
-                text={"format": _schema_wrapper("component_classification", CLASSIFICATION_SCHEMA)},
-                store=False,
+                "max_output_tokens": output_cap,
+                "text": {
+                    "format": _schema_wrapper(
+                        "component_classification", CLASSIFICATION_SCHEMA
+                    )
+                },
+                "store": False,
+            }
+            counted_input = _count_response_input_tokens(
+                client, request, maximum=self.limits.max_input_tokens
             )
+            reserved = self.pricing.worst_case(
+                max_input_tokens=counted_input,
+                max_output_tokens=output_cap,
+            )
+            metadata = {
+                "kind": "classification-canary" if canary else "classification",
+                "model": self.model,
+                "target": target,
+                "ingestion_run_id": ingestion_run_id,
+                "counted_input_tokens": counted_input,
+            }
+            self.ledger.reserve(
+                run_id,
+                reserved,
+                metadata,
+                cost_scope=cost_scope,
+                cost_scope_limit_usd=cost_scope_limit_usd,
+            )
+            dispatched = True
+            response = client.responses.create(**request)
             usage = _usage_from_response(response)
             try:
                 value = _load_json_strict(
@@ -823,6 +937,10 @@ def run_classification_batch(
     *,
     force: bool = False,
     client: Any | None = None,
+    canary: bool = False,
+    ingestion_run_id: str | None = None,
+    cost_scope: str | None = None,
+    cost_scope_limit_usd: float | None = None,
 ) -> list[dict[str, Any]]:
     """Classify component files sequentially with validated, resumable receipts."""
 
@@ -843,6 +961,11 @@ def run_classification_batch(
         _safe_job_identifier(stem, f"component_paths[{index}].stem")
     if len({stem.casefold() for stem in stems}) != len(stems):
         raise ValueError("component input stems must be unique (case-insensitive)")
+    if cost_scope is not None and len(paths) != 1:
+        raise ValueError(
+            "one literal cost_scope cannot be shared by multiple classification targets; "
+            "invoke the batch once per target"
+        )
 
     output_directory = Path(output_directory)
     settings = {
@@ -889,7 +1012,14 @@ def run_classification_batch(
 
         try:
             proposal, usage, charged = agent.classify(
-                component, interface_data, client=client, canary=False
+                component,
+                interface_data,
+                client=client,
+                canary=canary,
+                target=path.stem,
+                ingestion_run_id=ingestion_run_id,
+                cost_scope=cost_scope,
+                cost_scope_limit_usd=cost_scope_limit_usd,
             )
             # Keep persistence independently guarded if an injected/fake agent does
             # not implement ClassificationAgent.classify's semantic validation.
@@ -908,7 +1038,7 @@ def run_classification_batch(
             "model": agent.model,
             "reasoning_effort": agent.reasoning_effort,
             "proposal": proposal,
-            "usage": asdict(usage),
+            "usage": asdict(usage) if usage is not None else None,
             "charged_usd": charged,
         }
         write_json_atomic(receipt_path, receipt)
@@ -918,7 +1048,7 @@ def run_classification_batch(
                 "status": "completed",
                 "input_hash": input_hash,
                 "proposal_path": str(receipt_path.resolve()),
-                "usage": asdict(usage),
+                "usage": asdict(usage) if usage is not None else None,
                 "charged_usd": charged,
             }
         )
@@ -978,7 +1108,9 @@ class ModelingInputs:
         return tuple(selected) if selected else self.interfaces
 
     def all_files(self) -> tuple[Path, ...]:
-        return (
+        """Full tool-using CLI context, including structured-format guides."""
+
+        raw = (
             self.constraints,
             *_relevant_modeling_guides(self.component_information),
             *self.gold_templates,
@@ -986,6 +1118,35 @@ class ModelingInputs:
             *self.direct_hierarchy,
             self.component_information,
         )
+        return self._deduplicate(raw)
+
+    def direct_files(self) -> tuple[Path, ...]:
+        """Lean direct-Responses context without CLI/tool instructions.
+
+        The direct prompt is the complete operating contract. Exact examples,
+        governing interfaces, direct ancestry, and component evidence remain;
+        legacy constraints/guides describe candidate tools and are intentionally
+        excluded from the no-tools request.
+        """
+
+        raw = (
+            *self.gold_templates,
+            *self.relevant_interfaces(),
+            *self.direct_hierarchy,
+            self.component_information,
+        )
+        return self._deduplicate(raw)
+
+    @staticmethod
+    def _deduplicate(raw: Iterable[Path]) -> tuple[Path, ...]:
+        selected: list[Path] = []
+        seen: set[Path] = set()
+        for path in raw:
+            resolved = Path(path).resolve()
+            if resolved not in seen:
+                selected.append(Path(path))
+                seen.add(resolved)
+        return tuple(selected)
 
     def deterministic_files(self) -> tuple[Path, ...]:
         from .deterministic_assets import input_paths
@@ -1039,7 +1200,254 @@ def _model_plan_entry(path: Path) -> dict[str, Any] | None:
         "parameters": data.get("parameters", []),
         "power_ports": data.get("power_ports", []),
         "signal_ports": data.get("signal_ports", []),
+        "implements": data.get("implements"),
     }
+
+
+def _rectangular_chip_resistor_recipe(
+    inputs: ModelingInputs,
+    component: Mapping[str, Any],
+    target_id: str,
+    recommended: Mapping[str, Any] | None,
+    recommended_root: str | None,
+    template_static_path: Path | None,
+    template_model_path: Path | None,
+) -> dict[str, Any] | None:
+    """Return the strict host recipe for the evidenced rectangular 0603 family.
+
+    Unrelated families return ``None``. Once the physical 0603 signature
+    matches, absence or conflict in any required fact raises before provider
+    selection; there is no heuristic conversion or Luna fallback.
+    """
+
+    published = component.get("published_parameters")
+    family_match = (
+        component.get("part_kind") == "fixed thick-film chip resistor"
+        and component.get("domains") == ["electrical"]
+        and isinstance(published, Mapping)
+        and published.get("package") == "0603"
+    )
+    if not family_match:
+        return None
+    if (
+        recommended is None
+        or recommended_root
+        != f"electrical/resistors/fixed_resistors/instantiations/{target_id}"
+        or template_static_path is None
+        or template_model_path is None
+    ):
+        raise ValueError(
+            "matched rectangular 0603 resistor lacks an exact model/template/root recipe"
+        )
+    if (
+        recommended.get("id") != "electrical.resistor.ideal"
+        or recommended.get("version") != "1.0.0"
+        or not isinstance(recommended.get("sha256"), str)
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", recommended["sha256"]) is None
+        or recommended.get("implements") != "resistor"
+        or recommended.get("signal_ports") != []
+    ):
+        raise ValueError("matched rectangular 0603 resistor has an unsupported PMDL")
+
+    parameters = recommended.get("parameters")
+    ports = recommended.get("power_ports")
+    if not isinstance(parameters, list) or len(parameters) != 1:
+        raise ValueError(
+            "matched rectangular 0603 resistor requires one resistance parameter"
+        )
+    parameter = parameters[0]
+    if (
+        not isinstance(parameter, Mapping)
+        or parameter.get("name") != "resistance"
+        or parameter.get("unit") != "ohm"
+        or not isinstance(ports, list)
+        or len(ports) != 2
+    ):
+        raise ValueError(
+            "matched rectangular 0603 resistor has an invalid model parameter/ports"
+        )
+    port_names: list[str] = []
+    for port in ports:
+        if not isinstance(port, Mapping) or port.get("domain") != "electrical":
+            raise ValueError(
+                "matched rectangular 0603 resistor has an invalid power port"
+            )
+        name = port.get("name")
+        if not isinstance(name, str):
+            raise ValueError(
+                "matched rectangular 0603 resistor has a non-string power port"
+            )
+        port_names.append(name)
+    if port_names != ["p", "n"]:
+        raise ValueError(
+            "matched rectangular 0603 resistor requires exact p/n power ports"
+        )
+
+    assert isinstance(published, Mapping)
+    raw_dimensions = published.get("dimensions_m")
+    if not isinstance(raw_dimensions, list) or len(raw_dimensions) != 3:
+        raise ValueError(
+            "matched rectangular 0603 resistor requires three dimensions_m"
+        )
+    dimensions: list[float] = []
+    for raw_dimension in raw_dimensions:
+        if (
+            isinstance(raw_dimension, bool)
+            or not isinstance(raw_dimension, (int, float))
+            or not math.isfinite(float(raw_dimension))
+            or float(raw_dimension) <= 0
+        ):
+            raise ValueError(
+                "matched rectangular 0603 resistor has an invalid dimension"
+            )
+        dimensions.append(float(raw_dimension))
+    if tuple(dimensions) != RECTANGULAR_CHIP_RESISTOR_DIMENSIONS_M:
+        raise ValueError(
+            "matched rectangular 0603 resistor dimensions are not the bound recipe"
+        )
+    raw_nominal = published.get("resistance_ohm")
+    raw_tolerance = published.get("tolerance_fraction")
+    raw_power = published.get("rated_power_w")
+    if (
+        isinstance(raw_nominal, bool)
+        or not isinstance(raw_nominal, (int, float))
+        or not math.isfinite(float(raw_nominal))
+        or float(raw_nominal) <= 0
+        or isinstance(raw_tolerance, bool)
+        or not isinstance(raw_tolerance, (int, float))
+        or not math.isfinite(float(raw_tolerance))
+        or not 0 <= float(raw_tolerance) < 1
+        or isinstance(raw_power, bool)
+        or not isinstance(raw_power, (int, float))
+        or not math.isfinite(float(raw_power))
+        or float(raw_power) <= 0
+    ):
+        raise ValueError(
+            "matched rectangular 0603 resistor has invalid nominal/tolerance/power facts"
+        )
+    nominal = float(raw_nominal)
+    bounds = parameter.get("bounds")
+    if (
+        not isinstance(bounds, Mapping)
+        or isinstance(bounds.get("lower"), bool)
+        or not isinstance(bounds.get("lower"), (int, float))
+        or isinstance(bounds.get("upper"), bool)
+        or not isinstance(bounds.get("upper"), (int, float))
+        or not float(bounds["lower"]) <= nominal <= float(bounds["upper"])
+    ):
+        raise ValueError(
+            "matched rectangular 0603 resistor nominal is outside the exact PMDL bounds"
+        )
+
+    try:
+        template_static = _read_json_object(template_static_path)
+        template_model = _read_json_object(template_model_path)
+    except (OSError, UnicodeError, ValueError):
+        raise ValueError(
+            "matched rectangular 0603 resistor template cannot be parsed"
+        )
+    template_reference = template_model.get("model")
+    template_parameters = template_model.get("parameters")
+    if (
+        template_static.get("format") != "static-part-2"
+        or template_model.get("format") != "model-instance-1"
+        or not isinstance(template_reference, Mapping)
+        or dict(template_reference)
+        != {
+            "id": recommended["id"],
+            "version": recommended["version"],
+            "sha256": recommended["sha256"],
+        }
+        or not isinstance(template_parameters, Mapping)
+        or set(template_parameters) != {"resistance"}
+    ):
+        raise ValueError(
+            "matched rectangular 0603 resistor template/model binding changed"
+        )
+    connector_interfaces: dict[str, str] = {}
+    template_connectors = template_static.get("connectors")
+    if not isinstance(template_connectors, list) or len(template_connectors) != 2:
+        raise ValueError(
+            "matched rectangular 0603 resistor requires two template connectors"
+        )
+    for connector in template_connectors:
+        if (
+            not isinstance(connector, Mapping)
+            or connector.get("domain") != "electrical"
+            or connector.get("interface") != "catalog-generic-port"
+            or connector.get("model_port") not in {"p", "n"}
+        ):
+            raise ValueError(
+                "matched rectangular 0603 resistor connector interface changed"
+            )
+        model_port = connector["model_port"]
+        if model_port in connector_interfaces:
+            raise ValueError(
+                "matched rectangular 0603 resistor has duplicate template ports"
+            )
+        connector_interfaces[model_port] = connector["interface"]
+    if set(connector_interfaces) != {"p", "n"}:
+        raise ValueError(
+            "matched rectangular 0603 resistor template lacks p/n interfaces"
+        )
+
+    component_path = Path(inputs.component_information)
+    component_sha256 = "sha256:" + hashlib.sha256(
+        component_path.read_bytes()
+    ).hexdigest()
+    recipe: dict[str, Any] = {
+        "schema": RECTANGULAR_CHIP_RESISTOR_RECIPE_SCHEMA,
+        "recipe_id": RECTANGULAR_CHIP_RESISTOR_RECIPE_ID,
+        "target_id": target_id,
+        "component_evidence": {
+            # The original and immutable workspace snapshot share the basename,
+            # while their asset-relative paths intentionally differ. Keep this
+            # display-only label out of that path-dependent distinction so both
+            # host phases bind the exact same semantic recipe digest.
+            "source": component_path.name,
+            "sha256": component_sha256,
+            "dimensions_locator": "$.published_parameters.dimensions_m",
+            "nominal_locator": "$.published_parameters.resistance_ohm",
+            "tolerance_locator": "$.published_parameters.tolerance_fraction",
+        },
+        "recommended_instantiation_root": recommended_root,
+        "model": {
+            "id": recommended["id"],
+            "version": recommended["version"],
+            "sha256": recommended["sha256"],
+        },
+        "parameter": {
+            "name": "resistance",
+            "unit": "ohm",
+            "nominal": nominal,
+            "tolerance_fraction": float(raw_tolerance),
+        },
+        "package": "0603",
+        "dimensions_m": dimensions,
+        "rated_power_w": float(raw_power),
+        "ports": [
+            {
+                "model_port": name,
+                "domain": "electrical",
+                "interface": connector_interfaces[name],
+                "x_face_sign": -1 if name == "p" else 1,
+            }
+            for name in ("p", "n")
+        ],
+        "geometry_policy": "explicit_dimensions_rectangular_box_envelope_only",
+        "connector_pose_policy": "estimated_opposing_x_face_centers",
+        "fabrication_policy": "missing_conductor_and_termination",
+        "templates": {
+            "static_sha256": "sha256:"
+            + hashlib.sha256(template_static_path.read_bytes()).hexdigest(),
+            "model_sha256": "sha256:"
+            + hashlib.sha256(template_model_path.read_bytes()).hexdigest(),
+        },
+    }
+    recipe["recipe_sha256"] = "sha256:" + hashlib.sha256(
+        json.dumps(recipe, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return recipe
 
 
 def build_modeling_import_plan(inputs: ModelingInputs) -> dict[str, Any]:
@@ -1058,6 +1466,8 @@ def build_modeling_import_plan(inputs: ModelingInputs) -> dict[str, Any]:
     recommended = reusable[0] if len(reusable) == 1 else None
 
     recommended_root: str | None = None
+    template_static_path: Path | None = None
+    template_model_path: Path | None = None
     if recommended is not None:
         for raw_model in inputs.gold_templates:
             model_path = Path(raw_model)
@@ -1075,6 +1485,8 @@ def build_modeling_import_plan(inputs: ModelingInputs) -> dict[str, Any]:
                 continue
             instantiations = static_path.parent.parent
             recommended_root = f"{_catalog_relative(instantiations)}/{target_id}"
+            template_static_path = static_path
+            template_model_path = model_path
             break
 
     published = component.get("published_parameters", {})
@@ -1085,6 +1497,54 @@ def build_modeling_import_plan(inputs: ModelingInputs) -> dict[str, Any]:
         for key in ("manufacturer", "product", "part_kind", "purpose")
         if isinstance(component.get(key), str) and component[key].strip()
     }
+    raw_tolerance = published.get("tolerance_fraction")
+    if (
+        not isinstance(raw_tolerance, bool)
+        and isinstance(raw_tolerance, (int, float))
+        and math.isfinite(float(raw_tolerance))
+        and 0 <= float(raw_tolerance) < 1
+    ):
+        tolerance_value = float(raw_tolerance)
+        uncertainty_contract: dict[str, Any] = {
+            "source_field": "published_parameter_facts.tolerance_fraction",
+            "tolerance_fraction": tolerance_value,
+            "required_distribution": (
+                "fixed" if tolerance_value == 0 else "uniform"
+            ),
+            "mapping": (
+                "For one initialized numeric PMDL parameter x, zero tolerance "
+                "means a fixed distribution; otherwise use ordered bounds from "
+                "x*(1-tolerance_fraction) and x*(1+tolerance_fraction)."
+            ),
+            "empty_object_allowed": False,
+        }
+    elif any(
+        "tolerance" in str(key).casefold()
+        or "uncertainty" in str(key).casefold()
+        for key in published
+    ):
+        uncertainty_contract = {
+            "source_field": None,
+            "required_distribution": None,
+            "mapping": "Preserve the explicit source uncertainty fact without invention.",
+            "empty_object_allowed": False,
+        }
+    else:
+        uncertainty_contract = {
+            "source_field": None,
+            "required_distribution": None,
+            "mapping": "No uncertainty fact is present; use an empty object.",
+            "empty_object_allowed": True,
+        }
+    deterministic_recipe = _rectangular_chip_resistor_recipe(
+        inputs,
+        component,
+        target_id,
+        recommended,
+        recommended_root,
+        template_static_path,
+        template_model_path,
+    )
     return {
         "schema": "contraption.modeling-import-plan/v1",
         "target_id": target_id,
@@ -1095,6 +1555,7 @@ def build_modeling_import_plan(inputs: ModelingInputs) -> dict[str, Any]:
         "reusable_models": reusable,
         "recommended_model": recommended,
         "recommended_instantiation_root": recommended_root,
+        "deterministic_recipe": deterministic_recipe,
         "artifact_policy": {
             "base_catalog_is_immutable": True,
             "emit_existing_catalog_files": False,
@@ -1106,6 +1567,39 @@ def build_modeling_import_plan(inputs: ModelingInputs) -> dict[str, Any]:
             "Sibling parts that differ only in published parameter values must reuse "
             "the same recommended PMDL identity."
         ),
+        "artifact_contracts": {
+            "static.part": {
+                "format": "static-part-2",
+                "forbidden_procurement_identity_fields": list(
+                    PROCUREMENT_IDENTITY_FIELD_CONTRACT
+                ),
+                "forbidden_locations": [
+                    "top_level",
+                    "metadata_at_any_depth",
+                ],
+                "note": (
+                    "These fields are host-owned by the adjacent .procurement "
+                    "record and must not be copied into static.part"
+                ),
+            },
+            "v1.model": {
+                "format": "model-instance-1",
+                "required_top_level_fields": list(MODEL_INSTANCE_REQUIRED_FIELDS),
+                "forbidden_procurement_identity_fields": list(
+                    PROCUREMENT_IDENTITY_FIELD_CONTRACT
+                ),
+                "forbidden_locations": [
+                    "top_level",
+                    "metadata_at_any_depth",
+                ],
+                "parameter_uncertainty_empty_value_when_allowed": {},
+                "uncertainty_policy": uncertainty_contract,
+                "note": (
+                    "parameter_uncertainty is a required object even when no "
+                    "uncertainty facts are available"
+                ),
+            }
+        },
         "validation": {
             "command": (
                 "python -I -m contraption.part_import.model_validation_tool "
@@ -1117,15 +1611,17 @@ def build_modeling_import_plan(inputs: ModelingInputs) -> dict[str, Any]:
 
 
 class ModelingAgent:
+    backend_id = "codex-cli"
+
     def __init__(
         self,
         ledger: BudgetLedger,
         staging_root: str | Path,
         *,
         model: str = "gpt-5.6-luna",
-        reasoning_effort: str = "xhigh",
-        rollout_token_limit: int = 250_000,
-        max_input_tokens: int = 300_000,
+        reasoning_effort: str = "low",
+        rollout_token_limit: int = 10_000,
+        max_input_tokens: int = 120_000,
         pricing: TokenPricing = TokenPricing(),
         codex_binary: str | None = None,
         api_key: str | None = None,
@@ -1171,6 +1667,12 @@ class ModelingAgent:
         if posix.suffix not in {".pmdl", ".part", ".model", ".json", ".md"}:
             raise ValueError(f"unsupported generated artifact type: {raw!r}")
         return Path(*posix.parts)
+
+    def context_files(self, inputs: ModelingInputs) -> tuple[Path, ...]:
+        return inputs.all_files()
+
+    def hash_files(self, inputs: ModelingInputs) -> tuple[Path, ...]:
+        return (*self.context_files(inputs), *inputs.deterministic_files())
 
     def prepare_workspace(self, inputs: ModelingInputs, run_id: str) -> Path:
         _validate_strict_output_schema(MODELING_SCHEMA, source="modeling output schema")
@@ -1236,6 +1738,13 @@ class ModelingAgent:
         )
         assert_component_snapshot()
         import_plan = build_modeling_import_plan(snapshot_inputs)
+        if self.backend_id == "responses-api":
+            # The no-tools model receives only host-owned validation semantics;
+            # never leak the CLI candidate command into its direct prompt.
+            import_plan["validation"] = {
+                "mode": "host_only",
+                "maximum_response_attempts": MAX_MODELING_VALIDATION_ATTEMPTS,
+            }
         assert_component_snapshot()
         import_plan_path = write_json_atomic(
             workspace / IMPORT_PLAN_FILENAME, import_plan
@@ -1264,7 +1773,7 @@ class ModelingAgent:
         # and are never copied into AGENTS.md or the input manifest.
         component_staged = False
         for index, source in enumerate(
-            (*snapshot_inputs.all_files(), *deterministic_context)
+            (*self.context_files(snapshot_inputs), *deterministic_context)
         ):
             source = Path(source).resolve()
             if not source.is_file():
@@ -1425,7 +1934,7 @@ class ModelingAgent:
         contribute evidence for a zero-cost settlement.
         """
 
-        best: tuple[int, int, int] | None = None
+        best: tuple[int, int, int, int | None] | None = None
         completed_agent_message = False
         exact_terminal_failure = False
         malformed_event = False
@@ -1489,6 +1998,8 @@ class ModelingAgent:
                         "outputTokens",
                         "cached_input_tokens",
                         "cachedInputTokens",
+                        "cache_write_input_tokens",
+                        "cacheWriteInputTokens",
                     )
                 )
                 if not token_keys_present:
@@ -1496,17 +2007,34 @@ class ModelingAgent:
                 cached = item.get(
                     "cached_input_tokens", item.get("cachedInputTokens", 0)
                 )
+                cache_write = item.get(
+                    "cache_write_input_tokens",
+                    item.get("cacheWriteInputTokens"),
+                )
                 valid_counts = all(
                     isinstance(value, int)
                     and not isinstance(value, bool)
                     and value >= 0
                     for value in (inp, cached, out)
                 )
-                if not valid_counts or cached > inp:
+                valid_cache_write = cache_write is None or (
+                    isinstance(cache_write, int)
+                    and not isinstance(cache_write, bool)
+                    and cache_write >= 0
+                )
+                if (
+                    not valid_counts
+                    or not valid_cache_write
+                    or cached > inp
+                    or (
+                        cache_write is not None
+                        and cached + cache_write > inp
+                    )
+                ):
                     malformed_event = True
                     continue
-                candidate = (inp, cached, out)
-                if best is None or sum(candidate) > sum(best):
+                candidate = (inp, cached, out, cache_write)
+                if best is None or inp + out > best[0] + best[2]:
                     best = candidate
 
             event_type = event.get("type")
@@ -1554,7 +2082,16 @@ class ModelingAgent:
                 unknown_failure_event = True
             previous_exact_provider_error = current_exact_provider_error
 
-        usage = Usage(*best) if best is not None else None
+        usage = (
+            Usage(
+                best[0],
+                best[1],
+                best[2],
+                cache_write_input_tokens=best[3],
+            )
+            if best is not None
+            else None
+        )
         return CodexEventAccounting(
             usage=usage,
             completed_agent_message_observed=completed_agent_message,
@@ -2298,16 +2835,23 @@ class ModelingAgent:
 
     recover_staging_workspace = recover_workspace
 
-    def run(self, inputs: ModelingInputs, *, canary: bool = False) -> tuple[Path, dict[str, Any], float]:
+    def run(
+        self,
+        inputs: ModelingInputs,
+        *,
+        canary: bool = False,
+        target: str | None = None,
+        ingestion_run_id: str | None = None,
+        cost_scope: str | None = None,
+        cost_scope_limit_usd: float | None = None,
+        client: Any | None = None,
+    ) -> tuple[Path, dict[str, Any], float]:
         _validate_strict_output_schema(MODELING_SCHEMA, source="modeling output schema")
         preflight = modeling_preflight(inputs.component_information)
         if not preflight["eligible"]:
             raise UnsupportedModelingPhysics(preflight)
         run_id = f"modeling-{uuid.uuid4()}"
-        # The Codex rollout budget includes reasoning over the fully bundled
-        # gold models and interfaces, not just visible answer tokens.  A 20k
-        # canary can exhaust before its first draft, which tests nothing useful.
-        output_tokens = min(self.rollout_token_limit, 60_000 if canary else self.rollout_token_limit)
+        output_tokens = self.rollout_token_limit
         reserved = self.pricing.worst_case(
             max_input_tokens=self.max_input_tokens,
             max_output_tokens=output_tokens,
@@ -2315,7 +2859,16 @@ class ModelingAgent:
         self.ledger.reserve(
             run_id,
             reserved,
-            {"kind": "modeling-canary" if canary else "modeling", "model": self.model},
+            {
+                "kind": "modeling-canary" if canary else "modeling",
+                "model": self.model,
+                "backend": self.backend_id,
+                "target": target,
+                "ingestion_run_id": ingestion_run_id,
+                "modeling_run_id": run_id,
+            },
+            cost_scope=cost_scope,
+            cost_scope_limit_usd=cost_scope_limit_usd,
         )
         dispatched = False
         settled = False
@@ -2846,6 +3399,1178 @@ class ModelingAgent:
             shutil.rmtree(snapshot, ignore_errors=True)
 
 
+class DirectResponsesModelingAgent(ModelingAgent):
+    """Low-reasoning Luna importer using direct structured Responses calls.
+
+    The model has no tools and cannot write the staging tree. Every returned
+    byte passes the same host materialization, deterministic overlays, and
+    catalog validation as CLI output. Validation failures receive at most two
+    bounded correction prompts, subject to the same atomic per-part dollar scope.
+    """
+
+    backend_id = "responses-api"
+    MAX_RETRY_DIAGNOSTIC_CHARS = 1_200
+    MAX_RETRY_PROPOSAL_CHARS = 8_000
+
+    def __init__(
+        self,
+        ledger: BudgetLedger,
+        staging_root: str | Path,
+        *,
+        model: str = "gpt-5.6-luna",
+        reasoning_effort: str = "low",
+        rollout_token_limit: int = 8_000,
+        max_input_tokens: int = 20_000,
+        pricing: TokenPricing = TokenPricing(),
+        api_key: str | None = None,
+        max_validation_attempts: int = MAX_MODELING_VALIDATION_ATTEMPTS,
+    ) -> None:
+        super().__init__(
+            ledger,
+            staging_root,
+            model=model,
+            reasoning_effort=reasoning_effort,
+            rollout_token_limit=rollout_token_limit,
+            max_input_tokens=max_input_tokens,
+            pricing=pricing,
+            api_key=api_key,
+        )
+        if (
+            isinstance(max_validation_attempts, bool)
+            or not isinstance(max_validation_attempts, int)
+            or not 1 <= max_validation_attempts <= MAX_MODELING_VALIDATION_ATTEMPTS
+        ):
+            raise ValueError(
+                f"max_validation_attempts must be from 1 through "
+                f"{MAX_MODELING_VALIDATION_ATTEMPTS}"
+            )
+        self.max_validation_attempts = max_validation_attempts
+
+    def context_files(self, inputs: ModelingInputs) -> tuple[Path, ...]:
+        return inputs.direct_files()
+
+    @staticmethod
+    def deterministic_recipe_for(
+        inputs: ModelingInputs,
+    ) -> dict[str, Any] | None:
+        """Return an exact host recipe before any provider is selected."""
+
+        recipe = build_modeling_import_plan(inputs).get("deterministic_recipe")
+        return dict(recipe) if isinstance(recipe, Mapping) else None
+
+    @staticmethod
+    def prompt(component_information_filename: str | None = None) -> str:
+        target = (
+            f"The authoritative component record is {component_information_filename!r}. "
+            if component_information_filename
+            else "The final component input block is authoritative. "
+        )
+        return "".join(
+            (
+                "Return one JSON object matching the supplied structured-output schema. "
+                "You have no tools and no writable workspace: do not mention editing files, "
+                "candidate directories, shell commands, or running validation. The host will "
+                "materialize and validate every returned byte. ",
+                target,
+                "IMPORT_PLAN is authoritative. Use target_id exactly. Return exactly one "
+                "catalog-relative static.part and v1.model in the planned instantiation "
+                "directory. Each artifacts.content value must be the complete UTF-8 file "
+                "string, never null. If recommended_model is present, reuse its exact id, "
+                "version, and sha256 and do not create a PMDL. Only when required physics is "
+                "absent may you add one concrete PMDL in the category/device directory that "
+                "owns the target instantiations directory, and v1.model must reference it. ",
+                "Use supplied records as exact schema examples. Initialize parameters only "
+                "from explicit source facts or PMDL defaults; never encode a parameter-only "
+                "variation as a new PMDL. Do not return existing catalog files, interfaces, "
+                "README.md, extra .part/.model files, executable code, or unsupported fields. ",
+                "Every v1.model is format model-instance-1 and must contain all ten required "
+                "top-level keys: format, id, variant, part, version, model, parameters, "
+                "parameter_uncertainty, condition, and compute. parameter_uncertainty is "
+                "always an object; use an empty object only when no uncertainty or tolerance "
+                "fact is supplied. For an unambiguous one-parameter tolerance_fraction t and "
+                "numeric nominal x, encode a positive tolerance as a uniform distribution "
+                "with ordered bounds from x*(1-t) and x*(1+t); encode zero tolerance as "
+                "fixed, exactly as artifact_contracts states. ",
+                "Connections are optional. Preserve only explicitly evidenced fabrication-ready "
+                "connection facts; otherwise use the schema's missing state. Never invent "
+                "threads, tolerances, wiring, bearings, or joints. Procurement, purchasing, "
+                "manufacturer offers, fabrication overlays, shapes, CAD/mesh/image parsing, "
+                "and deterministic ingestion records are host-owned and must not appear in the "
+                "returned artifacts. In both static.part and v1.model, omit these exact "
+                "case-insensitive procurement/identity keys at top level and recursively inside "
+                "metadata: "
+                f"{', '.join(PROCUREMENT_IDENTITY_FIELD_CONTRACT)}. The host derives the "
+                "adjacent .procurement record directly from the source component input. "
+                "PMDL is inert declarative data and must have exact symbols, "
+                "units, initialization, validity, and machine-checkable properties. ",
+                "Make the first response a minimal complete validation-ready bundle. If the host "
+                "returns a bounded diagnostic, correct all reported defects and return the entire "
+                "replacement bundle; at most two correction responses are allowed.",
+            )
+        )
+
+    @staticmethod
+    def _deterministic_rectangular_chip_bundle(
+        import_plan: Mapping[str, Any],
+        component_path: Path,
+    ) -> tuple[dict[str, Any], dict[str, Any]] | None:
+        recipe = import_plan.get("deterministic_recipe")
+        if recipe is None:
+            return None
+        if not isinstance(recipe, Mapping):
+            raise ValueError("matched deterministic recipe must be an object")
+        raw_recipe = dict(recipe)
+        expected_digest = raw_recipe.pop("recipe_sha256", None)
+        actual_digest = "sha256:" + hashlib.sha256(
+            json.dumps(
+                raw_recipe, sort_keys=True, separators=(",", ":"), allow_nan=False
+            ).encode("utf-8")
+        ).hexdigest()
+        if expected_digest != actual_digest:
+            raise ValueError("deterministic rectangular-chip recipe digest changed")
+        if (
+            recipe.get("schema") != RECTANGULAR_CHIP_RESISTOR_RECIPE_SCHEMA
+            or recipe.get("recipe_id") != RECTANGULAR_CHIP_RESISTOR_RECIPE_ID
+            or recipe.get("geometry_policy")
+            != "explicit_dimensions_rectangular_box_envelope_only"
+            or recipe.get("connector_pose_policy")
+            != "estimated_opposing_x_face_centers"
+            or recipe.get("fabrication_policy")
+            != "missing_conductor_and_termination"
+        ):
+            raise ValueError("unsupported deterministic rectangular-chip recipe")
+        target_id = recipe.get("target_id")
+        instantiation_root = recipe.get("recommended_instantiation_root")
+        component_evidence = recipe.get("component_evidence")
+        model_reference = recipe.get("model")
+        recommended_model = import_plan.get("recommended_model")
+        parameter = recipe.get("parameter")
+        dimensions = recipe.get("dimensions_m")
+        ports = recipe.get("ports")
+        if (
+            not isinstance(target_id, str)
+            or import_plan.get("target_id") != target_id
+            or instantiation_root
+            != f"electrical/resistors/fixed_resistors/instantiations/{target_id}"
+            or not isinstance(component_evidence, Mapping)
+            or component_evidence.get("sha256")
+            != "sha256:" + hashlib.sha256(component_path.read_bytes()).hexdigest()
+            or not isinstance(model_reference, Mapping)
+            or not isinstance(recommended_model, Mapping)
+            or any(
+                recommended_model.get(key) != model_reference.get(key)
+                for key in ("id", "version", "sha256")
+            )
+            or not isinstance(parameter, Mapping)
+            or parameter.get("name") != "resistance"
+            or parameter.get("unit") != "ohm"
+            or not isinstance(dimensions, list)
+            or len(dimensions) != 3
+            or not isinstance(ports, list)
+            or len(ports) != 2
+        ):
+            raise ValueError("deterministic rectangular-chip recipe binding is invalid")
+        nominal = parameter.get("nominal")
+        tolerance = parameter.get("tolerance_fraction")
+        if (
+            isinstance(nominal, bool)
+            or not isinstance(nominal, (int, float))
+            or not math.isfinite(float(nominal))
+            or float(nominal) <= 0
+            or isinstance(tolerance, bool)
+            or not isinstance(tolerance, (int, float))
+            or not math.isfinite(float(tolerance))
+            or not 0 <= float(tolerance) < 1
+        ):
+            raise ValueError("deterministic rectangular-chip parameter is invalid")
+        dimension_values: list[float] = []
+        for item in dimensions:
+            if (
+                isinstance(item, bool)
+                or not isinstance(item, (int, float))
+                or not math.isfinite(float(item))
+                or float(item) <= 0
+            ):
+                raise ValueError("deterministic rectangular-chip dimension is invalid")
+            dimension_values.append(float(item))
+        if tuple(dimension_values) != RECTANGULAR_CHIP_RESISTOR_DIMENSIONS_M:
+            raise ValueError("deterministic rectangular-chip dimensions changed")
+        expected_ports = [
+            {
+                "model_port": "p",
+                "domain": "electrical",
+                "interface": "catalog-generic-port",
+                "x_face_sign": -1,
+            },
+            {
+                "model_port": "n",
+                "domain": "electrical",
+                "interface": "catalog-generic-port",
+                "x_face_sign": 1,
+            },
+        ]
+        if ports != expected_ports:
+            raise ValueError("deterministic rectangular-chip port recipe changed")
+
+        nominal_value = float(nominal)
+        tolerance_value = float(tolerance)
+        if tolerance_value == 0:
+            uncertainty = {
+                "resistance": {
+                    "distribution": "fixed",
+                    "parameters": {},
+                }
+            }
+        else:
+            first = nominal_value * (1.0 - tolerance_value)
+            second = nominal_value * (1.0 + tolerance_value)
+            uncertainty = {
+                "resistance": {
+                    "distribution": "uniform",
+                    "parameters": {
+                        "lower": min(first, second),
+                        "upper": max(first, second),
+                    },
+                }
+            }
+        evidence_reference = (
+            f"{component_evidence['sha256']}#"
+            f"{component_evidence['dimensions_locator']}"
+        )
+        identity_pose = {
+            "translation_m": [0.0, 0.0, 0.0],
+            "rotation_quaternion_wxyz": [1.0, 0.0, 0.0, 0.0],
+        }
+        connectors = []
+        for port in expected_ports:
+            connectors.append(
+                {
+                    "id": port["model_port"],
+                    "model_port": port["model_port"],
+                    "body": "body",
+                    "domain": "electrical",
+                    "interface": "catalog-generic-port",
+                    "local_pose": {
+                        "translation_m": [
+                            port["x_face_sign"] * dimension_values[0] / 2.0,
+                            0.0,
+                            0.0,
+                        ],
+                        "rotation_quaternion_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    },
+                    "provenance": {
+                        "kind": "estimated",
+                        "source": (
+                            "Host recipe estimate at the rectangular envelope X-face "
+                            "center; terminal geometry and land pattern are unavailable"
+                        ),
+                        "reference": evidence_reference,
+                    },
+                    "kinematics": None,
+                    "joint_coordinate_state": None,
+                    "fabrication": {
+                        "kind": "electrical_termination",
+                        "missing": ["conductor", "termination"],
+                        "status": "missing",
+                    },
+                }
+            )
+        rated_power = recipe.get("rated_power_w")
+        static_part = {
+            "format": "static-part-2",
+            "id": target_id,
+            "name": (
+                f"0603 fixed thick-film resistor, {nominal_value:g} ohm"
+            ),
+            "version": "1.0.0",
+            "physical_role": "part",
+            "bodies": [
+                {
+                    "id": "body",
+                    "local_pose": identity_pose,
+                    "solids": [
+                        {
+                            "id": "envelope",
+                            "geometry": {
+                                "kind": "box",
+                                "dimensions_m": dimension_values,
+                            },
+                            "local_pose": identity_pose,
+                            "provenance": {
+                                "kind": "estimated",
+                                "source": (
+                                    "Rectangular bounding envelope from explicit "
+                                    "component-input XYZ dimensions; not detailed CAD"
+                                ),
+                                "reference": evidence_reference,
+                            },
+                        }
+                    ],
+                }
+            ],
+            "connectors": connectors,
+            "parameter_bindings": [],
+            "optical_sensors": [],
+            "provenance": {
+                "kind": "derived",
+                "source": (
+                    "Versioned host rectangular-chip recipe using explicit package "
+                    "dimensions and estimated envelope-face connector frames"
+                ),
+                "reference": evidence_reference,
+            },
+            "metadata": {
+                "package": "0603",
+                "rated_power_w": rated_power,
+                "geometry_note": (
+                    "Rectangular bounding envelope only; detailed terminal geometry "
+                    "and land pattern are unavailable."
+                ),
+            },
+        }
+        model_instance = {
+            "format": "model-instance-1",
+            "id": f"{target_id}.v1",
+            "variant": "v1",
+            "part": target_id,
+            "version": "1.0.0",
+            "model": dict(model_reference),
+            "parameters": {"resistance": nominal_value},
+            "parameter_uncertainty": uncertainty,
+            "condition": "unverified",
+            "compute": {
+                "relative_cost": 1.0,
+                "notes": (
+                    "Host deterministic ideal-resistor hypothesis; parasitic "
+                    "inductance and capacitance remain outside this PMDL."
+                ),
+            },
+            "metadata": {
+                "host_recipe": RECTANGULAR_CHIP_RESISTOR_RECIPE_ID,
+            },
+        }
+        bundle = {
+            "summary": "Host-generated rectangular-chip resistor bundle.",
+            "artifacts": [
+                {
+                    "path": f"{instantiation_root}/static.part",
+                    "content": json.dumps(
+                        static_part, indent=2, sort_keys=True, allow_nan=False
+                    )
+                    + "\n",
+                },
+                {
+                    "path": f"{instantiation_root}/v1.model",
+                    "content": json.dumps(
+                        model_instance, indent=2, sort_keys=True, allow_nan=False
+                    )
+                    + "\n",
+                },
+            ],
+            "assumptions": [
+                "Connector frames are estimates at opposing rectangular envelope X-face centers."
+            ],
+            "evidence": [
+                (
+                    f"{component_evidence['source']} {component_evidence['sha256']} "
+                    "published parameter locators"
+                ),
+                (
+                    f"Exact reusable PMDL {model_reference['id']} "
+                    f"{model_reference['version']} {model_reference['sha256']}"
+                ),
+            ],
+        }
+        telemetry = {
+            "generation_mode": "host_deterministic",
+            "recipe_id": recipe["recipe_id"],
+            "recipe_schema": recipe["schema"],
+            "recipe_sha256": expected_digest,
+            "component_sha256": component_evidence["sha256"],
+            "model": dict(model_reference),
+            "geometry": "primitive_box_bounding_envelope",
+            "connector_pose_policy": recipe["connector_pose_policy"],
+            "fabrication_policy": recipe["fabrication_policy"],
+        }
+        return bundle, telemetry
+
+    @staticmethod
+    def _write_deterministic_activity(
+        run_root: Path,
+        *,
+        telemetry: Mapping[str, Any],
+        import_plan_path: Path,
+        proposal: Mapping[str, Any],
+        validation_status: str,
+        failure_reason: str | None = None,
+    ) -> dict[str, Any]:
+        activity = {
+            "logged_calls": 0,
+            "successful_calls": 0,
+            "failed_calls": 0,
+            "provider_calls": 0,
+            "excessive_calls": False,
+            "excessive_call_threshold": MAX_MODELING_VALIDATION_ATTEMPTS,
+            "source": "host-deterministic-recipe",
+            "generation_mode": "host_deterministic",
+            "deterministic_validation": validation_status,
+            "host_generation": dict(telemetry),
+            "host_normalizations": [],
+            "raw_successful_response_complete": None,
+            "import_plan_sha256": "sha256:"
+            + hashlib.sha256(import_plan_path.read_bytes()).hexdigest(),
+            "proposal_sha256": "sha256:"
+            + hashlib.sha256(
+                json.dumps(
+                    proposal, sort_keys=True, separators=(",", ":"), allow_nan=False
+                ).encode("utf-8")
+            ).hexdigest(),
+            "note": (
+                "The host built and validated this exact recipe before provider "
+                "client creation; no modeling provider response was used."
+            ),
+        }
+        if failure_reason is not None:
+            activity["failure_reason"] = " ".join(failure_reason.split())[:1_200]
+        write_json_atomic(run_root / "validation-activity.json", activity)
+        return activity
+
+    @staticmethod
+    def _validate_plan_paths(
+        value: Mapping[str, Any], import_plan: Mapping[str, Any]
+    ) -> None:
+        target_id = import_plan.get("target_id")
+        if not isinstance(target_id, str) or not target_id:
+            raise ValueError("host import plan has no target_id")
+        artifacts = value.get("artifacts")
+        if not isinstance(artifacts, list):
+            raise ValueError("modeling response artifacts must be an array")
+        paths = [
+            DirectResponsesModelingAgent._safe_relative(item.get("path"))
+            for item in artifacts
+            if isinstance(item, Mapping)
+        ]
+        if len(paths) != len(artifacts):
+            raise ValueError("modeling response has a non-object artifact")
+        unsupported = [
+            path for path in paths if path.suffix not in {".pmdl", ".part", ".model"}
+        ]
+        if unsupported:
+            raise ValueError(
+                "direct modeling may return only PMDL, static.part, and v1.model; "
+                f"got {unsupported[0].as_posix()!r}"
+            )
+        static_paths = [path for path in paths if path.name == "static.part"]
+        model_paths = [path for path in paths if path.name == "v1.model"]
+        other_records = [
+            path
+            for path in paths
+            if path.suffix in {".part", ".model"}
+            and path.name not in {"static.part", "v1.model"}
+        ]
+        if other_records:
+            raise ValueError(
+                "direct modeling may not add another part/model record: "
+                f"{other_records[0].as_posix()}"
+            )
+        if len(static_paths) != 1 or len(model_paths) != 1:
+            raise ValueError(
+                "direct modeling must return exactly one static.part and one v1.model"
+            )
+        if static_paths[0].parent != model_paths[0].parent:
+            raise ValueError("static.part and v1.model must share one instantiation directory")
+
+        recommended = import_plan.get("recommended_instantiation_root")
+        if recommended is not None:
+            if not isinstance(recommended, str) or not recommended:
+                raise ValueError("host import plan has an invalid instantiation root")
+            expected_parent = DirectResponsesModelingAgent._safe_relative(
+                f"{recommended}/static.part"
+            ).parent
+            if static_paths[0].parent != expected_parent:
+                raise ValueError(
+                    "response instantiation path differs from the host import plan"
+                )
+            unexpected = [
+                path
+                for path in paths
+                if path not in {
+                    expected_parent / "static.part",
+                    expected_parent / "v1.model",
+                }
+            ]
+            if unexpected:
+                raise ValueError(
+                    "recommended-model import may not add another catalog artifact: "
+                    f"{unexpected[0].as_posix()}"
+                )
+        elif static_paths[0].parent.name != target_id:
+            raise ValueError(
+                "new-model import instantiation directory must equal IMPORT_PLAN.target_id"
+            )
+        if recommended is None:
+            pmdl_paths = [path for path in paths if path.suffix == ".pmdl"]
+            if len(pmdl_paths) > 1:
+                raise ValueError("direct modeling may add at most one new PMDL")
+            if pmdl_paths:
+                instantiations = static_paths[0].parent.parent
+                if instantiations.name != "instantiations":
+                    raise ValueError(
+                        "new-model part must live under an instantiations directory"
+                    )
+                owner = instantiations.parent
+                if pmdl_paths[0].parent != owner:
+                    raise ValueError(
+                        "new PMDL must live in the category/device directory that owns "
+                        "the target instantiations directory"
+                    )
+                by_path = {
+                    DirectResponsesModelingAgent._safe_relative(item["path"]): item
+                    for item in artifacts
+                }
+                model_value = _load_json_strict(
+                    by_path[model_paths[0]]["content"], model_paths[0].as_posix()
+                )
+                pmdl_value = _load_json_strict(
+                    by_path[pmdl_paths[0]]["content"], pmdl_paths[0].as_posix()
+                )
+                reference = (
+                    model_value.get("model")
+                    if isinstance(model_value, Mapping)
+                    else None
+                )
+                if (
+                    not isinstance(reference, Mapping)
+                    or not isinstance(pmdl_value, Mapping)
+                    or pmdl_value.get("format") != "pmdl-1"
+                    or reference.get("id") != pmdl_value.get("id")
+                ):
+                    raise ValueError(
+                        "new PMDL identity must be the exact model referenced by v1.model"
+                    )
+
+    @classmethod
+    def _retry_context(cls, value: Mapping[str, Any], error: Exception) -> str:
+        diagnostic = " ".join(
+            f"{type(error).__name__}: {error}".replace("\x00", " ").split()
+        )[: cls.MAX_RETRY_DIAGNOSTIC_CHARS]
+        serialized = json.dumps(value, sort_keys=True, separators=(",", ":"))
+        if len(serialized) <= cls.MAX_RETRY_PROPOSAL_CHARS:
+            prior = serialized
+        else:
+            model_instances: list[dict[str, str]] = []
+            for item in value.get("artifacts", []):
+                if not isinstance(item, Mapping):
+                    continue
+                path = item.get("path")
+                content = item.get("content")
+                if (
+                    isinstance(path, str)
+                    and PurePosixPath(path).name == "v1.model"
+                    and isinstance(content, str)
+                ):
+                    model_instances.append(
+                        {"path": path, "content": content[:4_000]}
+                    )
+            prior = json.dumps(
+                {
+                    "summary": value.get("summary"),
+                    "artifact_paths": [
+                        item.get("path")
+                        for item in value.get("artifacts", [])
+                        if isinstance(item, Mapping)
+                    ],
+                    "v1_model_artifacts": model_instances,
+                    "note": (
+                        "non-model artifact content omitted because it exceeded the retry bound"
+                    ),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        return (
+            "The previous complete proposal failed deterministic host validation. "
+            "Correct the reported defect and return the entire replacement bundle. "
+            "In static.part and v1.model, remove these exact case-insensitive keys "
+            "from both the top level and every nested metadata object: "
+            f"{', '.join(PROCUREMENT_IDENTITY_FIELD_CONTRACT)}. "
+            f"Validation diagnostic: {diagnostic}\n"
+            f"Previous proposal: {prior}"
+        )
+
+    @classmethod
+    def _remove_host_owned_procurement_identity_fields(
+        cls,
+        value: Mapping[str, Any],
+        import_plan: Mapping[str, Any],
+    ) -> tuple[dict[str, Any], tuple[dict[str, Any], ...]]:
+        """Remove only catalog-schema-reserved procurement identity fields.
+
+        The adjacent ``.procurement`` record is deterministically extracted
+        from the protected component input.  A model response therefore cannot
+        add information here: removing these reserved copies only restores the
+        static/model ownership boundary.  All other bytes remain subject to the
+        normal catalog and fabrication validators.
+        """
+
+        contracts = import_plan.get("artifact_contracts")
+        if not isinstance(contracts, Mapping):
+            raise ValueError("IMPORT_PLAN has no artifact contracts")
+        expected_fields = list(PROCUREMENT_IDENTITY_FIELD_CONTRACT)
+        for artifact_name in ("static.part", "v1.model"):
+            contract = contracts.get(artifact_name)
+            if (
+                not isinstance(contract, Mapping)
+                or contract.get("forbidden_procurement_identity_fields")
+                != expected_fields
+                or contract.get("forbidden_locations")
+                != ["top_level", "metadata_at_any_depth"]
+            ):
+                raise ValueError(
+                    f"IMPORT_PLAN has no exact {artifact_name} procurement boundary"
+                )
+
+        artifacts = value.get("artifacts")
+        if not isinstance(artifacts, list):
+            return dict(value), ()
+        normalized_artifacts: list[Any] = []
+        normalizations: list[dict[str, Any]] = []
+
+        def scrub_metadata(
+            item: Any, context: str, removed: list[str]
+        ) -> Any:
+            if isinstance(item, Mapping):
+                cleaned: dict[str, Any] = {}
+                for key, nested in item.items():
+                    path = f"{context}.{key}"
+                    if (
+                        isinstance(key, str)
+                        and key.casefold() in PROCUREMENT_METADATA_FIELDS
+                    ):
+                        removed.append(path)
+                    else:
+                        cleaned[key] = scrub_metadata(nested, path, removed)
+                return cleaned
+            if isinstance(item, list):
+                return [
+                    scrub_metadata(nested, f"{context}[{index}]", removed)
+                    for index, nested in enumerate(item)
+                ]
+            return item
+
+        record_contracts = {
+            "static.part": ("static-part-2", "static_part"),
+            "v1.model": ("model-instance-1", "model_instance"),
+        }
+        for item in artifacts:
+            if not isinstance(item, Mapping):
+                normalized_artifacts.append(item)
+                continue
+            path = item.get("path")
+            content = item.get("content")
+            name = PurePosixPath(path).name if isinstance(path, str) else None
+            record_contract = record_contracts.get(name)
+            if record_contract is None or not isinstance(content, str):
+                normalized_artifacts.append(dict(item))
+                continue
+            expected_format, context = record_contract
+            record = _load_json_strict(content, path)
+            if not isinstance(record, dict) or record.get("format") != expected_format:
+                normalized_artifacts.append(dict(item))
+                continue
+            removed: list[str] = []
+            for key in tuple(record):
+                if (
+                    isinstance(key, str)
+                    and key.casefold() in PROCUREMENT_METADATA_FIELDS
+                ):
+                    removed.append(f"{context}.{key}")
+                    del record[key]
+            metadata = record.get("metadata")
+            if isinstance(metadata, (Mapping, list)):
+                record["metadata"] = scrub_metadata(
+                    metadata, f"{context}.metadata", removed
+                )
+            if not removed:
+                normalized_artifacts.append(dict(item))
+                continue
+            normalized_artifacts.append(
+                {
+                    **item,
+                    "content": json.dumps(
+                        record,
+                        indent=2,
+                        sort_keys=True,
+                        allow_nan=False,
+                    )
+                    + "\n",
+                }
+            )
+            normalizations.append(
+                {
+                    "artifact_path": path,
+                    "action": "remove_host_owned_procurement_identity_fields",
+                    "removed_paths": sorted(removed),
+                    "destination": "adjacent_host_procurement_record",
+                    "raw_response_complete": False,
+                }
+            )
+        if not normalizations:
+            return dict(value), ()
+        return (
+            {**value, "artifacts": normalized_artifacts},
+            tuple(normalizations),
+        )
+
+    @classmethod
+    def _enforce_model_instance_uncertainty_policy(
+        cls,
+        value: Mapping[str, Any],
+        import_plan: Mapping[str, Any],
+    ) -> tuple[dict[str, Any], tuple[dict[str, Any], ...]]:
+        """Deterministically complete only omitted uncertainty containers.
+
+        ``parameter_uncertainty`` is structurally mandatory for every
+        ``model-instance-1``. Explicit one-parameter tolerance evidence becomes
+        exact uniform bounds; an empty object is used only when the host plan
+        proves no uncertainty/tolerance fact exists. Every ambiguous or other
+        missing field remains a deterministic validation error.
+        """
+
+        contracts = import_plan.get("artifact_contracts")
+        model_contract = (
+            contracts.get("v1.model") if isinstance(contracts, Mapping) else None
+        )
+        uncertainty_policy = (
+            model_contract.get("uncertainty_policy")
+            if isinstance(model_contract, Mapping)
+            else None
+        )
+        if not isinstance(uncertainty_policy, Mapping):
+            raise ValueError("IMPORT_PLAN has no model-instance uncertainty policy")
+        artifacts = value.get("artifacts")
+        if not isinstance(artifacts, list):
+            return dict(value), ()
+        normalized_artifacts: list[Any] = []
+        normalizations: list[dict[str, Any]] = []
+        for item in artifacts:
+            if not isinstance(item, Mapping):
+                normalized_artifacts.append(item)
+                continue
+            path = item.get("path")
+            content = item.get("content")
+            if (
+                not isinstance(path, str)
+                or PurePosixPath(path).name != "v1.model"
+                or not isinstance(content, str)
+            ):
+                normalized_artifacts.append(dict(item))
+                continue
+            model_instance = _load_json_strict(content, path)
+            if (
+                not isinstance(model_instance, dict)
+                or model_instance.get("format") != "model-instance-1"
+            ):
+                normalized_artifacts.append(dict(item))
+                continue
+            parameters = model_instance.get("parameters")
+            existing_uncertainty = model_instance.get("parameter_uncertainty")
+            uncertainty_present = "parameter_uncertainty" in model_instance
+            source_field = uncertainty_policy.get("source_field")
+            empty_allowed = uncertainty_policy.get("empty_object_allowed") is True
+            normalization: dict[str, Any]
+            if source_field == "published_parameter_facts.tolerance_fraction":
+                tolerance = uncertainty_policy.get("tolerance_fraction")
+                if (
+                    isinstance(tolerance, bool)
+                    or not isinstance(tolerance, (int, float))
+                    or not math.isfinite(float(tolerance))
+                    or not 0 <= float(tolerance) < 1
+                    or not isinstance(parameters, Mapping)
+                    or len(parameters) != 1
+                ):
+                    raise ValueError(
+                        "cannot deterministically map the published tolerance to "
+                        "parameter_uncertainty"
+                    )
+                parameter, nominal = next(iter(parameters.items()))
+                if (
+                    not isinstance(parameter, str)
+                    or isinstance(nominal, bool)
+                    or not isinstance(nominal, (int, float))
+                    or not math.isfinite(float(nominal))
+                ):
+                    raise ValueError(
+                        "published tolerance requires one numeric initialized parameter"
+                    )
+                fraction = float(tolerance)
+                value_number = float(nominal)
+                first_bound = value_number * (1.0 - fraction)
+                second_bound = value_number * (1.0 + fraction)
+                lower = min(first_bound, second_bound)
+                upper = max(first_bound, second_bound)
+                if fraction == 0:
+                    expected_uncertainty = {
+                        parameter: {
+                            "distribution": "fixed",
+                            "parameters": {},
+                        }
+                    }
+                    action = "derive_fixed_parameter_uncertainty_from_zero_tolerance"
+                else:
+                    expected_uncertainty = {
+                        parameter: {
+                            "distribution": "uniform",
+                            "parameters": {"lower": lower, "upper": upper},
+                        }
+                    }
+                    action = "derive_uniform_parameter_uncertainty_from_tolerance"
+                if existing_uncertainty == expected_uncertainty:
+                    normalized_artifacts.append(dict(item))
+                    continue
+                if existing_uncertainty not in (None, {}):
+                    raise ValueError(
+                        "v1.model parameter_uncertainty conflicts with the exact "
+                        "published tolerance policy"
+                    )
+                model_instance["parameter_uncertainty"] = expected_uncertainty
+                normalization = {
+                    "artifact_path": path,
+                    "action": action,
+                    "parameter": parameter,
+                    "source_field": source_field,
+                    "source_value": fraction,
+                    "raw_response_complete": False,
+                }
+                if fraction > 0:
+                    normalization.update({"lower": lower, "upper": upper})
+            elif empty_allowed:
+                if uncertainty_present:
+                    if existing_uncertainty == {}:
+                        normalized_artifacts.append(dict(item))
+                        continue
+                    raise ValueError(
+                        "v1.model parameter_uncertainty invents a distribution "
+                        "without a source uncertainty fact"
+                    )
+                model_instance["parameter_uncertainty"] = {}
+                normalization = {
+                    "artifact_path": path,
+                    "action": "insert_empty_required_parameter_uncertainty",
+                    "source_field": None,
+                    "raw_response_complete": False,
+                }
+            else:
+                if (
+                    uncertainty_present
+                    and isinstance(existing_uncertainty, Mapping)
+                    and bool(existing_uncertainty)
+                ):
+                    normalized_artifacts.append(dict(item))
+                    continue
+                raise ValueError(
+                    "v1.model omitted parameter_uncertainty despite an explicit or "
+                    "ambiguous source uncertainty fact"
+                )
+            normalized_artifacts.append(
+                {
+                    **item,
+                    "content": json.dumps(
+                        model_instance,
+                        indent=2,
+                        sort_keys=True,
+                        allow_nan=False,
+                    )
+                    + "\n",
+                }
+            )
+            normalizations.append(normalization)
+        if not normalizations:
+            return dict(value), ()
+        return (
+            {**value, "artifacts": normalized_artifacts},
+            tuple(normalizations),
+        )
+
+    @staticmethod
+    def _write_direct_activity(
+        run_root: Path,
+        *,
+        calls: int,
+        successful: int,
+        host_normalizations: Iterable[Mapping[str, Any]] = (),
+    ) -> dict[str, Any]:
+        normalization_records = [dict(item) for item in host_normalizations]
+        activity = {
+            "logged_calls": calls,
+            "successful_calls": successful,
+            "failed_calls": calls - successful,
+            "excessive_calls": calls > MAX_MODELING_VALIDATION_ATTEMPTS,
+            "excessive_call_threshold": MAX_MODELING_VALIDATION_ATTEMPTS,
+            "source": "direct-responses-host-validation",
+            "host_normalizations": normalization_records,
+            "raw_successful_response_complete": (
+                successful == 1
+                and not any(item.get("attempt") == calls for item in normalization_records)
+            ),
+            "note": (
+                "Each Responses proposal was independently materialized and checked by "
+                "the deterministic host catalog validator."
+            ),
+        }
+        write_json_atomic(run_root / "validation-activity.json", activity)
+        return activity
+
+    @staticmethod
+    def _quarantine_failed_proposal(
+        workspace: Path, run_root: Path, attempt: int
+    ) -> Path | None:
+        """Move any post-rename partial proposal out of the next attempt."""
+
+        proposed = workspace / "proposed"
+        if not proposed.exists() and not proposed.is_symlink():
+            return None
+        if proposed.is_symlink() or not proposed.is_dir():
+            raise ValueError(f"failed proposal is not a safe directory: {proposed}")
+        quarantine = run_root / f"failed-proposal-attempt-{attempt}"
+        if quarantine.exists() or quarantine.is_symlink():
+            raise FileExistsError(f"failed proposal quarantine already exists: {quarantine}")
+        os.replace(proposed, quarantine)
+        return quarantine
+
+    def run(
+        self,
+        inputs: ModelingInputs,
+        *,
+        canary: bool = False,
+        target: str | None = None,
+        ingestion_run_id: str | None = None,
+        cost_scope: str | None = None,
+        cost_scope_limit_usd: float | None = None,
+        client: Any | None = None,
+    ) -> tuple[Path, dict[str, Any], float]:
+        _validate_strict_output_schema(
+            RESPONSES_MODELING_SCHEMA, source="direct modeling output schema"
+        )
+        preflight = modeling_preflight(inputs.component_information)
+        if not preflight["eligible"]:
+            raise UnsupportedModelingPhysics(preflight)
+        target = target or Path(inputs.component_information).stem
+        if cost_scope is None and cost_scope_limit_usd is None:
+            component_digest = hashlib.sha256(
+                Path(inputs.component_information).read_bytes()
+            ).hexdigest()
+            cost_scope = f"standalone-part:{component_digest}"
+            cost_scope_limit_usd = MAX_FULLY_INGESTED_PART_COST_USD
+        elif (cost_scope is None) != (cost_scope_limit_usd is None):
+            raise ValueError(
+                "cost_scope and cost_scope_limit_usd must be provided together"
+            )
+
+        modeling_run_id = f"direct-modeling-{uuid.uuid4()}"
+        workspace = self.prepare_workspace(inputs, modeling_run_id)
+        run_root = workspace.parent
+        import_plan_path = workspace / IMPORT_PLAN_FILENAME
+        import_plan = _read_json_object(import_plan_path)
+        deterministic = self._deterministic_rectangular_chip_bundle(
+            import_plan, Path(inputs.component_information)
+        )
+        if deterministic is not None:
+            value, telemetry = deterministic
+            try:
+                _validate_modeling_value(value)
+                _reject_api_key_material(value, _effective_api_key(self.api_key))
+                self._validate_plan_paths(value, import_plan)
+                if canary:
+                    self._validate_canary_value(value)
+                artifacts = self._materialize_artifacts(
+                    workspace,
+                    value,
+                    procurement_text_fallback=None,
+                )
+            except Exception as exc:
+                self._write_deterministic_activity(
+                    run_root,
+                    telemetry=telemetry,
+                    import_plan_path=import_plan_path,
+                    proposal=value,
+                    validation_status="failed",
+                    failure_reason=f"{type(exc).__name__}: {exc}",
+                )
+                raise
+            _write_text_atomic(
+                workspace / "agent-output.json",
+                json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n",
+            )
+            self._write_deterministic_activity(
+                run_root,
+                telemetry=telemetry,
+                import_plan_path=import_plan_path,
+                proposal=value,
+                validation_status="passed",
+            )
+            return artifacts, value, 0.0
+
+        if client is None:
+            try:
+                from openai import OpenAI  # type: ignore
+            except ImportError as exc:
+                raise RuntimeError(
+                    "install the 'agents' extra to run the direct API agent"
+                ) from exc
+            client = OpenAI(api_key=self.api_key) if self.api_key else OpenAI()
+
+        bundled_context = (workspace / "AGENTS.md").read_text(encoding="utf-8")
+        base_input = [
+            {
+                "role": "system",
+                "content": (
+                    self.prompt(Path(inputs.component_information).name)
+                    + "\n\n"
+                    + bundled_context
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Return one minimal complete import bundle for the authoritative target. "
+                    "Follow IMPORT_PLAN exactly and produce a validation-ready first attempt."
+                ),
+            },
+        ]
+        charged_total = 0.0
+        retry_message: str | None = None
+        host_normalizations: list[dict[str, Any]] = []
+        for attempt in range(1, self.max_validation_attempts + 1):
+            request_input = list(base_input)
+            if retry_message is not None:
+                request_input.append({"role": "user", "content": retry_message})
+            request = {
+                "model": self.model,
+                "reasoning": {"effort": self.reasoning_effort},
+                "input": request_input,
+                "max_output_tokens": self.rollout_token_limit,
+                "text": {
+                    "format": _schema_wrapper(
+                        "component_modeling_bundle", RESPONSES_MODELING_SCHEMA
+                    )
+                },
+                "store": False,
+            }
+            counted_input = _count_response_input_tokens(
+                client, request, maximum=self.max_input_tokens
+            )
+            reserved = self.pricing.worst_case(
+                max_input_tokens=counted_input,
+                max_output_tokens=self.rollout_token_limit,
+            )
+            call_id = f"{modeling_run_id}-attempt-{attempt}"
+            self.ledger.reserve(
+                call_id,
+                reserved,
+                {
+                    "kind": "modeling-canary" if canary else "modeling",
+                    "model": self.model,
+                    "backend": self.backend_id,
+                    "target": target,
+                    "ingestion_run_id": ingestion_run_id,
+                    "modeling_run_id": modeling_run_id,
+                    "validation_attempt": attempt,
+                    "counted_input_tokens": counted_input,
+                },
+                cost_scope=cost_scope,
+                cost_scope_limit_usd=cost_scope_limit_usd,
+            )
+            response_observed = False
+            usage: Usage | None = None
+            value: dict[str, Any] = {}
+            try:
+                response = client.responses.create(**request)
+                response_observed = True
+                usage = _usage_from_response(response)
+                value = _load_json_strict(
+                    response.output_text,
+                    f"direct modeling response attempt {attempt}",
+                )
+                if not isinstance(value, dict):
+                    raise ValueError("direct modeling response must be a JSON object")
+                _validate_shape(value, RESPONSES_MODELING_SCHEMA)
+                _validate_modeling_value(value)
+                _reject_api_key_material(value, _effective_api_key(self.api_key))
+                value, attempt_normalizations = (
+                    self._enforce_model_instance_uncertainty_policy(
+                        value, import_plan
+                    )
+                )
+                host_normalizations.extend(
+                    {**item, "attempt": attempt}
+                    for item in attempt_normalizations
+                )
+                value, procurement_boundary_normalizations = (
+                    self._remove_host_owned_procurement_identity_fields(
+                        value, import_plan
+                    )
+                )
+                host_normalizations.extend(
+                    {**item, "attempt": attempt}
+                    for item in procurement_boundary_normalizations
+                )
+                self._validate_plan_paths(value, import_plan)
+                if canary:
+                    self._validate_canary_value(value)
+                artifacts = self._materialize_artifacts(
+                    workspace,
+                    value,
+                    procurement_text_fallback=None,
+                )
+            except Exception as exc:
+                if response_observed:
+                    charge = self.ledger.settle(
+                        call_id,
+                        usage=usage,
+                        pricing=self.pricing,
+                        status="invalid_output",
+                    )
+                    charged_total += charge
+                    if attempt < self.max_validation_attempts:
+                        self._quarantine_failed_proposal(
+                            workspace, run_root, attempt
+                        )
+                        retry_message = self._retry_context(
+                            value, exc
+                        )
+                        continue
+                    self._write_direct_activity(
+                        run_root,
+                        calls=attempt,
+                        successful=0,
+                        host_normalizations=host_normalizations,
+                    )
+                else:
+                    charged_total += self.ledger.settle(
+                        call_id,
+                        usage=None,
+                        pricing=self.pricing,
+                        status="failed_after_dispatch",
+                    )
+                raise
+            charged_total += self.ledger.settle(
+                call_id, usage=usage, pricing=self.pricing
+            )
+            _write_text_atomic(
+                workspace / "agent-output.json",
+                json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n",
+            )
+            self._write_direct_activity(
+                run_root,
+                calls=attempt,
+                successful=1,
+                host_normalizations=host_normalizations,
+            )
+            return artifacts, value, charged_total
+        raise RuntimeError("direct modeling exhausted its validation attempts")
+
+
 def _modeling_validation_activity(workspace: Path) -> dict[str, Any]:
     """Read host-written validator telemetry without treating it as admission proof."""
 
@@ -2866,6 +4591,30 @@ def _modeling_validation_activity(workspace: Path) -> dict[str, Any]:
     activity["event_observed_result_records"] = event_count
     activity["event_log_agrees"] = event_count == activity["logged_calls"]
     return activity
+
+
+def _deferred_procurement_directory(
+    component: Mapping[str, Any], target: str
+) -> str | None:
+    """Return an explicitly supported identity-only instantiation location.
+
+    The placement does not bind the record to a static part.  It only keeps a
+    deferred import with its planned physical category while ``provides: []``
+    records the absence of a construction-ready model.
+    """
+
+    part_kind = component.get("part_kind")
+    domains = component.get("domains", [])
+    normalized_domains = {
+        item.casefold() for item in domains if isinstance(item, str)
+    }
+    if (
+        isinstance(part_kind, str)
+        and "thermistor" in part_kind.casefold()
+        and "thermoelectric" in normalized_domains
+    ):
+        return f"thermoelectric/thermistors/instantiations/{target}"
+    return None
 
 
 def _materialize_deferred_host_procurement(
@@ -2939,7 +4688,12 @@ def _materialize_deferred_host_procurement(
             "deferred procurement receipt exists without its exact artifacts"
         )
 
-    written, receipt = materialize_deferred_procurement(candidate, context_path)
+    component = _read_json_object(source)
+    written, receipt = materialize_deferred_procurement(
+        candidate,
+        context_path,
+        unbound_directory=_deferred_procurement_directory(component, target),
+    )
     if receipt is None:
         if written:
             raise RuntimeError("deferred procurement artifacts have no host receipt")
@@ -2965,6 +4719,11 @@ def run_modeling_proposal(
     output_directory: str | Path,
     *,
     force: bool = False,
+    canary: bool = False,
+    ingestion_run_id: str | None = None,
+    cost_scope: str | None = None,
+    cost_scope_limit_usd: float | None = None,
+    client: Any | None = None,
 ) -> dict[str, Any]:
     """Run or resume one full modeling proposal without promoting artifacts."""
 
@@ -2975,21 +4734,39 @@ def run_modeling_proposal(
     settings = {
         "workflow": "contraption.modeling-input/v2",
         "model": agent.model,
+        "backend": agent.backend_id,
         "reasoning_effort": agent.reasoning_effort,
         "rollout_token_limit": agent.rollout_token_limit,
         "max_input_tokens": agent.max_input_tokens,
-        "schema": MODELING_SCHEMA,
+        "schema": (
+            RESPONSES_MODELING_SCHEMA
+            if agent.backend_id == "responses-api"
+            else MODELING_SCHEMA
+        ),
+        "canary": canary,
         "preflight_schema": preflight["schema"],
         "prompt_sha256": hashlib.sha256(
             agent.prompt(inputs.component_information.name).encode("utf-8")
         ).hexdigest(),
     }
+    if preflight["eligible"] and isinstance(agent, DirectResponsesModelingAgent):
+        import_plan = build_modeling_import_plan(inputs)
+        serialized_plan = json.dumps(
+            import_plan, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode("utf-8")
+        settings["import_plan_sha256"] = (
+            "sha256:" + hashlib.sha256(serialized_plan).hexdigest()
+        )
+        recipe = import_plan.get("deterministic_recipe")
+        settings["deterministic_recipe_sha256"] = (
+            recipe.get("recipe_sha256") if isinstance(recipe, Mapping) else None
+        )
     from .procurement_extraction import procurement_fallback_identity
 
     settings["procurement_text_fallback"] = dict(
         procurement_fallback_identity(agent.procurement_text_fallback)
     )
-    input_hash = agent_input_hash("modeling", inputs.hash_files(), settings)
+    input_hash = agent_input_hash("modeling", agent.hash_files(inputs), settings)
     receipt_path = output_directory / f"{target}.json"
     if not preflight["eligible"]:
         procurement = _materialize_deferred_host_procurement(
@@ -3059,6 +4836,11 @@ def run_modeling_proposal(
             activity = receipt.get("validation_activity")
             if not isinstance(activity, dict):
                 activity = _modeling_validation_activity(artifacts.parent)
+            host_normalizations = activity.get("host_normalizations", [])
+            if not isinstance(host_normalizations, list):
+                raise ValueError(
+                    f"{receipt_path}: validation activity has invalid host normalizations"
+                )
             return {
                 "target": target,
                 "status": "skipped_exact_input",
@@ -3067,10 +4849,19 @@ def run_modeling_proposal(
                 "staging_artifacts": str(artifacts),
                 "charged_usd": 0.0,
                 "validation_activity": activity,
+                "host_normalizations": host_normalizations,
                 "promoted": False,
             }
 
-    artifacts, proposal, charged = agent.run(inputs, canary=False)
+    artifacts, proposal, charged = agent.run(
+        inputs,
+        canary=canary,
+        target=target,
+        ingestion_run_id=ingestion_run_id,
+        cost_scope=cost_scope,
+        cost_scope_limit_usd=cost_scope_limit_usd,
+        client=client,
+    )
     _validate_modeling_value(proposal)
     _reject_api_key_material(proposal, _effective_api_key(agent.api_key))
     artifacts = artifacts.resolve()
@@ -3085,22 +4876,55 @@ def run_modeling_proposal(
     if materialized.resolve() != artifacts:
         raise ValueError("modeling proposal/artifact workspace identity mismatch")
     run_id = artifacts.parents[1].name
-    event = next(
-        (
-            item
-            for item in reversed(agent.ledger.snapshot().get("events", []))
-            if item.get("run_id") == run_id
-        ),
-        None,
-    )
-    if event is None:
-        raise RuntimeError(f"settled modeling ledger event is missing for {run_id}")
-    ledger_charge = event.get("charged_usd")
-    if not isinstance(ledger_charge, (int, float)) or isinstance(ledger_charge, bool):
-        raise RuntimeError(f"modeling ledger event has invalid charge for {run_id}")
-    if abs(float(ledger_charge) - charged) > 1e-9:
-        raise RuntimeError(f"modeling return/ledger charge mismatch for {run_id}")
+    events = [
+        item
+        for item in agent.ledger.snapshot().get("events", [])
+        if item.get("run_id") == run_id
+        or (
+            isinstance(item.get("metadata"), Mapping)
+            and item["metadata"].get("modeling_run_id") == run_id
+        )
+    ]
     activity = _modeling_validation_activity(artifacts.parent)
+    usage: dict[str, Any] | None
+    if not events:
+        if (
+            charged != 0.0
+            or activity.get("source") != "host-deterministic-recipe"
+            or activity.get("deterministic_validation") != "passed"
+            or activity.get("provider_calls") != 0
+        ):
+            raise RuntimeError(
+                f"settled modeling ledger events are missing for {run_id}"
+            )
+        usage = None
+    else:
+        ledger_charge = sum(float(item.get("charged_usd", 0.0)) for item in events)
+        if abs(ledger_charge - charged) > 1e-9:
+            raise RuntimeError(f"modeling return/ledger charge mismatch for {run_id}")
+        raw_usages = [item.get("usage") for item in events]
+        if all(isinstance(item, Mapping) for item in raw_usages):
+            cache_writes = [item.get("cache_write_input_tokens") for item in raw_usages]
+            usage = {
+                "input_tokens": sum(int(item.get("input_tokens", 0)) for item in raw_usages),
+                "cached_input_tokens": sum(
+                    int(item.get("cached_input_tokens", 0)) for item in raw_usages
+                ),
+                "output_tokens": sum(int(item.get("output_tokens", 0)) for item in raw_usages),
+                "cache_write_input_tokens": (
+                    sum(int(value) for value in cache_writes)
+                    if all(
+                        isinstance(value, int) and not isinstance(value, bool)
+                        for value in cache_writes
+                    )
+                    else None
+                ),
+            }
+        else:
+            usage = None
+    host_normalizations = activity.get("host_normalizations", [])
+    if not isinstance(host_normalizations, list):
+        raise ValueError("modeling validation activity has invalid host normalizations")
     receipt = {
         "schema": "contraption.modeling-proposal/v1",
         "status": "completed",
@@ -3110,10 +4934,13 @@ def run_modeling_proposal(
         "model": agent.model,
         "reasoning_effort": agent.reasoning_effort,
         "proposal": proposal,
-        "usage": event.get("usage"),
+        "usage": usage,
         "charged_usd": charged,
         "staging_artifacts": str(artifacts),
         "validation_activity": activity,
+        "host_normalizations": host_normalizations,
+        "generation_mode": activity.get("generation_mode", "provider_response"),
+        "provider_calls": activity.get("provider_calls", len(events)),
         "promoted": False,
     }
     write_json_atomic(receipt_path, receipt)
@@ -3123,8 +4950,11 @@ def run_modeling_proposal(
         "input_hash": input_hash,
         "proposal_path": str(receipt_path.resolve()),
         "staging_artifacts": str(artifacts),
-        "usage": event.get("usage"),
+        "usage": usage,
         "charged_usd": charged,
         "validation_activity": activity,
+        "host_normalizations": host_normalizations,
+        "generation_mode": activity.get("generation_mode", "provider_response"),
+        "provider_calls": activity.get("provider_calls", len(events)),
         "promoted": False,
     }

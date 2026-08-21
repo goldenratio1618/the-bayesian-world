@@ -115,6 +115,7 @@ Different `vN.model` files represent distinct model hypotheses or fidelities for
 the same invariant physical part. Do not duplicate static geometry, connectors,
 fabrication constraints, deterministic shape references, or provenance inside a
 model instance. Purchasing, supplier, lifecycle, and product-identity facts
-belong in central [`procurement-record-1`](./PROCUREMENT.md) files, not in either
-`.model` or `.part`. Do not use variants to bypass a PMDL hash change; update the exact
+belong in instantiation-adjacent [`procurement-record-1`](./PROCUREMENT.md)
+`*.procurement` files, not in either `.model` or `.part`. Do not use variants to
+bypass a PMDL hash change; update the exact
 reference and requalify the closure.

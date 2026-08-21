@@ -102,7 +102,7 @@ The static record below is invariant across the model hypotheses listed later.
 
 ### External procurement records
 
-- `yageo.rc0603fr-07220rl` (`sha256:46f1e94de11ae6198b2760102df5189870f7cae142f0f3bbef9d33fdde0b8431`): Yageo; product_name=RC0603FR-07220RL, manufacturer_part_number=RC0603FR-07220RL.
+- `yageo.rc0603fr-07220rl` (`sha256:90555adaef0a6995f210ea441b2786883d80e57ee5db05efabb6b90a517cdb74`): Yageo; product_name=RC0603FR-07220RL, manufacturer_part_number=RC0603FR-07220RL.
   - product_page: [https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-07220RL](https://www.yageo.com/en/ProductSearch/PartNumberSearch?partNo=RC0603FR-07220RL)
 
 ## Model hypothesis v1: Fixed resistor with fitted parasitics
@@ -124,29 +124,34 @@ Every declared PMDL parameter must be initialized exactly once. Values are check
 
 | Parameter | Value | Unit | Allowed bounds | Instance uncertainty | Learnable |
 |---|---:|---|---|---|---|
-| `resistance` | 220.0 | `ohm` | $[1.0000000000000001e-09, 1000000000000]$ | `{
-  "distribution": "normal",
-  "parameters": {
-    "std": 2.2
-  }
-}` | `True` |
-| `inductance` | 1e-09 | `H` | $[1.0000000000000001e-15, 0.001]$ | `{
-  "distribution": "lognormal",
-  "parameters": {
-    "std": 0.5
-  }
-}` | `True` |
-| `capacitance` | 1e-12 | `F` | $[1.0000000000000001e-18, 9.9999999999999995e-07]$ | `{
-  "distribution": "lognormal",
-  "parameters": {
-    "std": 0.5
-  }
-}` | `True` |
+| `resistance` | 220.0 | `ohm` | $[1.0000000000000001e-09, 1000000000000]$ | `{"distribution": "normal", "parameters": {"std": 2.2}}` | `True` |
+| `inductance` | 1e-09 | `H` | $[1.0000000000000001e-15, 0.001]$ | `{"distribution": "lognormal", "parameters": {"std": 0.5}}` | `True` |
+| `capacitance` | 1e-12 | `F` | $[1.0000000000000001e-18, 9.9999999999999995e-07]$ | `{"distribution": "lognormal", "parameters": {"std": 0.5}}` | `True` |
+
+### Equation symbol key
+
+For readable equations, this README assigns deterministic short display symbols by declaration role. These aliases are unique within this PMDL file and affect presentation only; the exact authoritative identifier is shown here and in the DSL source below each equation.
+
+| Display | PMDL identifier | Role | Meaning |
+|---|---|---|---|
+| $x_{1}$ | `inductor_current` | state | Current through the series parasitic inductance and resistance from terminal p to terminal n. |
+| $\dot{x}_{1}$ | `inductor_current_dot` | state derivative | Time derivative of inductor_current. |
+| $x_{2}$ | `capacitor_voltage` | state | Voltage across the parallel parasitic capacitance, positive at terminal p. |
+| $\dot{x}_{2}$ | `capacitor_voltage_dot` | state derivative | Time derivative of capacitor_voltage. |
+| $z_{1}$ | `branch_current` | algebraic | Series resistor-inductor branch current from p to n. |
+| $z_{2}$ | `capacitor_current` | algebraic | Parallel capacitor current from p to n. |
+| $\theta_{1}$ | `resistance` | parameter | Actual terminal resistance; the published one-percent tolerance is the nominal prior scale. |
+| $\theta_{2}$ | `inductance` | parameter | Uncharacterized series parasitic inductance, initialized to a small positive fitting prior. |
+| $\theta_{3}$ | `capacitance` | parameter | Uncharacterized parallel parasitic capacitance, initialized to a small positive fitting prior. |
+| $\varepsilon_{1}$ | `v_p` | power-port effort (p) | v_p relative to circuit reference |
+| $\phi_{1}$ | `i_p` | power-port flow (p) | — |
+| $\varepsilon_{2}$ | `v_n` | power-port effort (n) | v_n relative to circuit reference |
+| $\phi_{2}$ | `i_n` | power-port flow (n) | — |
 
 #### Residual relation: terminal_voltage_across_capacitance
 
 $$
-\left(\left(capacitor_{\mathrm{voltage}} - v_{\mathrm{p}}\right) + v_{\mathrm{n}}\right) = 0
+\left(\left(x_{2} - \varepsilon_{1}\right) + \varepsilon_{2}\right) = 0
 $$
 
 DSL source: `capacitor_voltage - v_p + v_n`
@@ -155,7 +160,7 @@ Annotation: The parasitic capacitance is directly across the two terminals.
 #### Residual relation: capacitor_constitutive_law
 
 $$
-\left(capacitor_{\mathrm{current}} - \left(capacitance \, capacitor_{\mathrm{voltage\_dot}}\right)\right) = 0
+\left(z_{2} - \left(\theta_{3} \, \dot{x}_{2}\right)\right) = 0
 $$
 
 DSL source: `capacitor_current - capacitance * capacitor_voltage_dot`
@@ -164,7 +169,7 @@ Annotation: Capacitor current is capacitance times terminal-voltage rate.
 #### Residual relation: series_rl_branch
 
 $$
-\left(\left(\left(v_{\mathrm{p}} - v_{\mathrm{n}}\right) - \left(resistance \, branch_{\mathrm{current}}\right)\right) - \left(inductance \, inductor_{\mathrm{current\_dot}}\right)\right) = 0
+\left(\left(\left(\varepsilon_{1} - \varepsilon_{2}\right) - \left(\theta_{1} \, z_{1}\right)\right) - \left(\theta_{2} \, \dot{x}_{1}\right)\right) = 0
 $$
 
 DSL source: `v_p - v_n - resistance * branch_current - inductance * inductor_current_dot`
@@ -173,7 +178,7 @@ Annotation: The series branch combines the fitted resistance and parasitic induc
 #### Residual relation: branch_current_state
 
 $$
-\left(inductor_{\mathrm{current}} - branch_{\mathrm{current}}\right) = 0
+\left(x_{1} - z_{1}\right) = 0
 $$
 
 DSL source: `inductor_current - branch_current`
@@ -182,7 +187,7 @@ Annotation: The inductor state is the series branch current.
 #### Residual relation: terminal_current_balance
 
 $$
-\left(\left(i_{\mathrm{p}} - branch_{\mathrm{current}}\right) - capacitor_{\mathrm{current}}\right) = 0
+\left(\left(\phi_{1} - z_{1}\right) - z_{2}\right) = 0
 $$
 
 DSL source: `i_p - branch_current - capacitor_current`
@@ -191,7 +196,7 @@ Annotation: The p-terminal current splits between the series branch and capacito
 #### Residual relation: charge_conservation
 
 $$
-\left(i_{\mathrm{p}} + i_{\mathrm{n}}\right) = 0
+\left(\phi_{1} + \phi_{2}\right) = 0
 $$
 
 DSL source: `i_p + i_n`
@@ -200,7 +205,7 @@ Annotation: Terminal currents sum to zero under the into-component convention.
 #### Stored energy: inductive_energy [J]
 
 $$
-\left(\left(0.5 \, inductance\right) \, \left(inductor_{\mathrm{current}}\right)^{2}\right)
+\left(\left(0.5 \, \theta_{2}\right) \, \left(x_{1}\right)^{2}\right)
 $$
 
 DSL source: `0.5 * inductance * inductor_current ** 2`
@@ -209,7 +214,7 @@ Annotation: Energy stored in the parasitic inductance.
 #### Stored energy: capacitive_energy [J]
 
 $$
-\left(\left(0.5 \, capacitance\right) \, \left(capacitor_{\mathrm{voltage}}\right)^{2}\right)
+\left(\left(0.5 \, \theta_{3}\right) \, \left(x_{2}\right)^{2}\right)
 $$
 
 DSL source: `0.5 * capacitance * capacitor_voltage ** 2`
@@ -218,7 +223,7 @@ Annotation: Energy stored in the parasitic capacitance.
 #### Dissipation: joule_heating [W]
 
 $$
-\left(resistance \, \left(branch_{\mathrm{current}}\right)^{2}\right)
+\left(\theta_{1} \, \left(z_{1}\right)^{2}\right)
 $$
 
 DSL source: `resistance * branch_current ** 2`
@@ -230,10 +235,10 @@ Annotation: Irreversible loss in the resistive film.
 - Validity range for `inductance`: $[1.0000000000000001e-15, 0.001]$.
 - Validity range for `resistance`: $[1.0000000000000001e-09, 1000000000000]$.
 - Maximum supported timestep: 9.9999999999999995e-07 s.
-- Property `positive_fit_parameters` (`parameter_bounds`), expected `True`, sample count 64, tolerance 0: $\left(\left(\left(resistance > \left(0 \, resistance\right)\right) \land \left(inductance > \left(0 \, inductance\right)\right)\right) \land \left(capacitance > \left(0 \, capacitance\right)\right)\right)$.
-- Property `nonnegative_inductive_energy` (`nonnegative_energy`), expected `True`, sample count 64, tolerance 9.9999999999999998e-13: $\left(\left(\left(0.5 \, inductance\right) \, \left(inductor_{\mathrm{current}}\right)^{2}\right) \ge \left(0 \, \left(\left(0.5 \, inductance\right) \, \left(inductor_{\mathrm{current}}\right)^{2}\right)\right)\right)$.
-- Property `nonnegative_capacitive_energy` (`nonnegative_energy`), expected `True`, sample count 64, tolerance 9.9999999999999998e-13: $\left(\left(\left(0.5 \, capacitance\right) \, \left(capacitor_{\mathrm{voltage}}\right)^{2}\right) \ge \left(0 \, \left(\left(0.5 \, capacitance\right) \, \left(capacitor_{\mathrm{voltage}}\right)^{2}\right)\right)\right)$.
-- Property `nonnegative_joule_loss` (`nonnegative_dissipation`), expected `True`, sample count 64, tolerance 9.9999999999999998e-13: $\left(\left(resistance \, \left(branch_{\mathrm{current}}\right)^{2}\right) \ge \left(0 \, \left(resistance \, \left(branch_{\mathrm{current}}\right)^{2}\right)\right)\right)$.
+- Property `positive_fit_parameters` (`parameter_bounds`), expected `True`, sample count 64, tolerance 0: $\left(\left(\left(\theta_{1} > \left(0 \, \theta_{1}\right)\right) \land \left(\theta_{2} > \left(0 \, \theta_{2}\right)\right)\right) \land \left(\theta_{3} > \left(0 \, \theta_{3}\right)\right)\right)$.
+- Property `nonnegative_inductive_energy` (`nonnegative_energy`), expected `True`, sample count 64, tolerance 9.9999999999999998e-13: $\left(\left(\left(0.5 \, \theta_{2}\right) \, \left(x_{1}\right)^{2}\right) \ge \left(0 \, \left(\left(0.5 \, \theta_{2}\right) \, \left(x_{1}\right)^{2}\right)\right)\right)$.
+- Property `nonnegative_capacitive_energy` (`nonnegative_energy`), expected `True`, sample count 64, tolerance 9.9999999999999998e-13: $\left(\left(\left(0.5 \, \theta_{3}\right) \, \left(x_{2}\right)^{2}\right) \ge \left(0 \, \left(\left(0.5 \, \theta_{3}\right) \, \left(x_{2}\right)^{2}\right)\right)\right)$.
+- Property `nonnegative_joule_loss` (`nonnegative_dissipation`), expected `True`, sample count 64, tolerance 9.9999999999999998e-13: $\left(\left(\theta_{1} \, \left(z_{1}\right)^{2}\right) \ge \left(0 \, \left(\theta_{1} \, \left(z_{1}\right)^{2}\right)\right)\right)$.
 
 ### Text-based desires, assumptions, and explanatory notes
 
@@ -324,6 +329,7 @@ These hashes bind the inputs used for this rendering. The generated README is ex
 | `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-220r/shape/package/source/procedural-shape.json` | `sha256:1ca9ee45b5722e23bbd742051fe3ca524958fa81588f8c6a6bafa196f6ed5d82` |
 | `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-220r/static.part` | `sha256:fafd30ae1e5c39dd7ebe9638742128aba0cbd1932ee09fbc12da878cce5e4f9a` |
 | `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-220r/v1.model` | `sha256:481ecb49cd03470330542144bd1974e65a68cc45500f74b5ef8188709021065e` |
+| `electrical/resistors/fixed_resistors/instantiations/yageo-rc0603-220r/yageo.rc0603fr-07220rl.procurement` | `sha256:a0bb9d4556cb99956cdbeef2a3202b26470e2319f9b486c7f6b146f8fb361fdd` |
 | `electrical/resistors/fixed_resistors/interface.pmdl` | `sha256:96cb68346727c8e07114c334d569f1a9092291575995970d93870623d9a19e9a` |
 | `electrical/resistors/fixed_resistors/resistor_with_parasitics.pmdl` | `sha256:d74837b6e3361668057da6200c113ad26595080dbbe15edc34406d7b8572f4d8` |
 | `electrical/resistors/interface.pmdl` | `sha256:ae5de73b81f7f0c6c015f1df08e0ad2c2e95cb00101609bb7a773513ccfef66f` |

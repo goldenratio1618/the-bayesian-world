@@ -62,6 +62,16 @@ SHA-256 are bound by every `vN.model` that uses it.
 Every state derivative must occur in an active residual. `der(state_name)` is
 equivalent to the declared/default derivative symbol.
 
+Generated part READMEs assign short, deterministic display symbols by declaration
+role (for example, `x_1` for a state and `theta_1` for a parameter) and include
+a symbol key that expands each alias back to its exact PMDL identifier. Display
+aliases are unique within one PMDL rendering and are presentation only: they are
+not PMDL fields, do not change model hashes, and never replace the exact DSL
+source shown with each equation. Authored identifiers containing underscores
+remain valid and are escaped as single symbols when rendered directly. Greek
+keywords such as `alpha` and `gamma_i` render as the corresponding Greek
+symbol and subscript.
+
 ### Algebraic
 
 An algebraic has `name` plus optional `unit` (`1`), finite `initial` (`0`), and

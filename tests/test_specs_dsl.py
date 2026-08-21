@@ -374,7 +374,7 @@ class CatalogContractTests(unittest.TestCase):
         self.assertEqual(self.interfaces.ancestry("camera-mass"), ("inert-object", "camera-mass"))
         self.assertEqual(self.interfaces.category_for("brushed-dc-motor").id, "motor")
 
-    def test_procurement_namespace_is_not_a_physical_domain(self) -> None:
+    def test_procurement_evidence_namespace_is_not_a_physical_domain(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             catalog_root = Path(tmp) / "model_catalog"
             electrical = catalog_root / "electrical"
@@ -382,9 +382,9 @@ class CatalogContractTests(unittest.TestCase):
             (electrical / "interface.pmdl").write_bytes(
                 (MODELS / "electrical" / "interface.pmdl").read_bytes()
             )
-            records = catalog_root / "procurement" / "records"
-            records.mkdir(parents=True)
-            (records / "fixture.procurement").write_text("{}\n", encoding="utf-8")
+            evidence = catalog_root / "procurement" / "evidence"
+            evidence.mkdir(parents=True)
+            (evidence / "fixture.json").write_text("{}\n", encoding="utf-8")
 
             catalog = load_interface_catalog(catalog_root)
 

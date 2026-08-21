@@ -13,22 +13,22 @@
     {
       "locator": "$.product",
       "sha256": "sha256:71181f6affed7b36e53bc77d637de781c498f41047a667d261a0eaa5947b0a8c",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_arm.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_arm.json"
     },
     {
       "locator": "$.manufacturer",
       "sha256": "sha256:71181f6affed7b36e53bc77d637de781c498f41047a667d261a0eaa5947b0a8c",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_arm.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_arm.json"
     },
     {
       "locator": "$.source_urls[0]",
       "sha256": "sha256:71181f6affed7b36e53bc77d637de781c498f41047a667d261a0eaa5947b0a8c",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_arm.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_arm.json"
     },
     {
       "locator": "$.source_urls[1]",
       "sha256": "sha256:71181f6affed7b36e53bc77d637de781c498f41047a667d261a0eaa5947b0a8c",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_arm.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_arm.json"
     },
     {
       "locator": "$.provenance",
@@ -38,11 +38,11 @@
     {
       "locator": "$.features.lift_and_tilt_servos",
       "sha256": "sha256:71181f6affed7b36e53bc77d637de781c498f41047a667d261a0eaa5947b0a8c",
-      "source": "assembled_contraptions/scanner/component_inputs/romi_arm.json"
+      "source": "outputs/scanner-part-import/component_inputs/romi_arm.json"
     },
     {
       "locator": "$.provenance",
-      "sha256": "sha256:3901822e73b67d56be41491fc1c6286eba79ef9c238d83ce50224c195bfbfc5e",
+      "sha256": "sha256:711da3d106b1e9cd0486178f31c14839693cde09bb1ba1bdaf34228a02fb97bd",
       "source": "model_catalog/electromechanical/servos/position_servos/instantiations/generic_position_servo/static.part"
     }
   ],
@@ -74,7 +74,7 @@
     {
       "part": "scanner.position_servo",
       "quantity": 2,
-      "static_sha256": "sha256:af57c8366c0c027c0b272409b4bbd8787f50371bb109ce77a640b97b775c8264",
+      "static_sha256": "sha256:53fb0ab472864c4270793dba77ed2e414beef539c7aa4282483a2665f8ee16b0",
       "version": "1.0.0"
     }
   ],

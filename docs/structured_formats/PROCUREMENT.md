@@ -9,13 +9,27 @@ assembly hash. The authoritative implementation is
 
 ## Placement and top-level fields
 
-Records live directly below:
+A record lives in a part instantiation directory, beside `static.part` and
+`v1.model` when those physical artifacts exist:
 
-`model_catalog/procurement/records/<record-id>.procurement`
+`model_catalog/<domain>/<category>/instantiations/<part>/<record-id>.procurement`
 
-The filename stem must equal `id`. Nested record directories, symlinks,
-unsupported sibling files, duplicate ids/JSON keys, and unknown fields are
-invalid. Every top-level field is required:
+For a multi-part kit, the record lives beside its first, canonical provision
+while `provides` may bind every exact kit part and quantity. An evidenced
+identity deferred because its physics is not implemented may occupy a reviewed,
+planned instantiation directory without `static.part` or `v1.model`; it must
+retain `provides: []`. For example, an NTC thermistor identity may live below
+`thermoelectric/thermistors/instantiations/` while thermal modeling remains
+deferred.
+
+Placement is organizational only. It never asserts a purchasable-to-physical
+mapping: the `provides` array is the sole binding authority. Importers must not
+choose a directory heuristically. Bound records use the first exact provision;
+unbound records require an explicit, reviewed location.
+
+The filename stem must equal `id`. Records outside a direct child of an
+`instantiations` directory, symlinks, duplicate ids/JSON keys, and unknown
+fields are invalid. Every top-level field is required:
 
 | Field | Meaning |
 |---|---|
@@ -119,7 +133,7 @@ rejected rather than repaired heuristically.
   "provides": [],
   "evidence": [
     {
-      "source": "component_inputs/yageo_rc0603_10k.json",
+      "source": "outputs/part-import-2026-08-18/component_inputs/yageo_rc0603_10k.json",
       "sha256": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "locator": "$.manufacturer and $.product"
     }

@@ -32,14 +32,10 @@ class RuntimeAssetTests(unittest.TestCase):
                 / "scanner.control"
             ).is_file()
         )
-        self.assertTrue(
-            (
-                root
-                / "assembled_contraptions"
-                / "examples"
-                / "part_import_canary"
-                / "fixed_resistor.json"
-            ).is_file()
+        # Import fixtures are generated/run data under outputs/, not installed
+        # runtime assets or assembled contraptions.
+        self.assertFalse(
+            (root / "assembled_contraptions/examples/part_import_canary").exists()
         )
         self.assertTrue(
             (

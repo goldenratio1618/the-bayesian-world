@@ -2,13 +2,17 @@
 
 ## Trust boundary
 
-Agent output is a proposal in `staging/`, not part of `model_catalog/`. The
-classifier proposes a physical domain, category, and device placement. The
-modeler proposes catalog-relative `.pmdl`, `.part`, `.model`, JSON, and Markdown
-artifacts. Neither can emit executable host code. Safe paths, interface
-contracts, DSL grammar, symbol references, units, equation balance, physical
-properties, complete initialization, and composition are checked before a
-human or automation explicitly calls `promote`.
+Classifier and modeler output is untrusted until deterministic host validation.
+The classifier proposes a physical domain, category, and device placement. The
+modeler proposes catalog-relative `.pmdl`, `.part`, and `.model` artifacts;
+host-owned overlays may add procurement, fabrication, shape, and derived
+Markdown records. Neither agent can emit executable host code. Safe paths,
+interface contracts, DSL grammar, symbol references, units, equation balance,
+physical properties, complete initialization, and composition are checked
+before promotion. `modeling-one` leaves a staged proposal for explicit
+promotion. The isolated ingestion canary/batch revalidates and promotes into
+only its clean replay catalog, then reloads the promoted part/model registry;
+staged-only output never counts as fully ingested.
 
 Classification has an additional deterministic semantic gate. Every proposed
 domain must exist and correspond to physics. `reuse_path` must be the exact
@@ -27,55 +31,76 @@ therefore rejected rather than admitted.
 
 ## Models and reasoning settings
 
-The requested configuration is preserved verbatim:
+The guarded ingestion path uses `gpt-5.6-luna` at reasoning effort `low` for
+both classification and modeling. Classification uses Responses Structured
+Outputs. Modeling uses a direct Responses Structured Output with complete file
+content strings and no tools; the host alone materializes and validates it.
+A validation failure may receive up to two compact correction turns, for three
+modeling responses total. The model identifier, effort, schemas, selected
+context bytes, and prompts participate in the workflow or input hashes.
 
-* classification: `gpt-5.6-luna`, reasoning effort `medium`, Responses API
-  Structured Outputs;
-* modeling: `gpt-5.6-luna`, reasoning effort `xhigh`, non-interactive
-  `codex exec`, isolated workspace-write sandbox, JSON output schema.
-
-Both identifiers are constructor/CLI settings rather than hard-coded provider
-assumptions. `xhigh` remains the production modeling default. The preserved
-20-input replay may explicitly override modeling to `low` as a Luna-low
-stress/cost benchmark; the chosen effort is included in input hashes and
-receipts. It is not an apples-to-apples reliability comparison with the
-recorded `xhigh` baseline (12 paid dispatches, 22 validator calls, 6 of 10
-targets passing on their first paid-dispatch validator call, and
-`$2.23477088` charged), because reasoning effort and replay isolation differ.
+`ModelingAgent` retains the non-interactive `codex exec` workspace backend for
+legacy compatibility and `modeling-one`. It also defaults to Luna-low, stages
+candidate files, and receives the full structured-format guide set. It is not
+the canary/batch backend and is not required for the paid replay.
 
 ## Dollar limit
 
-`BudgetLedger` defaults to a lifetime limit of `$100.00` for its ledger path.
-Before every canary or full call it reserves the worst-case cost at conservative
-long-context rates. The reservation is settled from provider token usage, even
-when the CLI exits nonzero. A dispatched failure without usable token usage keeps
-its full reservation charged. The sole post-dispatch zero-cost exception is a
-structurally parsed Codex JSONL `turn.failed` provider rejection with the exact
-`invalid_request_error` / `invalid_json_schema` / HTTP 400 /
-`text.format.schema` tuple, and only when there is no usage, completed agent
-message or output file, candidate write, validator activity, malformed event, or
-other failure event. Stderr text and matching substrings are never proof. Such an
-event is recorded as `provider_rejected_before_inference` with
-`cost_basis: proven_pre_inference_zero`; every ambiguous case remains a full
-conservative debit. This is intentionally stricter than best-effort token
-counting.
+The general ledger default remains `$100.00`; ingestion canary/batch commands
+default `--ledger-limit-usd` to `$0.50` and may use a dedicated replay ledger.
+Before inference, the direct path requires the Responses input-token counter
+and reserves the exact counted input plus its full output allowance. A request
+without that counter fails before dispatch. Classification and every modeling
+attempt share one atomic per-part cost scope. The worst permitted envelope is:
 
-The built-in `gpt-5.6-luna` standard-pricing snapshot is dated 2026-08-06:
-`$0.20/M` uncached input, `$0.02/M` cached input, `$0.25/M` cache writes,
-`$1.20/M` output for short context; `$0.40/M`, `$0.04/M`, `$0.50/M`, and
-`$1.80/M` respectively for long context. Because usage payloads do not always
-separate cache writes, the ledger charges every uncached input token at the
-higher cache-write rate.
-Change these explicitly when using another tier, region, model, or price date.
+```text
+classification (12k input, 2k output) +
+3 × modeling (20k input, 8k output) = $0.0492 < $0.05
+```
+
+Provider usage settles the reservation without capping measured overages. A
+dispatched response with absent or malformed usage is charged its full
+reservation. Provider-reported cache-write tokens are accounted separately;
+when that field is unavailable, every non-cached input token is conservatively
+priced as a cache write and the event is labeled as an estimate.
+
+The built-in `gpt-5.6-luna` standard-pricing snapshot was verified against the
+[official OpenAI Luna model page](https://developers.openai.com/api/docs/models/gpt-5.6-luna)
+on 2026-08-20: `$0.20/M` input, `$0.02/M` cached input,
+and `$1.20/M` output. Prompt-cache writes cost 1.25 times ordinary input
+(`$0.25/M`). Requests above 272,000 input tokens use twice the input/cached
+rates and 1.5 times the output rate; cache writes remain 1.25 times the
+applicable input rate. The guarded importer caps all requests far below that
+threshold. Change the table explicitly for another tier, region, model, or
+price date.
+
+Run reports compute `total importer ledger cost / freshly promoted completed
+parts`. The numerator includes classification, all modeling attempts, failures,
+and retries. Bound prior failed-run ledgers are included in the final aggregate;
+their target/component hash and exact bytes are reverified, and their spend
+reduces that target's remaining pre-dispatch `$0.05` scope. Deferred
+unsupported-physics parts are zero dispatch and excluded from the denominator. A gate passes only when cost per
+completed part is strictly below `$0.05`, average failed validation attempts
+per completed part is strictly below `1`, every requested target is reported,
+and no scope breach occurred. Batch execution requires a matching passing
+one-part canary and records combined canary-plus-batch-plus-carryover KPIs.
+
+The three preserved failed canaries for `yageo_rc0603_10r` bind `$0.02134939`
+and nine failed Luna modeling validations, leaving `$0.02865061` of cumulative
+target headroom. Thus a successful ten-part replay has a historical failure
+average of `0.9`; any additional invalid output makes the `<1` KPI impossible.
+Reports distinguish that historical Luna result (`0/9` host-valid modeling
+responses) from host-deterministic recipe completions through
+`generation_mode`, `provider_calls`, recipe/input hashes, and deterministic
+validation telemetry.
 
 ## Required modeling workspace
 
 Before dispatch, the host builds a deterministic `IMPORT_PLAN.json`. It names
-the exact target ID and catalog root, published parameter facts, eligible
-reusable PMDL identities with canonical hashes, the preferred family model,
-the immutable-base policy, and the three-call validation limit. Every run then
-copies and preserves the catalog-relative source label for only the context
-relevant to that import:
+the exact target ID, published parameter facts, eligible reusable PMDL
+identities with canonical hashes, preferred family model, immutable-base
+policy, and attempt limit. The legacy CLI backend copies and preserves the
+catalog-relative source label for this context:
 
 1. `prompts/model_constraints.md`;
 2. the authoritative guides in `docs/structured_formats/` selected for the
@@ -87,11 +112,19 @@ relevant to that import:
 7. normalized, verified deterministic extraction JSON when host-owned document
    or design-file ingestion produced relevant textual evidence.
 
+The direct Responses backend deliberately excludes the CLI constraints and
+format guides because they contain candidate/tool instructions that do not
+apply to a no-tools response. Its lean context contains `IMPORT_PLAN.json`,
+record-shape examples, governing interfaces, direct ancestors, the component
+record, and normalized deterministic extraction evidence. A direct-only system
+prompt supplies the complete output and trust-boundary contract. The exact
+backend-selected context set is also used for the resumable input hash.
+
 The numbered canonical copies and a SHA-256 context manifest live beside the
-writable `workspace/`, not inside it. `IMPORT_PLAN.json` is also protected. The
-agent receives the complete selected text in `AGENTS.md`; it may write only
-below `workspace/candidate/`. The host verifies protected input/control hashes
-before dispatch, immediately after Codex exits, and on error paths. Raw PDF,
+host staging `workspace/`. `IMPORT_PLAN.json` is protected. The CLI agent may
+write only below `workspace/candidate/`; the direct agent has no filesystem or
+tools and returns complete artifact strings. The host verifies protected
+input/control hashes around CLI execution. Raw PDF,
 ECAD, archive, CAD, mesh, and other binary/source design payloads never enter
 the Luna workspace; deterministic host code validates and normalizes them
 first, and only its extraction JSON may become modeling context.
@@ -113,8 +146,7 @@ boundary, trusted deterministic host code may append hash-bound shape/optical
 outputs; the generic validator deliberately accepts and verifies those
 host-owned files.
 
-The modeler is instructed to validate the complete catalog bundle iteratively
-with:
+The legacy CLI modeler validates its candidate bundle iteratively with:
 
 ```console
 python -I -m contraption.part_import.model_validation_tool --bundle candidate
@@ -132,18 +164,21 @@ protected hashes before and after parsing and never
 imports or executes generated host code. Isolated Python mode plus a
 trusted-interpreter-first `PATH` prevents workspace modules from shadowing the
 installed validator.
-Calls are recorded in `validation-calls.jsonl`. A modeling workspace may make
+Calls are recorded in `validation-calls.jsonl`. A CLI modeling workspace may make
 at most three calls: a fourth request is deterministically refused without
 being appended to the call log. After the agent exits, the host writes
 `validation-activity.json` with successful/failed counts. This telemetry is not
 trusted for admission: safe materialization and full host validation still run
-independently.
+independently. The direct model never sees or invokes this command. The host
+materializes each structured response into an attempt workspace, performs the
+same validation, quarantines any incomplete published proposal before a retry,
+and exposes only a bounded diagnostic to the next response.
 
-The candidate tree is the artifact authority. Luna's final structured response
-is only a path manifest: strict output entries carry the path and a required
-`content: null` placeholder, never a second transcription of the bytes. A valid
-candidate can therefore be recovered even when the CLI exits nonzero or its
-last message is malformed. Proposed files that are byte-identical to the base
+For the legacy CLI backend, the candidate tree is the artifact authority and
+the final structured response is only a path manifest with `content: null`.
+A valid candidate can therefore be recovered after a nonzero CLI exit. For the
+direct backend, each artifact carries its complete UTF-8 content and the host
+is the sole artifact writer. Proposed files that are byte-identical to the base
 catalog are stripped, while any changed file colliding with a base-catalog path
 is rejected. For new `.model` files, the host parses the referenced canonical
 PMDL and repairs a stale or missing PMDL hash to that exact identity before the
@@ -181,35 +216,110 @@ catalog part explicitly.
 Only `OPENAI_API_KEY` is read from `.env`; unrelated dotenv values are ignored.
 Without `--env-file`, the CLI accepts exactly one `.env` found in the repository
 or its parent directory. If both exist, it stops and requires an explicit path
-instead of silently selecting credentials. Classification passes the key
-directly to the SDK. Modeling admits it through `codex login --with-api-key`
-inside a short-lived `CODEX_HOME`, removes the key from the rollout environment,
-and destroys that temporary authentication directory after the subprocess
-exits. The secret is never written to an agent workspace, durable staging tree,
-or ledger. Existing Codex CLI authentication can be used when no key is
-provided.
+instead of silently selecting credentials. Classification and direct modeling
+pass the key directly to the OpenAI SDK. The legacy CLI backend admits it
+through `codex login --with-api-key` inside a short-lived `CODEX_HOME`, removes
+the key from the rollout environment, and destroys that temporary authentication
+directory after the subprocess exits. The secret is never written to an agent
+workspace, durable staging tree, report, or ledger. The `agents` optional
+dependency requires `openai>=2.53.0`, the first locally verified minimum with
+the Responses input-token counter used by the hard preflight gate.
 
 ## Guarded full runs
 
-These are paid, non-canary operations. They share
-`outputs/agent-budget.json`, whose lifetime ceiling remains `$100.00`:
+Legacy classification and staged modeling share `outputs/agent-budget.json`,
+whose lifetime ceiling remains `$100.00`:
 
 ```console
-contraption agent-run classification-all --job-file assembled_contraptions/scanner/agent_jobs.json --env-file ../.env
-contraption agent-run modeling-one --job-file assembled_contraptions/scanner/agent_jobs.json --target romi_drive --env-file ../.env
+contraption agent-run classification-all --job-file outputs/scanner-part-import/agent_jobs.json --env-file ../.env
+contraption agent-run modeling-one --job-file outputs/scanner-part-import/agent_jobs.json --target romi_drive --env-file ../.env
 ```
+
+The measured 20-part replay uses a fresh isolated output root and dedicated
+`$0.50` ledger. Durable zero-event ledger binding and stable host-recipe hashes
+change the workflow fingerprint, so the passing v4 canary cannot gate a batch;
+v5 must start from a new empty replay root. Run exactly one eligible target
+first:
+
+```console
+contraption agent-run ingestion-canary \
+  --job-file outputs/part-import-2026-08-18/agent_jobs.json \
+  --target yageo_rc0603_10r \
+  --output-root outputs/part-import-2026-08-20-luna-direct-replay-v5 \
+  --ledger outputs/part-import-2026-08-20-luna-direct-replay-v5/agent-budget.json \
+  --prior-failed-ledger outputs/part-import-2026-08-19-luna-direct-replay/agent-budget.json \
+  --prior-failed-ledger outputs/part-import-2026-08-19-luna-direct-replay-v2/agent-budget.json \
+  --prior-failed-ledger outputs/part-import-2026-08-19-luna-direct-replay-v3/agent-budget.json \
+  --ledger-limit-usd 0.50 \
+  --env-file ../.env
+```
+
+For this inventory's ten exact Yageo RC0603 family records, the host selects a
+generic versioned fail-closed physical recipe before creating either provider
+client. It
+requires the exact ideal-resistor PMDL identity/hash and p/n ports, explicit
+0603 package and XYZ dimensions, one finite positive resistance, and an exact
+tolerance. The recipe emits only a primitive rectangular bounding envelope,
+estimated p/n frames at opposing X-face centers, and fabrication records marked
+missing for conductor and termination. It copies no manufacturer, product,
+offer, or URL into `.part`/`.model`; the adjacent `.procurement` record remains
+host-extracted from the protected input. A missing or conflicting recipe fact
+fails with zero classification or modeling dispatch; it never falls back to
+Luna. Other eligible
+families and genuine new-model imports continue through the general direct
+Responses path.
+
+Only after `ingestion-canary-report.json` passes may the remaining 19 targets
+run against that same isolated catalog and ledger:
+
+```console
+contraption agent-run ingestion-batch \
+  --job-file outputs/part-import-2026-08-18/agent_jobs.json \
+  --canary-report outputs/part-import-2026-08-20-luna-direct-replay-v5/ingestion-canary-report.json \
+  --output-root outputs/part-import-2026-08-20-luna-direct-replay-v5 \
+  --ledger outputs/part-import-2026-08-20-luna-direct-replay-v5/agent-budget.json \
+  --prior-failed-ledger outputs/part-import-2026-08-19-luna-direct-replay/agent-budget.json \
+  --prior-failed-ledger outputs/part-import-2026-08-19-luna-direct-replay-v2/agent-budget.json \
+  --prior-failed-ledger outputs/part-import-2026-08-19-luna-direct-replay-v3/agent-budget.json \
+  --ledger-limit-usd 0.50 \
+  --env-file ../.env
+```
+
+The canary creates `isolation-manifest.json`, copies the catalog and job inputs,
+identity/hash-checks then removes only the ten existing eligible resistor
+targets, preserves the shared ideal-resistor PMDL, and leaves the source catalog
+untouched. Ten thermal targets remain deterministic zero-dispatch deferrals.
+Eligible direct proposals are promoted only into the isolated catalog. Batch
+stops after the first target failure and the expected-target check prevents a
+partial result list from passing.
+
+The canary replay root must be absent or empty, must be a strict child of
+`outputs/`, and may not overlap the source-job run. Its ledger and staging paths
+are fixed at `agent-budget.json` and `agent-staging/` inside that root; symlinks
+and special files are rejected. Constructing a new canary ledger atomically
+persists its canonical empty JSON immediately, even when the deterministic path
+makes zero provider calls. Both canary and batch reports bind the exact ledger
+path and byte digest, and the canary replay-state fingerprint carries the same
+binding. Batch requires that regular non-symlink file to exist and match before
+constructing a ledger or doing gate/work; deletion, mutation, or replacement is
+fail-closed and never synthesizes a fresh ledger. The canary report binds the exact 20-target
+inventory, canary target, isolation manifest, copied job and complete component
+asset closure, post-promotion catalog/data tree, all host `contraption` Python
+source bytes, and OpenAI SDK version. Batch verifies those bindings before any
+write or dispatch and requires exactly the remaining 19 targets.
 
 `classification-all` processes the records declared by the supplied
 `agent-jobs-1` inventory in deterministic authored order and
 stops at the first provider or semantic-validation failure. Each completed
 record is atomically written to
-`outputs/agent-proposals/classification/<target>.json` with the validated
+`agent-proposals/classification/<target>.json` below the directory containing
+the selected job inventory, with the validated
 proposal, exact input hash, reported usage, and charged dollars.
 
 `modeling-one` requires a `--target` declared by that same inventory. It
 atomically writes a receipt under
-`outputs/agent-proposals/modeling/` and leaves all generated, validated files in
-`outputs/agent-staging/`. It never calls `promote`.
+that run's `agent-proposals/modeling/` directory and leaves all generated,
+validated files in the sibling `agent-staging/`. It never calls `promote`.
 The proposal receipt includes validation-call telemetry so repeated repair
 loops are visible during prompt and reference-quality review.
 

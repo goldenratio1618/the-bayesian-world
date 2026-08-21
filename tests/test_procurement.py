@@ -38,8 +38,8 @@ from scripts.generate_procurement_records import generate
 ROOT = Path(__file__).resolve().parents[1]
 PRIOR_INPUTS = (
     ROOT
-    / "assembled_contraptions"
-    / "part_import_2026_08_18"
+    / "outputs"
+    / "part-import-2026-08-18"
     / "component_inputs"
 )
 RESISTOR_INSTANTIATIONS = (
@@ -469,13 +469,25 @@ def test_pdf_fallback_accepts_multiple_adjacent_labeled_pairs(tmp_path: Path) ->
 
 
 def test_item_number_and_product_list_paths_are_conservative() -> None:
-    control = ROOT / "assembled_contraptions" / "scanner" / "component_inputs" / "romi_control.json"
+    control = (
+        ROOT
+        / "outputs"
+        / "scanner-part-import"
+        / "component_inputs"
+        / "romi_control.json"
+    )
     (record,) = extract_component_procurement_file(control)
     assert ("manufacturer_item_number", "3544", "Pololu") in {
         (item.scheme, item.value, item.issuer) for item in record.identifiers
     }
 
-    power = ROOT / "assembled_contraptions" / "scanner" / "component_inputs" / "power.json"
+    power = (
+        ROOT
+        / "outputs"
+        / "scanner-part-import"
+        / "component_inputs"
+        / "power.json"
+    )
     records = extract_component_procurement_file(power)
     assert len(records) == 2
     cells = next(item for item in records if "NiMH cells" in item.identifiers[0].value)
@@ -612,7 +624,7 @@ def test_registry_exposes_procurement_without_changing_resolved_part() -> None:
         )
 
 
-def test_central_record_io_and_explicit_batch_migration(tmp_path: Path) -> None:
+def test_adjacent_record_io_and_explicit_batch_migration(tmp_path: Path) -> None:
     input_root = tmp_path / "inputs"
     input_root.mkdir()
     evidenced = input_root / "evidenced.json"
@@ -620,18 +632,22 @@ def test_central_record_io_and_explicit_batch_migration(tmp_path: Path) -> None:
     unidentified = input_root / "unidentified.json"
     unidentified.write_text('{"purpose":"fixture"}', encoding="utf-8")
     catalog = tmp_path / "catalog"
+    locations = {
+        "product.explicit-product":
+            "electrical/widgets/instantiations/explicit-product"
+    }
 
     registry = migrate_component_inputs(
         (evidenced, unidentified),
         catalog,
         source_root=input_root,
+        unbound_locations=locations,
     )
 
     assert tuple(registry) == ("product.explicit-product",)
     record_path = (
         catalog
-        / "procurement"
-        / "records"
+        / locations["product.explicit-product"]
         / "product.explicit-product.procurement"
     )
     assert record_path.is_file()
@@ -639,11 +655,15 @@ def test_central_record_io_and_explicit_batch_migration(tmp_path: Path) -> None:
     assert loaded["product.explicit-product"].to_dict() == registry[
         "product.explicit-product"
     ].to_dict()
-    write_procurement_records(catalog, registry.values())
+    write_procurement_records(
+        catalog, registry.values(), unbound_locations=locations
+    )
 
     changed = replace(registry["product.explicit-product"], version="1.0.1")
     with pytest.raises(ProcurementExtractionError, match="refusing to overwrite"):
-        write_procurement_records(catalog, (changed,))
+        write_procurement_records(
+            catalog, (changed,), unbound_locations=locations
+        )
     with pytest.raises(ProcurementExtractionError, match="outside the migration set"):
         migrate_component_inputs(
             (evidenced,),
@@ -651,6 +671,20 @@ def test_central_record_io_and_explicit_batch_migration(tmp_path: Path) -> None:
             source_root=input_root,
             provisions_by_source={"missing.json": {}},
         )
+
+
+def test_procurement_registry_rejects_nonadjacent_records(tmp_path: Path) -> None:
+    catalog = tmp_path / "model_catalog"
+    source = next((ROOT / "model_catalog").rglob("*.procurement"))
+    target = catalog / "procurement" / "records" / source.name
+    target.parent.mkdir(parents=True)
+    target.write_bytes(source.read_bytes())
+
+    with pytest.raises(
+        ProcurementSpecError,
+        match="directly inside a part instantiation directory",
+    ):
+        ProcurementRegistry.load_catalog(catalog)
 
 
 def test_procurement_registry_rejects_unknown_and_stale_provisions() -> None:

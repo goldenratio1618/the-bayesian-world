@@ -18,6 +18,9 @@ __pycache__/
 # Generated simulations and paid-agent state
 /outputs/
 
+# Agent workspaces always belong to a named run below outputs.
+/outputs/**/agent-staging/
+
 # Machine-specific Codex, WSL, and setup notes
 /AGENTS.md
 /AGENTS.local.md
